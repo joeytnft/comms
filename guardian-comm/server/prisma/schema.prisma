@@ -1,0 +1,252 @@
+// Guardian Comm — Database Schema
+// Run: npx prisma migrate dev --name init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ORGANIZATIONS
+// ============================================================================
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  inviteCode  String   @unique @default(cuid())
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users    User[]
+  groups   Group[]
+  alerts   Alert[]
+  incidents Incident[]
+
+  @@map("organizations")
+}
+
+// ============================================================================
+// USERS
+// ============================================================================
+
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  passwordHash    String
+  displayName     String
+  phone           String?
+  avatarUrl       String?
+  publicKey       String?  // E2E encryption public key
+  organizationId  String
+  lastSeenAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization    Organization      @relation(fields: [organizationId], references: [id])
+  memberships     GroupMembership[]
+  sentMessages    Message[]         @relation("sender")
+  triggeredAlerts Alert[]           @relation("triggeredBy")
+  reportedIncidents Incident[]      @relation("reportedBy")
+  refreshTokens   RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+// ============================================================================
+// GROUPS & MEMBERSHIPS
+// ============================================================================
+
+model Group {
+  id              String    @id @default(cuid())
+  name            String
+  description     String?
+  type            GroupType
+  organizationId  String
+  parentGroupId   String?   // Points to lead group (for sub-groups)
+  iconColor       String?
+  createdBy       String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization    Organization      @relation(fields: [organizationId], references: [id])
+  parentGroup     Group?            @relation("GroupHierarchy", fields: [parentGroupId], references: [id])
+  subGroups       Group[]           @relation("GroupHierarchy")
+  memberships     GroupMembership[]
+  messages        Message[]
+
+  @@map("groups")
+}
+
+enum GroupType {
+  LEAD
+  SUB
+}
+
+model GroupMembership {
+  id       String     @id @default(cuid())
+  groupId  String
+  userId   String
+  role     MemberRole @default(MEMBER)
+  joinedAt DateTime   @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@map("group_memberships")
+}
+
+enum MemberRole {
+  ADMIN
+  MEMBER
+}
+
+// ============================================================================
+// MESSAGES
+// ============================================================================
+
+model Message {
+  id               String      @id @default(cuid())
+  groupId          String
+  senderId         String
+  type             MessageType @default(TEXT)
+  encryptedContent String      // E2E encrypted — server cannot read
+  iv               String      // Initialization vector
+  createdAt        DateTime    @default(now())
+
+  group  Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  sender User  @relation("sender", fields: [senderId], references: [id])
+  readReceipts ReadReceipt[]
+
+  @@index([groupId, createdAt])
+  @@map("messages")
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  ALERT
+  SYSTEM
+}
+
+model ReadReceipt {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  readAt    DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@map("read_receipts")
+}
+
+// ============================================================================
+// ALERTS
+// ============================================================================
+
+model Alert {
+  id              String     @id @default(cuid())
+  organizationId  String
+  triggeredById   String
+  level           AlertLevel
+  message         String?
+  latitude        Float?
+  longitude       Float?
+  resolvedAt      DateTime?
+  resolvedById    String?
+  createdAt       DateTime   @default(now())
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  triggeredBy  User                 @relation("triggeredBy", fields: [triggeredById], references: [id])
+  acknowledgments AlertAcknowledgment[]
+
+  @@index([organizationId, createdAt])
+  @@map("alerts")
+}
+
+enum AlertLevel {
+  ATTENTION
+  WARNING
+  EMERGENCY
+}
+
+model AlertAcknowledgment {
+  id             String   @id @default(cuid())
+  alertId        String
+  userId         String
+  acknowledgedAt DateTime @default(now())
+
+  alert Alert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@unique([alertId, userId])
+  @@map("alert_acknowledgments")
+}
+
+// ============================================================================
+// INCIDENTS
+// ============================================================================
+
+model Incident {
+  id               String          @id @default(cuid())
+  organizationId   String
+  reportedById     String
+  title            String
+  encryptedDetails String          // E2E encrypted
+  severity         IncidentSeverity
+  status           IncidentStatus  @default(OPEN)
+  latitude         Float?
+  longitude        Float?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  resolvedAt       DateTime?
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  reportedBy   User            @relation("reportedBy", fields: [reportedById], references: [id])
+  photos       IncidentPhoto[]
+
+  @@index([organizationId, createdAt])
+  @@map("incidents")
+}
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+model IncidentPhoto {
+  id           String   @id @default(cuid())
+  incidentId   String
+  encryptedUrl String   // Encrypted S3 URL
+  createdAt    DateTime @default(now())
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@map("incident_photos")
+}

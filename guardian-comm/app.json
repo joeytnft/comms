@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "Guardian Comm",
+    "slug": "guardian-comm",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./src/assets/images/icon.png",
+    "scheme": "guardiancomm",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./src/assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a1a2e"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.guardiancomm.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Guardian Comm needs your location to share with your security team.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Guardian Comm needs background location to keep your team informed of your position.",
+        "NSMicrophoneUsageDescription": "Guardian Comm needs microphone access for push-to-talk communication.",
+        "NSCameraUsageDescription": "Guardian Comm needs camera access for incident reports.",
+        "UIBackgroundModes": ["audio", "voip", "location", "remote-notification"]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/images/adaptive-icon.png",
+        "backgroundColor": "#1a1a2e"
+      },
+      "package": "com.guardiancomm.app",
+      "permissions": [
+        "RECORD_AUDIO",
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "WAKE_LOCK",
+        "VIBRATE",
+        "BLUETOOTH",
+        "BLUETOOTH_CONNECT"
+      ]
+    },
+    "plugins": [
+      "expo-location",
+      "expo-camera",
+      "expo-notifications",
+      "expo-secure-store",
+      "expo-av"
+    ]
+  }
+}

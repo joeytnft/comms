@@ -1,0 +1,56 @@
+# Guardian Comm — Local Development Infrastructure
+# Run: docker-compose up -d
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: guardian-postgres
+    environment:
+      POSTGRES_USER: guardian
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: guardian_comm
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U guardian -d guardian_comm']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (message queue, caching, pub/sub)
+  redis:
+    image: redis:7-alpine
+    container_name: guardian-redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # LiveKit Server (Voice/PTT SFU)
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: guardian-livekit
+    command: --config /etc/livekit.yaml
+    ports:
+      - '7880:7880'  # HTTP
+      - '7881:7881'  # WebRTC TCP
+      - '7882:7882/udp'  # WebRTC UDP
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
