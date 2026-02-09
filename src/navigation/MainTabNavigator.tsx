@@ -6,6 +6,7 @@ import { COLORS, TYPOGRAPHY } from '@/config/theme';
 // Implemented screens
 import { DashboardScreen } from '@/screens/Home/DashboardScreen';
 import { SettingsScreen } from '@/screens/Settings/SettingsScreen';
+import { GroupStackNavigator } from './GroupStackNavigator';
 
 // Placeholder screens until real ones are built in later phases
 const PlaceholderScreen = ({ name }: { name: string }) => (
@@ -15,13 +16,12 @@ const PlaceholderScreen = ({ name }: { name: string }) => (
   </View>
 );
 
-const ChatListScreen = () => <PlaceholderScreen name="Messages" />;
 const PTTScreen = () => <PlaceholderScreen name="Push to Talk" />;
 const AlertsScreen = () => <PlaceholderScreen name="Alerts" />;
 
 export type MainTabParamList = {
   Dashboard: undefined;
-  Messages: undefined;
+  Groups: undefined;
   PTT: undefined;
   Alerts: undefined;
   Settings: undefined;
@@ -60,10 +60,11 @@ export function MainTabNavigator() {
         }}
       />
       <Tab.Screen
-        name="Messages"
-        component={ChatListScreen}
+        name="Groups"
+        component={GroupStackNavigator}
         options={{
-          tabBarIcon: ({ color }) => <TabIcon label="M" color={color} />,
+          headerShown: false,
+          tabBarIcon: ({ color }) => <TabIcon label="G" color={color} />,
         }}
       />
       <Tab.Screen

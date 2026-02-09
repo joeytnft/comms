@@ -8,6 +8,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '../utils/errors';
+import { FREE_TRIAL_DAYS } from '../config/subscriptions';
 
 interface RegisterBody {
   email: string;
@@ -90,6 +91,19 @@ export async function register(
       lastSeenAt: true,
     },
   });
+
+  // Initialize free trial if this org hasn't been set up yet
+  if (!organization.trialEndsAt) {
+    const trialEnd = new Date();
+    trialEnd.setDate(trialEnd.getDate() + FREE_TRIAL_DAYS);
+    await prisma.organization.update({
+      where: { id: organization.id },
+      data: {
+        trialEndsAt: trialEnd,
+        subscriptionStatus: 'TRIALING',
+      },
+    });
+  }
 
   // Generate tokens
   const accessToken = request.server.jwt.sign({

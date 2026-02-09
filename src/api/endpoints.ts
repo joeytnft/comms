@@ -69,6 +69,12 @@ export const ENDPOINTS = {
     UPLOAD_PHOTO: (id: string) => `/incidents/${id}/photos`,
   },
 
+  // Subscription
+  SUBSCRIPTION: {
+    GET: '/subscription',
+    PLANS: '/subscription/plans',
+  },
+
   // Location
   LOCATION: {
     UPDATE: '/location',
