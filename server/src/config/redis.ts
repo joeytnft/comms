@@ -17,6 +17,6 @@ redis.on('connect', () => {
   logger.info('[Redis] Connected');
 });
 
-redis.on('error', (err) => {
-  logger.error('[Redis] Error:', err.message);
+redis.on('error', (err: Error) => {
+  logger.error({ err: err.message }, '[Redis] Error');
 });

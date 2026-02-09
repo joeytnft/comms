@@ -3,14 +3,11 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StyleSheet, View, Text } from 'react-native';
 import { COLORS, TYPOGRAPHY } from '@/config/theme';
 
-// TODO: Replace with actual screen imports as they are built
-// import { DashboardScreen } from '@/screens/Home/DashboardScreen';
-// import { ChatListScreen } from '@/screens/Chat/ChatListScreen';
-// import { PTTScreen } from '@/screens/PTT/PTTScreen';
-// import { AlertsScreen } from '@/screens/Alerts/AlertsScreen';
-// import { SettingsScreen } from '@/screens/Settings/SettingsScreen';
+// Implemented screens
+import { DashboardScreen } from '@/screens/Home/DashboardScreen';
+import { SettingsScreen } from '@/screens/Settings/SettingsScreen';
 
-// Placeholder screens until real ones are built
+// Placeholder screens until real ones are built in later phases
 const PlaceholderScreen = ({ name }: { name: string }) => (
   <View style={styles.placeholder}>
     <Text style={styles.placeholderText}>{name}</Text>
@@ -18,11 +15,9 @@ const PlaceholderScreen = ({ name }: { name: string }) => (
   </View>
 );
 
-const DashboardScreen = () => <PlaceholderScreen name="Dashboard" />;
 const ChatListScreen = () => <PlaceholderScreen name="Messages" />;
 const PTTScreen = () => <PlaceholderScreen name="Push to Talk" />;
 const AlertsScreen = () => <PlaceholderScreen name="Alerts" />;
-const SettingsScreen = () => <PlaceholderScreen name="Settings" />;
 
 export type MainTabParamList = {
   Dashboard: undefined;
@@ -60,7 +55,7 @@ export function MainTabNavigator() {
         component={DashboardScreen}
         options={{
           title: 'Home',
-          // TODO: Add icons — use @expo/vector-icons or custom SVGs
+          headerShown: false,
           tabBarIcon: ({ color }) => <TabIcon label="H" color={color} />,
         }}
       />
@@ -90,6 +85,7 @@ export function MainTabNavigator() {
         name="Settings"
         component={SettingsScreen}
         options={{
+          headerShown: false,
           tabBarIcon: ({ color }) => <TabIcon label="S" color={color} />,
         }}
       />

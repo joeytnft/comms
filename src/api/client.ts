@@ -1,12 +1,15 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
+import * as SecureStore from 'expo-secure-store';
 import { ENV } from '@/config/env';
-import { API_TIMEOUT } from '@/config/constants';
-// TODO: Import SecureStore for token management
-// import * as SecureStore from 'expo-secure-store';
-// import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from '@/config/constants';
+import { API_TIMEOUT, ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from '@/config/constants';
 
 class ApiClient {
   private client: AxiosInstance;
+  private isRefreshing = false;
+  private refreshQueue: Array<{
+    resolve: (token: string) => void;
+    reject: (error: unknown) => void;
+  }> = [];
 
   constructor() {
     this.client = axios.create({
@@ -20,11 +23,10 @@ class ApiClient {
     // Request interceptor — attach auth token
     this.client.interceptors.request.use(
       async (config: InternalAxiosRequestConfig) => {
-        // TODO: Get token from SecureStore
-        // const token = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
-        // if (token) {
-        //   config.headers.Authorization = `Bearer ${token}`;
-        // }
+        const token = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
         return config;
       },
       (error) => Promise.reject(error),
@@ -34,30 +36,78 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response) => response,
       async (error: AxiosError) => {
-        if (error.response?.status === 401) {
-          // TODO: Attempt token refresh
-          // const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
-          // if (refreshToken) {
-          //   try {
-          //     const { data } = await axios.post(`${ENV.apiUrl}/auth/refresh`, { refreshToken });
-          //     await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, data.accessToken);
-          //     // Retry original request
-          //     return this.client(error.config!);
-          //   } catch {
-          //     // Refresh failed — force logout
-          //   }
-          // }
+        const originalRequest = error.config as InternalAxiosRequestConfig & {
+          _retry?: boolean;
+        };
+
+        if (error.response?.status === 401 && !originalRequest._retry) {
+          if (this.isRefreshing) {
+            // Another refresh is in progress — queue this request
+            return new Promise((resolve, reject) => {
+              this.refreshQueue.push({
+                resolve: (token: string) => {
+                  originalRequest.headers.Authorization = `Bearer ${token}`;
+                  resolve(this.client(originalRequest));
+                },
+                reject,
+              });
+            });
+          }
+
+          originalRequest._retry = true;
+          this.isRefreshing = true;
+
+          try {
+            const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+            if (!refreshToken) {
+              this.processQueue(null, new Error('No refresh token'));
+              return Promise.reject(error);
+            }
+
+            const { data } = await axios.post(`${ENV.apiUrl}/auth/refresh`, {
+              refreshToken,
+            });
+
+            const newAccessToken = data.tokens.accessToken;
+            const newRefreshToken = data.tokens.refreshToken;
+
+            await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, newAccessToken);
+            await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, newRefreshToken);
+
+            originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+            this.processQueue(newAccessToken, null);
+
+            return this.client(originalRequest);
+          } catch (refreshError) {
+            this.processQueue(null, refreshError);
+            await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
+            await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+            return Promise.reject(refreshError);
+          } finally {
+            this.isRefreshing = false;
+          }
         }
+
         return Promise.reject(error);
       },
     );
+  }
+
+  private processQueue(token: string | null, error: unknown) {
+    for (const pending of this.refreshQueue) {
+      if (error) {
+        pending.reject(error);
+      } else {
+        pending.resolve(token!);
+      }
+    }
+    this.refreshQueue = [];
   }
 
   get instance() {
     return this.client;
   }
 
-  // Convenience methods
   async get<T>(url: string, params?: Record<string, unknown>) {
     const response = await this.client.get<T>(url, { params });
     return response.data;
