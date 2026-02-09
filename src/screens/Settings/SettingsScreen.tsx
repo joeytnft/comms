@@ -1,13 +1,17 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSubscriptionStore } from '@/store/useSubscriptionStore';
 import { Button } from '@/components/common';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 import { APP_VERSION } from '@/config/constants';
 
 export function SettingsScreen() {
   const { user, logout } = useAuth();
+  const { tierLabel } = useSubscriptionStore();
+  const navigation = useNavigation<any>();
 
   const handleLogout = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -45,6 +49,20 @@ export function SettingsScreen() {
             <Text style={styles.settingLabel}>Phone</Text>
             <Text style={styles.settingValue}>{user?.phone || 'Not set'}</Text>
           </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Subscription</Text>
+          <Pressable
+            style={styles.settingRow}
+            onPress={() => navigation.navigate('Subscription')}
+          >
+            <Text style={styles.settingLabel}>Current Plan</Text>
+            <View style={styles.tierRow}>
+              <Text style={styles.tierBadge}>{tierLabel()}</Text>
+              <Text style={styles.chevron}>{'>'}</Text>
+            </View>
+          </Pressable>
         </View>
 
         <View style={styles.section}>
@@ -133,6 +151,20 @@ const styles = StyleSheet.create({
   settingValue: {
     ...TYPOGRAPHY.body,
     color: COLORS.textPrimary,
+  },
+  tierRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  tierBadge: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.info,
+    fontWeight: '600',
+  },
+  chevron: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textMuted,
   },
   logoutButton: {
     marginTop: SPACING.lg,

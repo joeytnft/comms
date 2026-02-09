@@ -10,8 +10,10 @@ import { AppError } from './utils/errors';
 import { authRoutes } from './routes/auth';
 import { userRoutes } from './routes/users';
 
+import { groupRoutes } from './routes/groups';
+import { subscriptionRoutes } from './routes/subscriptions';
+
 // Route imports — uncomment as implemented
-// import { groupRoutes } from './routes/groups';
 // import { messageRoutes } from './routes/messages';
 // import { alertRoutes } from './routes/alerts';
 // import { incidentRoutes } from './routes/incidents';
@@ -83,8 +85,10 @@ export async function buildApp() {
   app.register(authRoutes, { prefix: '/auth' });
   app.register(userRoutes, { prefix: '/users' });
 
+  app.register(groupRoutes, { prefix: '/groups' });
+  app.register(subscriptionRoutes, { prefix: '/subscription' });
+
   // Uncomment as implemented:
-  // app.register(groupRoutes, { prefix: '/groups' });
   // app.register(messageRoutes, { prefix: '/groups' });
   // app.register(alertRoutes, { prefix: '/alerts' });
   // app.register(incidentRoutes, { prefix: '/incidents' });

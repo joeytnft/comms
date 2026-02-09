@@ -19,6 +19,10 @@ const envSchema = z.object({
   LIVEKIT_API_SECRET: z.string(),
   LIVEKIT_URL: z.string().url(),
 
+  // RevenueCat (optional — dev works without them)
+  REVENUECAT_API_KEY: z.string().optional(),
+  REVENUECAT_WEBHOOK_SECRET: z.string().optional(),
+
   // Server
   PORT: z.coerce.number().default(3001),
   HOST: z.string().default('0.0.0.0'),

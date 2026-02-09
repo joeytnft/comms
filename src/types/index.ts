@@ -4,3 +4,4 @@ export * from './message';
 export * from './alert';
 export * from './incident';
 export * from './ptt';
+export * from './subscription';

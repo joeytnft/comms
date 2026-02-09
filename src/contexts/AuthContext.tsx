@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect } from 'react';
 import { User, LoginCredentials, RegisterData } from '@/types';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useSubscriptionStore } from '@/store/useSubscriptionStore';
 
 interface AuthContextType {
   user: User | null;
@@ -15,12 +16,25 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { user, isLoading, isAuthenticated, login, register, logout, refreshSession, loadStoredSession } = useAuthStore();
+  const { user, isLoading, isAuthenticated, login, register, logout: authLogout, refreshSession, loadStoredSession } = useAuthStore();
+  const { fetchSubscription, clear: clearSubscription } = useSubscriptionStore();
 
   // Check for existing session on mount
   useEffect(() => {
     loadStoredSession();
   }, []);
+
+  // Fetch subscription when user becomes authenticated
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      fetchSubscription();
+    }
+  }, [isAuthenticated, user]);
+
+  const logout = async () => {
+    clearSubscription();
+    await authLogout();
+  };
 
   return (
     <AuthContext.Provider

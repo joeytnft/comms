@@ -22,12 +22,48 @@ model Organization {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  users    User[]
-  groups   Group[]
-  alerts   Alert[]
-  incidents Incident[]
+  // Subscription
+  subscriptionTier     SubscriptionTier   @default(FREE)
+  subscriptionStatus   SubscriptionStatus @default(TRIALING)
+  trialEndsAt          DateTime?
+  rcCustomerId         String?            @unique // RevenueCat customer ID
+
+  users         User[]
+  groups        Group[]
+  alerts        Alert[]
+  incidents     Incident[]
+  billingEvents BillingEvent[]
 
   @@map("organizations")
+}
+
+enum SubscriptionTier {
+  FREE
+  TEAM
+  PRO
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+model BillingEvent {
+  id             String            @id @default(cuid())
+  organizationId String
+  type           String            // e.g. 'subscription_created', 'payment_succeeded', 'tier_changed'
+  tier           SubscriptionTier?
+  rcEventId      String?           @unique // Idempotency key from RevenueCat
+  metadata       Json?
+  createdAt      DateTime          @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@map("billing_events")
 }
 
 // ============================================================================
