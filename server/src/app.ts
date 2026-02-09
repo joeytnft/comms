@@ -4,17 +4,17 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import jwt from '@fastify/jwt';
 import { Server } from 'socket.io';
-import { createServer } from 'http';
 import { env } from './config/env';
 import { logger } from './utils/logger';
+import { AppError } from './utils/errors';
+import { authRoutes } from './routes/auth';
+import { userRoutes } from './routes/users';
 
 // Route imports — uncomment as implemented
-// import { authRoutes } from './routes/auth';
 // import { groupRoutes } from './routes/groups';
 // import { messageRoutes } from './routes/messages';
 // import { alertRoutes } from './routes/alerts';
 // import { incidentRoutes } from './routes/incidents';
-// import { userRoutes } from './routes/users';
 
 // Socket imports — uncomment as implemented
 // import { setupSocketHandlers } from './sockets/socketHandler';
@@ -28,6 +28,32 @@ export async function buildApp() {
           ? { target: 'pino-pretty', options: { colorize: true } }
           : undefined,
     },
+  });
+
+  // Global error handler
+  app.setErrorHandler((error, request, reply) => {
+    if (error instanceof AppError) {
+      reply.status(error.statusCode).send({
+        error: error.code || error.name,
+        message: error.message,
+      });
+      return;
+    }
+
+    // Fastify validation errors
+    if (error.validation) {
+      reply.status(400).send({
+        error: 'VALIDATION_ERROR',
+        message: error.message,
+      });
+      return;
+    }
+
+    request.log.error(error);
+    reply.status(500).send({
+      error: 'INTERNAL_ERROR',
+      message: 'An unexpected error occurred',
+    });
   });
 
   // Plugins
@@ -53,13 +79,15 @@ export async function buildApp() {
     return { status: 'ok', timestamp: new Date().toISOString() };
   });
 
-  // API routes — uncomment as implemented
-  // app.register(authRoutes, { prefix: '/auth' });
+  // API routes
+  app.register(authRoutes, { prefix: '/auth' });
+  app.register(userRoutes, { prefix: '/users' });
+
+  // Uncomment as implemented:
   // app.register(groupRoutes, { prefix: '/groups' });
   // app.register(messageRoutes, { prefix: '/groups' });
   // app.register(alertRoutes, { prefix: '/alerts' });
   // app.register(incidentRoutes, { prefix: '/incidents' });
-  // app.register(userRoutes, { prefix: '/users' });
 
   // Socket.IO setup
   // After Fastify is ready, attach Socket.IO to the underlying HTTP server

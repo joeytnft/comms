@@ -15,7 +15,7 @@ declare module 'fastify' {
   }
 }
 
-export async function authenticate(request: FastifyRequest, reply: FastifyReply) {
+export async function authenticate(request: FastifyRequest, _reply: FastifyReply) {
   try {
     const token = request.headers.authorization?.replace('Bearer ', '');
     if (!token) {
