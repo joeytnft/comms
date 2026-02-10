@@ -4,6 +4,7 @@ import { env } from '../config/env';
 import { logger } from '../utils/logger';
 import { setupChatSocket } from './chatSocket';
 import { setupPTTSocket } from './pttSocket';
+import { setupAlertSocket } from './alertSocket';
 
 interface SocketUser {
   userId: string;
@@ -50,6 +51,9 @@ export function setupSocketHandlers(io: Server) {
 
     // Set up PTT event handlers
     setupPTTSocket(io, socket);
+
+    // Set up alert event handlers
+    setupAlertSocket(io, socket);
 
     socket.on('disconnect', (reason) => {
       logger.info(`[Socket] User disconnected: ${socket.user.userId} (${reason})`);

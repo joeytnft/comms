@@ -1,17 +1,22 @@
-export type AlertLevel = 'attention' | 'warning' | 'emergency';
+export type AlertLevel = 'ATTENTION' | 'WARNING' | 'EMERGENCY';
+
+export interface AlertAcknowledgment {
+  userId: string;
+  acknowledgedAt: string;
+}
 
 export interface Alert {
   id: string;
   organizationId: string;
-  triggeredBy: string;
-  triggeredByName: string;
+  triggeredById: string;
+  triggeredBy: { id: string; displayName: string };
   level: AlertLevel;
-  message?: string;
-  latitude?: number;
-  longitude?: number;
-  acknowledgedBy: string[]; // User IDs
-  resolvedAt?: string;
-  resolvedBy?: string;
+  message: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  acknowledgments: AlertAcknowledgment[];
+  resolvedAt: string | null;
+  resolvedById: string | null;
   createdAt: string;
 }
 
@@ -23,13 +28,13 @@ export interface TriggerAlertData {
 }
 
 export const ALERT_COLORS: Record<AlertLevel, string> = {
-  attention: '#F59E0B', // Amber
-  warning: '#F97316', // Orange
-  emergency: '#EF4444', // Red
+  ATTENTION: '#F59E0B', // Amber
+  WARNING: '#F97316', // Orange
+  EMERGENCY: '#EF4444', // Red
 };
 
 export const ALERT_LABELS: Record<AlertLevel, string> = {
-  attention: 'ATTENTION',
-  warning: 'WARNING',
-  emergency: 'EMERGENCY',
+  ATTENTION: 'Attention',
+  WARNING: 'Warning',
+  EMERGENCY: 'Emergency',
 };

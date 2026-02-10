@@ -66,6 +66,24 @@ export function SettingsScreen() {
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Features</Text>
+          <Pressable
+            style={styles.settingRow}
+            onPress={() => navigation.navigate('TeamMap')}
+          >
+            <Text style={styles.settingLabel}>Team Map</Text>
+            <Text style={styles.chevron}>{'>'}</Text>
+          </Pressable>
+          <Pressable
+            style={styles.settingRow}
+            onPress={() => navigation.navigate('Incidents')}
+          >
+            <Text style={styles.settingLabel}>Incidents</Text>
+            <Text style={styles.chevron}>{'>'}</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>App</Text>
           <View style={styles.settingRow}>
             <Text style={styles.settingLabel}>Version</Text>

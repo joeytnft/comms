@@ -3,28 +3,18 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StyleSheet, View, Text } from 'react-native';
 import { COLORS, TYPOGRAPHY } from '@/config/theme';
 
-// Implemented screens
 import { DashboardScreen } from '@/screens/Home/DashboardScreen';
-import { SettingsScreen } from '@/screens/Settings/SettingsScreen';
 import { GroupStackNavigator } from './GroupStackNavigator';
 import { PTTScreen } from '@/screens/PTT/PTTScreen';
-
-// Placeholder screens until real ones are built in later phases
-const PlaceholderScreen = ({ name }: { name: string }) => (
-  <View style={styles.placeholder}>
-    <Text style={styles.placeholderText}>{name}</Text>
-    <Text style={styles.placeholderSubtext}>Coming in next phase</Text>
-  </View>
-);
-
-const AlertsScreen = () => <PlaceholderScreen name="Alerts" />;
+import { AlertsScreen } from '@/screens/Alerts/AlertsScreen';
+import { MoreStackNavigator } from './MoreStackNavigator';
 
 export type MainTabParamList = {
   Dashboard: undefined;
   Groups: undefined;
   PTT: undefined;
   Alerts: undefined;
-  Settings: undefined;
+  More: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -80,15 +70,16 @@ export function MainTabNavigator() {
         name="Alerts"
         component={AlertsScreen}
         options={{
-          tabBarIcon: ({ color }) => <TabIcon label="A" color={color} />,
+          headerShown: false,
+          tabBarIcon: ({ color }) => <TabIcon label="!" color={color} isAlert />,
         }}
       />
       <Tab.Screen
-        name="Settings"
-        component={SettingsScreen}
+        name="More"
+        component={MoreStackNavigator}
         options={{
           headerShown: false,
-          tabBarIcon: ({ color }) => <TabIcon label="S" color={color} />,
+          tabBarIcon: ({ color }) => <TabIcon label="..." color={color} />,
         }}
       />
     </Tab.Navigator>
@@ -100,34 +91,23 @@ function TabIcon({
   label,
   color,
   isPTT = false,
+  isAlert = false,
 }: {
   label: string;
   color: string;
   isPTT?: boolean;
+  isAlert?: boolean;
 }) {
   return (
-    <View style={[styles.iconContainer, isPTT && styles.pttIcon]}>
-      <Text style={[styles.iconText, { color: isPTT ? COLORS.white : color }]}>{label}</Text>
+    <View style={[styles.iconContainer, isPTT && styles.pttIcon, isAlert && styles.alertIcon]}>
+      <Text style={[styles.iconText, { color: isPTT || isAlert ? COLORS.white : color }]}>
+        {label}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  placeholder: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-  },
-  placeholderText: {
-    ...TYPOGRAPHY.heading2,
-    color: COLORS.textPrimary,
-  },
-  placeholderSubtext: {
-    ...TYPOGRAPHY.bodySmall,
-    color: COLORS.textMuted,
-    marginTop: 8,
-  },
   iconContainer: {
     width: 28,
     height: 28,
@@ -139,6 +119,12 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     width: 36,
     height: 36,
+  },
+  alertIcon: {
+    backgroundColor: COLORS.warning,
+    borderRadius: 14,
+    width: 32,
+    height: 32,
   },
   iconText: {
     fontSize: 14,
