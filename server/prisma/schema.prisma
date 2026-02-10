@@ -90,6 +90,7 @@ model User {
   triggeredAlerts Alert[]           @relation("triggeredBy")
   reportedIncidents Incident[]      @relation("reportedBy")
   refreshTokens   RefreshToken[]
+  location        UserLocation?
 
   @@map("users")
 }
@@ -104,6 +105,22 @@ model RefreshToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("refresh_tokens")
+}
+
+// ============================================================================
+// LOCATION
+// ============================================================================
+
+model UserLocation {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  latitude  Float
+  longitude Float
+  updatedAt DateTime @default(now()) @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_locations")
 }
 
 // ============================================================================

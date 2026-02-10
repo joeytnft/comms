@@ -13,11 +13,10 @@ import { groupRoutes } from './routes/groups';
 import { subscriptionRoutes } from './routes/subscriptions';
 import { messageRoutes } from './routes/messages';
 import { pttRoutes } from './routes/ptt';
+import { alertRoutes } from './routes/alerts';
+import { locationRoutes } from './routes/location';
+import { incidentRoutes } from './routes/incidents';
 import { setupSocketHandlers } from './sockets/socketHandler';
-
-// Route imports — uncomment as implemented
-// import { alertRoutes } from './routes/alerts';
-// import { incidentRoutes } from './routes/incidents';
 
 export async function buildApp() {
   const app = Fastify({
@@ -86,10 +85,9 @@ export async function buildApp() {
   app.register(subscriptionRoutes, { prefix: '/subscription' });
   app.register(messageRoutes, { prefix: '/groups' });
   app.register(pttRoutes, { prefix: '/ptt' });
-
-  // Uncomment as implemented:
-  // app.register(alertRoutes, { prefix: '/alerts' });
-  // app.register(incidentRoutes, { prefix: '/incidents' });
+  app.register(alertRoutes, { prefix: '/alerts' });
+  app.register(locationRoutes, { prefix: '/location' });
+  app.register(incidentRoutes, { prefix: '/incidents' });
 
   // Socket.IO setup
   app.addHook('onReady', async () => {
