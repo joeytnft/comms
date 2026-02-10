@@ -118,6 +118,14 @@ export function GroupDetailScreen({ navigation, route }: Props) {
           </View>
         </View>
 
+        {/* Chat button */}
+        <Button
+          title="Open Chat"
+          variant="primary"
+          onPress={() => navigation.navigate('ChatRoom', { groupId, groupName: currentGroup.name })}
+          style={styles.chatButton}
+        />
+
         {/* Members section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -277,6 +285,9 @@ const styles = StyleSheet.create({
   addButton: {
     paddingHorizontal: SPACING.md,
     minHeight: 40,
+  },
+  chatButton: {
+    marginBottom: SPACING.lg,
   },
   deleteButton: {
     marginTop: SPACING.md,
