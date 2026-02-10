@@ -12,7 +12,7 @@ import * as hierarchyService from '../services/groups/hierarchyService';
 interface CreateGroupBody {
   name: string;
   description?: string;
-  type: 'LEAD' | 'SUB';
+  type: string; // Accepts 'lead'/'sub' or 'LEAD'/'SUB' — normalized to uppercase
   parentGroupId?: string;
   iconColor?: string;
 }
@@ -40,6 +40,14 @@ interface RemoveMemberParams {
 
 interface JoinByInviteBody {
   inviteCode: string;
+}
+
+/**
+ * Normalizes a group object for API responses, converting Prisma enum
+ * values (LEAD/SUB) to the lowercase format the client expects (lead/sub).
+ */
+function formatGroupType(type: string): string {
+  return type.toLowerCase();
 }
 
 const GROUP_SELECT = {
@@ -82,6 +90,7 @@ export async function listGroups(
 
   const formatted = groups.map((g) => ({
     ...g,
+    type: formatGroupType(g.type),
     memberCount: g._count.memberships,
     _count: undefined,
   }));
@@ -93,7 +102,8 @@ export async function createGroup(
   request: FastifyRequest<{ Body: CreateGroupBody }>,
   reply: FastifyReply,
 ) {
-  const { name, description, type, parentGroupId, iconColor } = request.body;
+  const { name, description, type: rawType, parentGroupId, iconColor } = request.body;
+  const type = rawType.toUpperCase() as 'LEAD' | 'SUB';
 
   await hierarchyService.validateGroupCreation(
     { name, description, type, parentGroupId, iconColor },
@@ -133,6 +143,7 @@ export async function createGroup(
   reply.status(201).send({
     group: {
       ...group,
+      type: formatGroupType(group.type),
       memberCount: group._count.memberships,
       members: group.memberships,
       _count: undefined,
@@ -174,6 +185,7 @@ export async function getGroup(
   reply.send({
     group: {
       ...group,
+      type: formatGroupType(group!.type),
       memberCount: group!._count.memberships,
       members: group!.memberships,
       _count: undefined,
@@ -215,6 +227,7 @@ export async function updateGroup(
   reply.send({
     group: {
       ...group,
+      type: formatGroupType(group.type),
       memberCount: group._count.memberships,
       _count: undefined,
     },
@@ -369,7 +382,11 @@ export async function getHierarchy(
   reply: FastifyReply,
 ) {
   const hierarchy = await hierarchyService.getGroupHierarchy(request.organizationId);
-  reply.send({ hierarchy });
+  const formatted = hierarchy.map((h) => ({
+    leadGroup: { ...h.leadGroup, type: formatGroupType(h.leadGroup.type) },
+    subGroups: h.subGroups.map((s) => ({ ...s, type: formatGroupType(s.type) })),
+  }));
+  reply.send({ hierarchy: formatted });
 }
 
 // --- Group Invites ---
