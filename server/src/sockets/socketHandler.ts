@@ -3,6 +3,7 @@ import { createVerifier } from 'fast-jwt';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
 import { setupChatSocket } from './chatSocket';
+import { setupPTTSocket } from './pttSocket';
 
 interface SocketUser {
   userId: string;
@@ -46,6 +47,9 @@ export function setupSocketHandlers(io: Server) {
 
     // Set up chat event handlers
     setupChatSocket(io, socket);
+
+    // Set up PTT event handlers
+    setupPTTSocket(io, socket);
 
     socket.on('disconnect', (reason) => {
       logger.info(`[Socket] User disconnected: ${socket.user.userId} (${reason})`);

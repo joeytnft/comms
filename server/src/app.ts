@@ -12,6 +12,7 @@ import { userRoutes } from './routes/users';
 import { groupRoutes } from './routes/groups';
 import { subscriptionRoutes } from './routes/subscriptions';
 import { messageRoutes } from './routes/messages';
+import { pttRoutes } from './routes/ptt';
 import { setupSocketHandlers } from './sockets/socketHandler';
 
 // Route imports — uncomment as implemented
@@ -84,6 +85,7 @@ export async function buildApp() {
   app.register(groupRoutes, { prefix: '/groups' });
   app.register(subscriptionRoutes, { prefix: '/subscription' });
   app.register(messageRoutes, { prefix: '/groups' });
+  app.register(pttRoutes, { prefix: '/ptt' });
 
   // Uncomment as implemented:
   // app.register(alertRoutes, { prefix: '/alerts' });

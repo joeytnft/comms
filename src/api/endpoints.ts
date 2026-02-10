@@ -52,7 +52,8 @@ export const ENDPOINTS = {
 
   // PTT
   PTT: {
-    TOKEN: (groupId: string) => `/ptt/${groupId}/token`, // Get LiveKit token
+    TOKEN: (groupId: string) => `/ptt/${groupId}/token`,
+    PARTICIPANTS: (groupId: string) => `/ptt/${groupId}/participants`,
   },
 
   // Alerts

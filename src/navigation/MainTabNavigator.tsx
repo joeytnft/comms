@@ -7,6 +7,7 @@ import { COLORS, TYPOGRAPHY } from '@/config/theme';
 import { DashboardScreen } from '@/screens/Home/DashboardScreen';
 import { SettingsScreen } from '@/screens/Settings/SettingsScreen';
 import { GroupStackNavigator } from './GroupStackNavigator';
+import { PTTScreen } from '@/screens/PTT/PTTScreen';
 
 // Placeholder screens until real ones are built in later phases
 const PlaceholderScreen = ({ name }: { name: string }) => (
@@ -16,7 +17,6 @@ const PlaceholderScreen = ({ name }: { name: string }) => (
   </View>
 );
 
-const PTTScreen = () => <PlaceholderScreen name="Push to Talk" />;
 const AlertsScreen = () => <PlaceholderScreen name="Alerts" />;
 
 export type MainTabParamList = {
@@ -72,6 +72,7 @@ export function MainTabNavigator() {
         component={PTTScreen}
         options={{
           title: 'Talk',
+          headerShown: false,
           tabBarIcon: ({ color }) => <TabIcon label="T" color={color} isPTT />,
         }}
       />
