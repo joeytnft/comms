@@ -27,9 +27,9 @@ export const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
     maxMembers: 20,
     features: {
       ptt: true,
-      alerts: false,
-      location: false,
-      incidents: false,
+      alerts: true,      // Enabled for trial/testing
+      location: true,    // Enabled for trial/testing
+      incidents: true,   // Enabled for trial/testing
       multiCampus: false,
     },
   },

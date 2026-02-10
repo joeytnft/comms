@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
-import * as SecureStore from 'expo-secure-store';
+import { secureStorage } from '@/utils/secureStorage';
 import { ENV } from '@/config/env';
 import { API_TIMEOUT, ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from '@/config/constants';
 
@@ -23,7 +23,7 @@ class ApiClient {
     // Request interceptor — attach auth token
     this.client.interceptors.request.use(
       async (config: InternalAxiosRequestConfig) => {
-        const token = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+        const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
@@ -58,7 +58,7 @@ class ApiClient {
           this.isRefreshing = true;
 
           try {
-            const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+            const refreshToken = await secureStorage.getItemAsync(REFRESH_TOKEN_KEY);
             if (!refreshToken) {
               this.processQueue(null, new Error('No refresh token'));
               return Promise.reject(error);
@@ -71,8 +71,8 @@ class ApiClient {
             const newAccessToken = data.tokens.accessToken;
             const newRefreshToken = data.tokens.refreshToken;
 
-            await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, newAccessToken);
-            await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, newRefreshToken);
+            await secureStorage.setItemAsync(ACCESS_TOKEN_KEY, newAccessToken);
+            await secureStorage.setItemAsync(REFRESH_TOKEN_KEY, newRefreshToken);
 
             originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
             this.processQueue(newAccessToken, null);
@@ -80,8 +80,8 @@ class ApiClient {
             return this.client(originalRequest);
           } catch (refreshError) {
             this.processQueue(null, refreshError);
-            await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
-            await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+            await secureStorage.deleteItemAsync(ACCESS_TOKEN_KEY);
+            await secureStorage.deleteItemAsync(REFRESH_TOKEN_KEY);
             return Promise.reject(refreshError);
           } finally {
             this.isRefreshing = false;

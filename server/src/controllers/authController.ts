@@ -15,7 +15,8 @@ interface RegisterBody {
   password: string;
   displayName: string;
   phone?: string;
-  organizationCode: string;
+  organizationCode?: string;   // Optional: for joining existing org
+  organizationName?: string;    // Optional: for creating new org
 }
 
 interface LoginBody {
@@ -44,23 +45,27 @@ export async function register(
   request: FastifyRequest<{ Body: RegisterBody }>,
   reply: FastifyReply,
 ) {
-  const { email, password, displayName, phone, organizationCode } = request.body;
+  const { email, password, displayName, phone, organizationCode, organizationName } = request.body;
 
-  if (!email || !password || !displayName || !organizationCode) {
-    throw new ValidationError('Email, password, displayName, and organizationCode are required');
+  if (!email || !password || !displayName) {
+    throw new ValidationError('Email, password, and displayName are required');
+  }
+
+  // Must provide EITHER organizationCode OR organizationName
+  if (!organizationCode && !organizationName) {
+    throw new ValidationError(
+      'Either organizationCode (to join) or organizationName (to create) is required',
+    );
+  }
+
+  if (organizationCode && organizationName) {
+    throw new ValidationError(
+      'Cannot provide both organizationCode and organizationName. Choose one.',
+    );
   }
 
   if (password.length < 8) {
     throw new ValidationError('Password must be at least 8 characters');
-  }
-
-  // Find the organization by invite code
-  const organization = await prisma.organization.findUnique({
-    where: { inviteCode: organizationCode },
-  });
-
-  if (!organization) {
-    throw new NotFoundError('Organization with that invite code');
   }
 
   // Check if email already exists
@@ -70,6 +75,37 @@ export async function register(
   }
 
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+  let organization;
+
+  // FLOW 1: Join existing organization with invite code
+  if (organizationCode) {
+    organization = await prisma.organization.findUnique({
+      where: { inviteCode: organizationCode },
+    });
+
+    if (!organization) {
+      throw new NotFoundError('Organization with that invite code');
+    }
+  }
+  // FLOW 2: Create new organization (admin signup)
+  else if (organizationName) {
+    const trialEnd = new Date();
+    trialEnd.setDate(trialEnd.getDate() + FREE_TRIAL_DAYS);
+
+    organization = await prisma.organization.create({
+      data: {
+        name: organizationName,
+        createdBy: email, // Temporarily use email; will update with userId after user creation
+        subscriptionTier: 'FREE',
+        subscriptionStatus: 'TRIALING',
+        trialEndsAt: trialEnd,
+      },
+    });
+  }
+
+  if (!organization) {
+    throw new Error('Failed to resolve or create organization');
+  }
 
   const user = await prisma.user.create({
     data: {
@@ -92,16 +128,11 @@ export async function register(
     },
   });
 
-  // Initialize free trial if this org hasn't been set up yet
-  if (!organization.trialEndsAt) {
-    const trialEnd = new Date();
-    trialEnd.setDate(trialEnd.getDate() + FREE_TRIAL_DAYS);
+  // Update organization createdBy if this was a new org
+  if (organizationName) {
     await prisma.organization.update({
       where: { id: organization.id },
-      data: {
-        trialEndsAt: trialEnd,
-        subscriptionStatus: 'TRIALING',
-      },
+      data: { createdBy: user.id },
     });
   }
 

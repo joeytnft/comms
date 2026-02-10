@@ -13,35 +13,53 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '@/config/theme';
 
+type RegistrationMode = 'create' | 'join';
+
 export function RegisterScreen({ navigation }: { navigation: any }) {
   const { register, isLoading } = useAuth();
+  const [mode, setMode] = useState<RegistrationMode>('create');
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [organizationCode, setOrganizationCode] = useState('');
+  const [organizationName, setOrganizationName] = useState('');
 
   const handleRegister = async () => {
-    if (!displayName.trim() || !email.trim() || !password || !organizationCode.trim()) {
+    if (!displayName.trim() || !email.trim() || !password) {
       Alert.alert('Error', 'Please fill in all required fields.');
       return;
     }
+
+    if (mode === 'join' && !organizationCode.trim()) {
+      Alert.alert('Error', 'Please enter an organization invite code.');
+      return;
+    }
+
+    if (mode === 'create' && !organizationName.trim()) {
+      Alert.alert('Error', 'Please enter your organization name.');
+      return;
+    }
+
     if (password !== confirmPassword) {
       Alert.alert('Error', 'Passwords do not match.');
       return;
     }
+
     if (password.length < 8) {
       Alert.alert('Error', 'Password must be at least 8 characters.');
       return;
     }
+
     try {
       await register({
         displayName: displayName.trim(),
         email: email.trim(),
         phone: phone.trim() || undefined,
         password,
-        organizationCode: organizationCode.trim(),
+        organizationCode: mode === 'join' ? organizationCode.trim() : undefined,
+        organizationName: mode === 'create' ? organizationName.trim() : undefined,
       });
     } catch (error: any) {
       Alert.alert('Registration Failed', error.message || 'Please try again.');
@@ -56,10 +74,66 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Join your church security team</Text>
+          <Text style={styles.subtitle}>
+            {mode === 'create'
+              ? 'Start your church security team'
+              : 'Join your church security team'}
+          </Text>
+        </View>
+
+        {/* Mode Toggle */}
+        <View style={styles.modeToggle}>
+          <TouchableOpacity
+            style={[styles.modeButton, mode === 'create' && styles.modeButtonActive]}
+            onPress={() => setMode('create')}
+          >
+            <Text style={[styles.modeText, mode === 'create' && styles.modeTextActive]}>
+              Create Organization
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.modeButton, mode === 'join' && styles.modeButtonActive]}
+            onPress={() => setMode('join')}
+          >
+            <Text style={[styles.modeText, mode === 'join' && styles.modeTextActive]}>
+              Join with Code
+            </Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.form}>
+          {/* Organization Code (Join Mode) */}
+          {mode === 'join' && (
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Organization Invite Code *</Text>
+              <TextInput
+                style={styles.input}
+                value={organizationCode}
+                onChangeText={setOrganizationCode}
+                placeholder="Enter invite code from your team lead"
+                placeholderTextColor={COLORS.gray500}
+                autoCapitalize="characters"
+              />
+            </View>
+          )}
+
+          {/* Organization Name (Create Mode) */}
+          {mode === 'create' && (
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Organization Name *</Text>
+              <TextInput
+                style={styles.input}
+                value={organizationName}
+                onChangeText={setOrganizationName}
+                placeholder="Your church name"
+                placeholderTextColor={COLORS.gray500}
+              />
+              <Text style={styles.helperText}>
+                You'll be the admin and can invite team members later.
+              </Text>
+            </View>
+          )}
+
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Display Name *</Text>
             <TextInput
@@ -93,18 +167,6 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
               placeholder="(555) 123-4567"
               placeholderTextColor={COLORS.gray500}
               keyboardType="phone-pad"
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Organization Code *</Text>
-            <TextInput
-              style={styles.input}
-              value={organizationCode}
-              onChangeText={setOrganizationCode}
-              placeholder="Enter invite code from your team lead"
-              placeholderTextColor={COLORS.gray500}
-              autoCapitalize="characters"
             />
           </View>
 
@@ -165,7 +227,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.xxl,
   },
   header: {
-    marginBottom: SPACING.xl,
+    marginBottom: SPACING.lg,
   },
   title: {
     ...TYPOGRAPHY.heading1,
@@ -175,6 +237,31 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.bodySmall,
     color: COLORS.textSecondary,
     marginTop: SPACING.xs,
+  },
+  modeToggle: {
+    flexDirection: 'row',
+    marginBottom: SPACING.lg,
+    backgroundColor: COLORS.surface,
+    borderRadius: BORDER_RADIUS.md,
+    padding: 4,
+  },
+  modeButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: BORDER_RADIUS.sm,
+    alignItems: 'center',
+  },
+  modeButtonActive: {
+    backgroundColor: COLORS.accent,
+  },
+  modeText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+  },
+  modeTextActive: {
+    color: COLORS.white,
   },
   form: {
     gap: SPACING.md,
@@ -186,6 +273,11 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.bodySmall,
     color: COLORS.textSecondary,
     fontWeight: '600',
+  },
+  helperText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    marginTop: -4,
   },
   input: {
     backgroundColor: COLORS.surface,

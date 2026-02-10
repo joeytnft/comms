@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
-import * as SecureStore from 'expo-secure-store';
+import { secureStorage } from '@/utils/secureStorage';
 import { ENV } from '@/config/env';
 import { ACCESS_TOKEN_KEY, SOCKET_RECONNECT_ATTEMPTS, SOCKET_RECONNECT_DELAY } from '@/config/constants';
 import { useAuth } from './AuthContext';
@@ -33,7 +33,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     let mounted = true;
 
     async function connect() {
-      const token = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+      const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
       if (!token || !mounted) return;
 
       const socket = io(ENV.socketUrl, {

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import * as SecureStore from 'expo-secure-store';
+import { secureStorage } from '@/utils/secureStorage';
 import { User, AuthTokens, LoginCredentials, RegisterData } from '@/types';
 import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY } from '@/config/constants';
 import { authService } from '@/services/authService';
@@ -18,14 +18,14 @@ interface AuthState {
 }
 
 async function storeTokens(tokens: AuthTokens): Promise<void> {
-  await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, tokens.accessToken);
-  await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, tokens.refreshToken);
+  await secureStorage.setItemAsync(ACCESS_TOKEN_KEY, tokens.accessToken);
+  await secureStorage.setItemAsync(REFRESH_TOKEN_KEY, tokens.refreshToken);
 }
 
 async function clearTokens(): Promise<void> {
-  await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
-  await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
-  await SecureStore.deleteItemAsync(USER_KEY);
+  await secureStorage.deleteItemAsync(ACCESS_TOKEN_KEY);
+  await secureStorage.deleteItemAsync(REFRESH_TOKEN_KEY);
+  await secureStorage.deleteItemAsync(USER_KEY);
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -40,7 +40,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const { user, tokens } = await authService.login(credentials);
       await storeTokens(tokens);
-      await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
+      await secureStorage.setItemAsync(USER_KEY, JSON.stringify(user));
       set({ user, isAuthenticated: true, isLoading: false });
     } catch (error) {
       set({ isLoading: false });
@@ -53,7 +53,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const { user, tokens } = await authService.register(data);
       await storeTokens(tokens);
-      await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
+      await secureStorage.setItemAsync(USER_KEY, JSON.stringify(user));
       set({ user, isAuthenticated: true, isLoading: false });
     } catch (error) {
       set({ isLoading: false });
@@ -63,7 +63,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: async () => {
     try {
-      const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+      const refreshToken = await secureStorage.getItemAsync(REFRESH_TOKEN_KEY);
       if (refreshToken) {
         await authService.logout(refreshToken).catch(() => {
           // Server logout is best-effort; clear local state regardless
@@ -76,7 +76,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   refreshSession: async () => {
-    const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+    const refreshToken = await secureStorage.getItemAsync(REFRESH_TOKEN_KEY);
     if (!refreshToken) {
       await clearTokens();
       set({ user: null, isAuthenticated: false, isLoading: false });
@@ -95,8 +95,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   loadStoredSession: async () => {
     try {
-      const accessToken = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
-      const userJson = await SecureStore.getItemAsync(USER_KEY);
+      const accessToken = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
+      const userJson = await secureStorage.getItemAsync(USER_KEY);
 
       if (!accessToken || !userJson) {
         set({ isLoading: false });
@@ -110,7 +110,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       try {
         const { user: freshUser } = await authService.getMe();
         set({ user: freshUser });
-        await SecureStore.setItemAsync(USER_KEY, JSON.stringify(freshUser));
+        await secureStorage.setItemAsync(USER_KEY, JSON.stringify(freshUser));
       } catch {
         // Token may be expired — try refresh
         await get().refreshSession();

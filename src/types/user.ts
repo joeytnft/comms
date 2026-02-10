@@ -31,5 +31,6 @@ export interface RegisterData {
   password: string;
   displayName: string;
   phone?: string;
-  organizationCode: string; // Invite code to join a church org
+  organizationCode?: string; // Invite code to join existing org
+  organizationName?: string; // Name for creating new org (admin signup)
 }

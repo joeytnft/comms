@@ -4,11 +4,9 @@
     "slug": "guardian-comm",
     "version": "0.1.0",
     "orientation": "portrait",
-    "icon": "./src/assets/images/icon.png",
     "scheme": "guardiancomm",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./src/assets/images/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#1a1a2e"
     },
@@ -25,10 +23,6 @@
       }
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./src/assets/images/adaptive-icon.png",
-        "backgroundColor": "#1a1a2e"
-      },
       "package": "com.guardiancomm.app",
       "permissions": [
         "RECORD_AUDIO",
