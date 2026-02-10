@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, TextInput, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -19,10 +19,11 @@ type Props = {
 export function GroupDetailScreen({ navigation, route }: Props) {
   const { groupId } = route.params;
   const { user } = useAuth();
-  const { currentGroup, isLoading, fetchGroup, addMember, removeMember, deleteGroup, clearCurrentGroup } = useGroupStore();
+  const { currentGroup, isLoading, fetchGroup, addMember, removeMember, deleteGroup, generateInvite, revokeInvite, clearCurrentGroup } = useGroupStore();
   const [showAddMember, setShowAddMember] = useState(false);
   const [memberEmail, setMemberEmail] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -82,6 +83,54 @@ export function GroupDetailScreen({ navigation, route }: Props) {
     );
   };
 
+  const handleGenerateInvite = async () => {
+    setIsGeneratingInvite(true);
+    try {
+      const code = await generateInvite(groupId);
+      await Share.share({
+        message: `Join my group on Guardian Comm! Use invite code: ${code}`,
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to generate invite';
+      Alert.alert('Error', message);
+    } finally {
+      setIsGeneratingInvite(false);
+    }
+  };
+
+  const handleShareInvite = async () => {
+    if (!currentGroup?.inviteCode) return;
+    try {
+      await Share.share({
+        message: `Join my group on Guardian Comm! Use invite code: ${currentGroup.inviteCode}`,
+      });
+    } catch {
+      // User cancelled share
+    }
+  };
+
+  const handleRevokeInvite = () => {
+    Alert.alert(
+      'Revoke Invite Code',
+      'This will disable the current invite code. Anyone with the old code will no longer be able to join.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Revoke',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await revokeInvite(groupId);
+            } catch (error: unknown) {
+              const message = error instanceof Error ? error.message : 'Failed to revoke invite';
+              Alert.alert('Error', message);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   if (isLoading && !currentGroup) {
     return <LoadingOverlay message="Loading group..." />;
   }
@@ -125,6 +174,43 @@ export function GroupDetailScreen({ navigation, route }: Props) {
           onPress={() => navigation.navigate('ChatRoom', { groupId, groupName: currentGroup.name })}
           style={styles.chatButton}
         />
+
+        {/* Invite section — admin only */}
+        {isAdmin && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Invite Code</Text>
+            </View>
+            {currentGroup.inviteCode ? (
+              <View>
+                <View style={styles.inviteCodeRow}>
+                  <Text style={styles.inviteCode}>{currentGroup.inviteCode}</Text>
+                </View>
+                <View style={styles.inviteActions}>
+                  <TouchableOpacity style={styles.inviteActionBtn} onPress={handleShareInvite}>
+                    <Text style={styles.inviteActionText}>Share</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.inviteActionBtn} onPress={handleGenerateInvite} disabled={isGeneratingInvite}>
+                    <Text style={styles.inviteActionText}>Regenerate</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.inviteActionBtn, styles.inviteRevokeBtn]} onPress={handleRevokeInvite}>
+                    <Text style={styles.inviteRevokeText}>Revoke</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <View>
+                <Text style={styles.noInviteText}>No active invite code</Text>
+                <Button
+                  title="Generate Invite Code"
+                  onPress={handleGenerateInvite}
+                  loading={isGeneratingInvite}
+                  style={styles.generateButton}
+                />
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Members section */}
         <View style={styles.section}>
@@ -288,6 +374,57 @@ const styles = StyleSheet.create({
   },
   chatButton: {
     marginBottom: SPACING.lg,
+  },
+  inviteCodeRow: {
+    backgroundColor: COLORS.background,
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.gray700,
+    borderStyle: 'dashed',
+  },
+  inviteCode: {
+    ...TYPOGRAPHY.heading2,
+    color: COLORS.accent,
+    letterSpacing: 3,
+    fontWeight: '700',
+  },
+  inviteActions: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
+  },
+  inviteActionBtn: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+    borderRadius: BORDER_RADIUS.sm,
+    paddingVertical: SPACING.sm,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.gray700,
+  },
+  inviteActionText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.info,
+    fontWeight: '600',
+  },
+  inviteRevokeBtn: {
+    borderColor: COLORS.danger,
+  },
+  inviteRevokeText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.danger,
+    fontWeight: '600',
+  },
+  noInviteText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginBottom: SPACING.sm,
+  },
+  generateButton: {
+    marginTop: SPACING.xs,
   },
   deleteButton: {
     marginTop: SPACING.md,

@@ -117,6 +117,7 @@ model Group {
   organizationId  String
   parentGroupId   String?   // Points to lead group (for sub-groups)
   iconColor       String?
+  inviteCode      String?   @unique  // Shareable code for self-join
   createdBy       String
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt

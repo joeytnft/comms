@@ -9,6 +9,9 @@ export async function groupRoutes(app: FastifyInstance) {
   // Hierarchy — must be before /:id to avoid param conflict
   app.get('/hierarchy', groupController.getHierarchy);
 
+  // Join by invite code — must be before /:id
+  app.post('/join', groupController.joinByInvite);
+
   // CRUD
   app.get('/', groupController.listGroups);
   app.post('/', { preHandler: [checkGroupLimit] }, groupController.createGroup as RouteHandlerMethod);
@@ -20,4 +23,8 @@ export async function groupRoutes(app: FastifyInstance) {
   app.get('/:id/members', groupController.getMembers);
   app.post('/:id/members', groupController.addMember);
   app.delete('/:id/members/:userId', groupController.removeMember);
+
+  // Invites
+  app.post('/:id/invite', groupController.generateInvite);
+  app.delete('/:id/invite', groupController.revokeInvite);
 }

@@ -14,6 +14,7 @@ export interface Group {
   createdAt: string;
   memberCount: number;
   iconColor?: string; // For visual identification
+  inviteCode?: string | null; // Shareable code for self-join
 }
 
 export interface GroupWithMembers extends Group {

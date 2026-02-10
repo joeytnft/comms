@@ -50,4 +50,16 @@ export const groupService = {
   async getHierarchy(): Promise<HierarchyResponse> {
     return apiClient.get<HierarchyResponse>(ENDPOINTS.GROUPS.HIERARCHY);
   },
+
+  async generateInvite(groupId: string): Promise<{ inviteCode: string }> {
+    return apiClient.post<{ inviteCode: string }>(ENDPOINTS.GROUPS.GENERATE_INVITE(groupId), {});
+  },
+
+  async revokeInvite(groupId: string): Promise<void> {
+    await apiClient.delete(ENDPOINTS.GROUPS.REVOKE_INVITE(groupId));
+  },
+
+  async joinByInvite(inviteCode: string): Promise<GroupDetailResponse> {
+    return apiClient.post<GroupDetailResponse>(ENDPOINTS.GROUPS.JOIN_BY_INVITE, { inviteCode });
+  },
 };
