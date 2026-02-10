@@ -1,5 +1,5 @@
-import React, { useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, TextInput, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -7,7 +7,7 @@ import { useGroupStore } from '@/store/useGroupStore';
 import { GroupCard } from '@/components/groups/GroupCard';
 import { LoadingOverlay } from '@/components/common';
 import { Group } from '@/types';
-import { COLORS, TYPOGRAPHY, SPACING } from '@/config/theme';
+import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '@/config/theme';
 import { GroupStackParamList } from '@/navigation/GroupStackNavigator';
 
 type Props = {
@@ -15,7 +15,10 @@ type Props = {
 };
 
 export function GroupListScreen({ navigation }: Props) {
-  const { groups, isLoading, error, fetchGroups } = useGroupStore();
+  const { groups, isLoading, error, fetchGroups, joinByInvite } = useGroupStore();
+  const [showJoinForm, setShowJoinForm] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
+  const [isJoining, setIsJoining] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -31,6 +34,23 @@ export function GroupListScreen({ navigation }: Props) {
     navigation.navigate('CreateGroup');
   };
 
+  const handleJoinByCode = async () => {
+    const code = inviteCode.trim().toUpperCase();
+    if (!code) return;
+    setIsJoining(true);
+    try {
+      await joinByInvite(code);
+      setInviteCode('');
+      setShowJoinForm(false);
+      Alert.alert('Joined!', 'You have successfully joined the group.');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to join group';
+      Alert.alert('Error', message);
+    } finally {
+      setIsJoining(false);
+    }
+  };
+
   if (isLoading && groups.length === 0) {
     return <LoadingOverlay message="Loading groups..." />;
   }
@@ -39,10 +59,39 @@ export function GroupListScreen({ navigation }: Props) {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>Groups</Text>
-        <TouchableOpacity style={styles.createButton} onPress={handleCreatePress}>
-          <Text style={styles.createButtonText}>+ New</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.joinButton}
+            onPress={() => setShowJoinForm(!showJoinForm)}
+          >
+            <Text style={styles.joinButtonText}>{showJoinForm ? 'Cancel' : 'Join'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.createButton} onPress={handleCreatePress}>
+            <Text style={styles.createButtonText}>+ New</Text>
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {showJoinForm && (
+        <View style={styles.joinForm}>
+          <TextInput
+            style={styles.joinInput}
+            placeholder="Enter invite code"
+            placeholderTextColor={COLORS.textMuted}
+            value={inviteCode}
+            onChangeText={setInviteCode}
+            autoCapitalize="characters"
+            maxLength={8}
+          />
+          <TouchableOpacity
+            style={[styles.joinSubmitButton, (!inviteCode.trim() || isJoining) && styles.joinSubmitDisabled]}
+            onPress={handleJoinByCode}
+            disabled={!inviteCode.trim() || isJoining}
+          >
+            <Text style={styles.joinSubmitText}>{isJoining ? 'Joining...' : 'Join Group'}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {error ? (
         <View style={styles.errorContainer}>
@@ -97,6 +146,22 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.heading1,
     color: COLORS.textPrimary,
   },
+  headerActions: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  joinButton: {
+    borderWidth: 1,
+    borderColor: COLORS.accent,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: 8,
+  },
+  joinButtonText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.accent,
+    fontWeight: '600',
+  },
   createButton: {
     backgroundColor: COLORS.accent,
     paddingHorizontal: SPACING.md,
@@ -104,6 +169,38 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   createButtonText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.white,
+    fontWeight: '600',
+  },
+  joinForm: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.md,
+  },
+  joinInput: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    ...TYPOGRAPHY.body,
+    color: COLORS.textPrimary,
+    borderWidth: 1,
+    borderColor: COLORS.gray700,
+    letterSpacing: 2,
+  },
+  joinSubmitButton: {
+    backgroundColor: COLORS.accent,
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.md,
+    justifyContent: 'center',
+  },
+  joinSubmitDisabled: {
+    opacity: 0.5,
+  },
+  joinSubmitText: {
     ...TYPOGRAPHY.bodySmall,
     color: COLORS.white,
     fontWeight: '600',

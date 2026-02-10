@@ -38,6 +38,9 @@ export const ENDPOINTS = {
     REMOVE_MEMBER: (groupId: string, userId: string) =>
       `/groups/${groupId}/members/${userId}`,
     HIERARCHY: '/groups/hierarchy',
+    GENERATE_INVITE: (id: string) => `/groups/${id}/invite`,
+    REVOKE_INVITE: (id: string) => `/groups/${id}/invite`,
+    JOIN_BY_INVITE: '/groups/join',
   },
 
   // Messages

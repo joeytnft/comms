@@ -17,6 +17,9 @@ interface GroupState {
   deleteGroup: (id: string) => Promise<void>;
   addMember: (data: InviteMemberData) => Promise<void>;
   removeMember: (groupId: string, userId: string) => Promise<void>;
+  generateInvite: (groupId: string) => Promise<string>;
+  revokeInvite: (groupId: string) => Promise<void>;
+  joinByInvite: (inviteCode: string) => Promise<void>;
   clearError: () => void;
   clearCurrentGroup: () => void;
 }
@@ -153,6 +156,56 @@ export const useGroupStore = create<GroupState>((set, get) => ({
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to remove member';
       set({ error: message });
+      throw error;
+    }
+  },
+
+  generateInvite: async (groupId) => {
+    set({ error: null });
+    try {
+      const { inviteCode } = await groupService.generateInvite(groupId);
+      set((state) => {
+        if (state.currentGroup?.id === groupId) {
+          return { currentGroup: { ...state.currentGroup, inviteCode } };
+        }
+        return {};
+      });
+      return inviteCode;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to generate invite';
+      set({ error: message });
+      throw error;
+    }
+  },
+
+  revokeInvite: async (groupId) => {
+    set({ error: null });
+    try {
+      await groupService.revokeInvite(groupId);
+      set((state) => {
+        if (state.currentGroup?.id === groupId) {
+          return { currentGroup: { ...state.currentGroup, inviteCode: null } };
+        }
+        return {};
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to revoke invite';
+      set({ error: message });
+      throw error;
+    }
+  },
+
+  joinByInvite: async (inviteCode) => {
+    set({ isLoading: true, error: null });
+    try {
+      const { group } = await groupService.joinByInvite(inviteCode);
+      set((state) => ({
+        groups: [...state.groups, group],
+        isLoading: false,
+      }));
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to join group';
+      set({ error: message, isLoading: false });
       throw error;
     }
   },

@@ -1,7 +1,9 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
+import crypto from 'crypto';
 import { prisma } from '../config/database';
 import {
   AuthorizationError,
+  ConflictError,
   NotFoundError,
   ValidationError,
 } from '../utils/errors';
@@ -36,6 +38,10 @@ interface RemoveMemberParams {
   userId: string;
 }
 
+interface JoinByInviteBody {
+  inviteCode: string;
+}
+
 const GROUP_SELECT = {
   id: true,
   name: true,
@@ -44,10 +50,16 @@ const GROUP_SELECT = {
   organizationId: true,
   parentGroupId: true,
   iconColor: true,
+  inviteCode: true,
   createdBy: true,
   createdAt: true,
   updatedAt: true,
 } as const;
+
+function generateInviteCode(): string {
+  // 8-char alphanumeric code, e.g. "A3K9X2M7"
+  return crypto.randomBytes(4).toString('hex').toUpperCase();
+}
 
 async function findGroupInOrg(groupId: string, organizationId: string) {
   const group = await prisma.group.findFirst({
@@ -358,4 +370,115 @@ export async function getHierarchy(
 ) {
   const hierarchy = await hierarchyService.getGroupHierarchy(request.organizationId);
   reply.send({ hierarchy });
+}
+
+// --- Group Invites ---
+
+/**
+ * Generate or regenerate an invite code for a group. Admin only.
+ */
+export async function generateInvite(
+  request: FastifyRequest<{ Params: GroupIdParams }>,
+  reply: FastifyReply,
+) {
+  await findGroupInOrg(request.params.id, request.organizationId);
+
+  const role = await hierarchyService.getUserRole(request.userId, request.params.id);
+  if (role !== 'ADMIN') {
+    throw new AuthorizationError('Only group admins can generate invite codes');
+  }
+
+  // Generate a unique code (retry on collision)
+  let code: string;
+  let attempts = 0;
+  do {
+    code = generateInviteCode();
+    const existing = await prisma.group.findUnique({ where: { inviteCode: code } });
+    if (!existing) break;
+    attempts++;
+  } while (attempts < 5);
+
+  const group = await prisma.group.update({
+    where: { id: request.params.id },
+    data: { inviteCode: code },
+    select: { id: true, inviteCode: true },
+  });
+
+  reply.send({ inviteCode: group.inviteCode });
+}
+
+/**
+ * Revoke (clear) a group's invite code. Admin only.
+ */
+export async function revokeInvite(
+  request: FastifyRequest<{ Params: GroupIdParams }>,
+  reply: FastifyReply,
+) {
+  await findGroupInOrg(request.params.id, request.organizationId);
+
+  const role = await hierarchyService.getUserRole(request.userId, request.params.id);
+  if (role !== 'ADMIN') {
+    throw new AuthorizationError('Only group admins can revoke invite codes');
+  }
+
+  await prisma.group.update({
+    where: { id: request.params.id },
+    data: { inviteCode: null },
+  });
+
+  reply.status(204).send();
+}
+
+/**
+ * Join a group using an invite code. Any authenticated org member can use this.
+ */
+export async function joinByInvite(
+  request: FastifyRequest<{ Body: JoinByInviteBody }>,
+  reply: FastifyReply,
+) {
+  const { inviteCode } = request.body;
+
+  if (!inviteCode) {
+    throw new ValidationError('inviteCode is required');
+  }
+
+  const group = await prisma.group.findUnique({
+    where: { inviteCode },
+    select: { id: true, name: true, organizationId: true },
+  });
+
+  if (!group) {
+    throw new NotFoundError('Group with that invite code');
+  }
+
+  // User must be in the same organization
+  if (group.organizationId !== request.organizationId) {
+    throw new AuthorizationError('This invite code is for a different organization');
+  }
+
+  // Check if already a member
+  const existing = await prisma.groupMembership.findUnique({
+    where: { groupId_userId: { groupId: group.id, userId: request.userId } },
+  });
+  if (existing) {
+    throw new ConflictError('You are already a member of this group');
+  }
+
+  const membership = await prisma.groupMembership.create({
+    data: {
+      groupId: group.id,
+      userId: request.userId,
+      role: 'MEMBER',
+    },
+    include: {
+      user: {
+        select: { id: true, displayName: true, avatarUrl: true, lastSeenAt: true },
+      },
+      group: {
+        select: { id: true, name: true, type: true },
+      },
+    },
+  });
+
+  reply.status(201).send({ membership });
 }
