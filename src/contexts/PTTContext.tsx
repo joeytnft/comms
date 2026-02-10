@@ -1,12 +1,20 @@
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
-import { PTTState, PTTConfig, PTTSession, DEFAULT_PTT_CONFIG } from '@/types';
+import React, { createContext, useContext, useCallback, useEffect } from 'react';
+import { Vibration } from 'react-native';
+import { Audio } from 'expo-av';
+import { PTTState, PTTConfig } from '@/types';
 import { useSocket } from './SocketContext';
+import { usePTTStore } from '@/store/usePTTStore';
 
 interface PTTContextType {
   config: PTTConfig;
-  currentSession: PTTSession | null;
-  state: PTTState;
-  startTransmitting: (groupId: string) => void;
+  pttState: PTTState;
+  isConnected: boolean;
+  isConnecting: boolean;
+  currentGroupId: string | null;
+  currentGroupName: string | null;
+  activeSpeaker: { userId: string; displayName: string } | null;
+  connectedMemberCount: number;
+  startTransmitting: () => void;
   stopTransmitting: () => void;
   joinChannel: (groupId: string) => Promise<void>;
   leaveChannel: () => void;
@@ -17,68 +25,137 @@ const PTTContext = createContext<PTTContextType | undefined>(undefined);
 
 export function PTTProvider({ children }: { children: React.ReactNode }) {
   const { socket } = useSocket();
-  const [config, setConfig] = useState<PTTConfig>(DEFAULT_PTT_CONFIG);
-  const [currentSession, setCurrentSession] = useState<PTTSession | null>(null);
-  const [state, setState] = useState<PTTState>('idle');
-  const audioStreamRef = useRef<MediaStream | null>(null);
+  const store = usePTTStore();
 
-  const startTransmitting = useCallback(
-    (groupId: string) => {
-      if (state === 'transmitting') return;
-      setState('transmitting');
+  // Set up socket listeners for PTT events
+  useEffect(() => {
+    if (!socket) return;
 
-      // TODO: Implement actual audio capture and WebRTC/LiveKit streaming
-      // 1. Request microphone access
-      // 2. Create audio stream
-      // 3. Connect to LiveKit room for the group
-      // 4. Publish audio track
-      // 5. Notify group via socket that user is transmitting
+    const handleSpeaking = (data: {
+      groupId: string;
+      userId: string;
+      displayName: string;
+      startedAt: string;
+    }) => {
+      usePTTStore.getState().setActiveSpeaker({
+        userId: data.userId,
+        displayName: data.displayName,
+        startedAt: data.startedAt,
+      });
 
-      socket?.emit('ptt:start', { groupId });
-    },
-    [state, socket],
-  );
+      // Vibrate on receive
+      if (usePTTStore.getState().config.vibrateOnReceive) {
+        Vibration.vibrate(100);
+      }
+    };
 
-  const stopTransmitting = useCallback(() => {
-    if (state !== 'transmitting') return;
-    setState('idle');
+    const handleStopped = () => {
+      usePTTStore.getState().setActiveSpeaker(null);
+    };
 
-    // TODO: Stop audio capture, unpublish track
-    socket?.emit('ptt:stop', { groupId: currentSession?.groupId });
-  }, [state, socket, currentSession]);
+    const handleMemberJoined = (data: { userId: string }) => {
+      usePTTStore.getState().addConnectedMember(data.userId);
+    };
+
+    const handleMemberLeft = (data: { userId: string }) => {
+      usePTTStore.getState().removeConnectedMember(data.userId);
+    };
+
+    const handleRoomState = (data: {
+      groupId: string;
+      connectedMembers: number;
+      memberIds: string[];
+    }) => {
+      usePTTStore.getState().setConnectedMembers(data.memberIds);
+    };
+
+    socket.on('ptt:speaking', handleSpeaking);
+    socket.on('ptt:stopped', handleStopped);
+    socket.on('ptt:member_joined', handleMemberJoined);
+    socket.on('ptt:member_left', handleMemberLeft);
+    socket.on('ptt:room_state', handleRoomState);
+
+    return () => {
+      socket.off('ptt:speaking', handleSpeaking);
+      socket.off('ptt:stopped', handleStopped);
+      socket.off('ptt:member_joined', handleMemberJoined);
+      socket.off('ptt:member_left', handleMemberLeft);
+      socket.off('ptt:room_state', handleRoomState);
+    };
+  }, [socket]);
 
   const joinChannel = useCallback(
     async (groupId: string) => {
-      // TODO: Connect to LiveKit room for this group
-      // Generate a LiveKit token from the server
-      // Join the room as a subscriber (and publisher when PTT is pressed)
-      setCurrentSession({
-        groupId,
-        groupName: '', // TODO: Resolve from group store
-        state: 'idle',
-        connectedMembers: 0,
+      if (!socket) return;
+
+      // Fetch token from server (validates membership + subscription)
+      const response = await usePTTStore.getState().fetchToken(groupId);
+      usePTTStore.getState().setCurrentGroup(groupId, response.groupName);
+
+      // Request audio permissions
+      const { granted } = await Audio.requestPermissionsAsync();
+      if (!granted) {
+        usePTTStore.getState().disconnect();
+        throw new Error('Microphone permission is required for PTT');
+      }
+
+      // Set audio mode for PTT
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        shouldDuckAndroid: true,
       });
+
+      // Join the PTT socket room for signaling
+      socket.emit('ptt:join', { groupId });
+      usePTTStore.getState().setConnected(true);
+
+      // Fetch participant list
+      usePTTStore.getState().fetchParticipants(groupId);
     },
     [socket],
   );
 
   const leaveChannel = useCallback(() => {
-    // TODO: Disconnect from LiveKit room
-    setCurrentSession(null);
-    setState('idle');
-  }, []);
+    const currentGroupId = usePTTStore.getState().currentGroupId;
+    if (!socket || !currentGroupId) return;
+
+    socket.emit('ptt:leave', { groupId: currentGroupId });
+    usePTTStore.getState().disconnect();
+  }, [socket]);
+
+  const startTransmitting = useCallback(() => {
+    const { currentGroupId, pttState } = usePTTStore.getState();
+    if (!socket || !currentGroupId || pttState === 'transmitting') return;
+
+    usePTTStore.getState().setTransmitting(true);
+    socket.emit('ptt:start', { groupId: currentGroupId });
+  }, [socket]);
+
+  const stopTransmitting = useCallback(() => {
+    const { currentGroupId, pttState } = usePTTStore.getState();
+    if (!socket || !currentGroupId || pttState !== 'transmitting') return;
+
+    usePTTStore.getState().setTransmitting(false);
+    socket.emit('ptt:stop', { groupId: currentGroupId });
+  }, [socket]);
 
   const updateConfig = useCallback((updates: Partial<PTTConfig>) => {
-    setConfig((prev) => ({ ...prev, ...updates }));
-    // TODO: Persist config to MMKV
+    usePTTStore.getState().updateConfig(updates);
   }, []);
 
   return (
     <PTTContext.Provider
       value={{
-        config,
-        currentSession,
-        state,
+        config: store.config,
+        pttState: store.pttState,
+        isConnected: store.isConnected,
+        isConnecting: store.isConnecting,
+        currentGroupId: store.currentGroupId,
+        currentGroupName: store.currentGroupName,
+        activeSpeaker: store.activeSpeaker,
+        connectedMemberCount: store.connectedMemberIds.length,
         startTransmitting,
         stopTransmitting,
         joinChannel,
