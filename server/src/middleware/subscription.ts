@@ -58,7 +58,8 @@ export function requireFeature(feature: keyof PlanLimits['features']) {
 }
 
 /**
- * Middleware that checks group creation limit before allowing group creation.
+ * Middleware that checks group creation limits before allowing group creation.
+ * Enforces separate limits for LEAD groups and SUB groups based on the plan.
  */
 export async function checkGroupLimit(request: FastifyRequest, _reply: FastifyReply) {
   const org = await getOrgSubscription(request.organizationId);
@@ -70,16 +71,34 @@ export async function checkGroupLimit(request: FastifyRequest, _reply: FastifyRe
   }
 
   const limits = PLAN_LIMITS[org.subscriptionTier];
-  if (limits.maxGroups === -1) return; // unlimited
+  const body = request.body as { type?: string } | undefined;
+  const groupType = body?.type?.toUpperCase();
 
-  const groupCount = await prisma.group.count({
-    where: { organizationId: request.organizationId },
-  });
+  if (groupType === 'SUB') {
+    if (limits.maxSubGroups === -1) return; // unlimited
 
-  if (groupCount >= limits.maxGroups) {
-    throw new AuthorizationError(
-      `Group limit reached (${limits.maxGroups}). Upgrade your plan to create more groups.`,
-    );
+    const subGroupCount = await prisma.group.count({
+      where: { organizationId: request.organizationId, type: 'SUB' },
+    });
+
+    if (subGroupCount >= limits.maxSubGroups) {
+      throw new AuthorizationError(
+        `Sub-group limit reached (${limits.maxSubGroups}). Upgrade your plan to create more sub-groups.`,
+      );
+    }
+  } else {
+    // LEAD group
+    if (limits.maxLeadGroups === -1) return; // unlimited
+
+    const leadGroupCount = await prisma.group.count({
+      where: { organizationId: request.organizationId, type: 'LEAD' },
+    });
+
+    if (leadGroupCount >= limits.maxLeadGroups) {
+      throw new AuthorizationError(
+        `Lead group limit reached (${limits.maxLeadGroups}). Upgrade your plan to create more groups.`,
+      );
+    }
   }
 }
 

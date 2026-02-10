@@ -22,8 +22,9 @@ interface SubscriptionState {
 
 const TIER_LABELS: Record<SubscriptionTier, string> = {
   FREE: 'Free',
-  TEAM: 'Team',
-  PRO: 'Pro',
+  BASIC: 'Basic',
+  STANDARD: 'Standard',
+  ENTERPRISE: 'Enterprise',
 };
 
 export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({

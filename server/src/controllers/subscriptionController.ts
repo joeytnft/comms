@@ -15,13 +15,23 @@ export async function getSubscription(
       subscriptionTier: true,
       subscriptionStatus: true,
       trialEndsAt: true,
-      _count: { select: { users: true, groups: true } },
+      _count: { select: { users: true } },
     },
   });
 
   if (!org) {
     throw new NotFoundError('Organization');
   }
+
+  // Count lead and sub groups separately
+  const [leadGroups, subGroups] = await Promise.all([
+    prisma.group.count({
+      where: { organizationId: request.organizationId, type: 'LEAD' },
+    }),
+    prisma.group.count({
+      where: { organizationId: request.organizationId, type: 'SUB' },
+    }),
+  ]);
 
   const limits = PLAN_LIMITS[org.subscriptionTier];
 
@@ -33,7 +43,8 @@ export async function getSubscription(
       limits,
       usage: {
         members: org._count.users,
-        groups: org._count.groups,
+        leadGroups,
+        subGroups,
       },
     },
   });
@@ -63,9 +74,10 @@ interface WebhookBody {
  * RevenueCat webhook handler.
  * RevenueCat sends events when subscription status changes.
  * We map RevenueCat entitlements to our tier system:
- *   - "team" entitlement → TEAM tier
- *   - "pro" entitlement  → PRO tier
- *   - no active entitlement → FREE tier
+ *   - "enterprise" entitlement → ENTERPRISE tier
+ *   - "standard" entitlement   → STANDARD tier
+ *   - "basic" entitlement      → BASIC tier
+ *   - no active entitlement    → FREE tier
  */
 export async function handleWebhook(
   request: FastifyRequest<{ Body: WebhookBody }>,
@@ -112,10 +124,12 @@ export async function handleWebhook(
   let newTier: SubscriptionTier = 'FREE';
   let newStatus: SubscriptionStatus = org.subscriptionStatus;
 
-  if (event.entitlement_ids?.includes('pro')) {
-    newTier = 'PRO';
-  } else if (event.entitlement_ids?.includes('team')) {
-    newTier = 'TEAM';
+  if (event.entitlement_ids?.includes('enterprise')) {
+    newTier = 'ENTERPRISE';
+  } else if (event.entitlement_ids?.includes('standard')) {
+    newTier = 'STANDARD';
+  } else if (event.entitlement_ids?.includes('basic')) {
+    newTier = 'BASIC';
   }
 
   // Map RevenueCat event types to subscription status
