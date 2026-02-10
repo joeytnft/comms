@@ -9,17 +9,14 @@ import { logger } from './utils/logger';
 import { AppError } from './utils/errors';
 import { authRoutes } from './routes/auth';
 import { userRoutes } from './routes/users';
-
 import { groupRoutes } from './routes/groups';
 import { subscriptionRoutes } from './routes/subscriptions';
+import { messageRoutes } from './routes/messages';
+import { setupSocketHandlers } from './sockets/socketHandler';
 
 // Route imports — uncomment as implemented
-// import { messageRoutes } from './routes/messages';
 // import { alertRoutes } from './routes/alerts';
 // import { incidentRoutes } from './routes/incidents';
-
-// Socket imports — uncomment as implemented
-// import { setupSocketHandlers } from './sockets/socketHandler';
 
 export async function buildApp() {
   const app = Fastify({
@@ -84,17 +81,15 @@ export async function buildApp() {
   // API routes
   app.register(authRoutes, { prefix: '/auth' });
   app.register(userRoutes, { prefix: '/users' });
-
   app.register(groupRoutes, { prefix: '/groups' });
   app.register(subscriptionRoutes, { prefix: '/subscription' });
+  app.register(messageRoutes, { prefix: '/groups' });
 
   // Uncomment as implemented:
-  // app.register(messageRoutes, { prefix: '/groups' });
   // app.register(alertRoutes, { prefix: '/alerts' });
   // app.register(incidentRoutes, { prefix: '/incidents' });
 
   // Socket.IO setup
-  // After Fastify is ready, attach Socket.IO to the underlying HTTP server
   app.addHook('onReady', async () => {
     const httpServer = app.server;
     const io = new Server(httpServer, {
@@ -105,16 +100,7 @@ export async function buildApp() {
       transports: ['websocket'],
     });
 
-    // TODO: Uncomment when socket handlers are implemented
-    // setupSocketHandlers(io);
-
-    io.on('connection', (socket) => {
-      logger.info(`[Socket] Client connected: ${socket.id}`);
-
-      socket.on('disconnect', () => {
-        logger.info(`[Socket] Client disconnected: ${socket.id}`);
-      });
-    });
+    setupSocketHandlers(io);
 
     logger.info('[Socket.IO] Attached to HTTP server');
   });

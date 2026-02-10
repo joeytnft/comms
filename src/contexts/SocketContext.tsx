@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
+import * as SecureStore from 'expo-secure-store';
 import { ENV } from '@/config/env';
+import { ACCESS_TOKEN_KEY, SOCKET_RECONNECT_ATTEMPTS, SOCKET_RECONNECT_DELAY } from '@/config/constants';
 import { useAuth } from './AuthContext';
 
 interface SocketContextType {
@@ -14,13 +16,12 @@ const SocketContext = createContext<SocketContextType>({
 });
 
 export function SocketProvider({ children }: { children: React.ReactNode }) {
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    if (!isAuthenticated || !user) {
-      // Disconnect if logged out
+    if (!isAuthenticated) {
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
@@ -29,38 +30,45 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // TODO: Get actual token from SecureStore
-    const socket = io(ENV.socketUrl, {
-      auth: {
-        // token: accessToken,
-        userId: user.id,
-      },
-      transports: ['websocket'],
-      reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 2000,
-    });
+    let mounted = true;
 
-    socket.on('connect', () => {
-      console.warn('[Socket] Connected');
-      setIsConnected(true);
-    });
+    async function connect() {
+      const token = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+      if (!token || !mounted) return;
 
-    socket.on('disconnect', (reason) => {
-      console.warn('[Socket] Disconnected:', reason);
-      setIsConnected(false);
-    });
+      const socket = io(ENV.socketUrl, {
+        auth: { token },
+        transports: ['websocket'],
+        reconnection: true,
+        reconnectionAttempts: SOCKET_RECONNECT_ATTEMPTS,
+        reconnectionDelay: SOCKET_RECONNECT_DELAY,
+      });
 
-    socket.on('connect_error', (error) => {
-      console.error('[Socket] Connection error:', error.message);
-    });
+      socket.on('connect', () => {
+        if (mounted) setIsConnected(true);
+      });
 
-    socketRef.current = socket;
+      socket.on('disconnect', () => {
+        if (mounted) setIsConnected(false);
+      });
+
+      socket.on('connect_error', (error) => {
+        console.warn('[Socket] Connection error:', error.message);
+      });
+
+      socketRef.current = socket;
+    }
+
+    connect();
 
     return () => {
-      socket.disconnect();
+      mounted = false;
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
     };
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated]);
 
   return (
     <SocketContext.Provider value={{ socket: socketRef.current, isConnected }}>
