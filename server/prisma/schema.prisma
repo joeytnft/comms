@@ -39,8 +39,9 @@ model Organization {
 
 enum SubscriptionTier {
   FREE
-  TEAM
-  PRO
+  BASIC
+  STANDARD
+  ENTERPRISE
 }
 
 enum SubscriptionStatus {

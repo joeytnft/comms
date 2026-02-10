@@ -8,8 +8,9 @@ import { SubscriptionTier } from '@/types/subscription';
 
 const TIER_COLORS: Record<SubscriptionTier, string> = {
   FREE: COLORS.gray500,
-  TEAM: COLORS.info,
-  PRO: COLORS.warning,
+  BASIC: COLORS.info,
+  STANDARD: COLORS.warning,
+  ENTERPRISE: COLORS.accent,
 };
 
 const FEATURE_LABELS: Record<string, string> = {
@@ -19,6 +20,11 @@ const FEATURE_LABELS: Record<string, string> = {
   incidents: 'Incident Logging',
   multiCampus: 'Multi-Campus Support',
 };
+
+function formatLimit(value: number, label: string): string {
+  if (value === -1) return `Unlimited ${label}`;
+  return `${value} ${label}`;
+}
 
 export function SubscriptionScreen() {
   const { subscription, plans, isLoading, fetchSubscription, fetchPlans, daysLeftInTrial, tierLabel } = useSubscriptionStore();
@@ -55,14 +61,22 @@ export function SubscriptionScreen() {
                 {subscription.limits.maxMembers > 0 ? ` / ${subscription.limits.maxMembers}` : ' (unlimited)'}
               </Text>
               <Text style={styles.usageText}>
-                Groups: {subscription.usage.groups}
-                {subscription.limits.maxGroups > 0 ? ` / ${subscription.limits.maxGroups}` : ' (unlimited)'}
+                Lead Groups: {subscription.usage.leadGroups}
+                {subscription.limits.maxLeadGroups > 0 ? ` / ${subscription.limits.maxLeadGroups}` : ' (unlimited)'}
+              </Text>
+              <Text style={styles.usageText}>
+                Sub-Groups: {subscription.usage.subGroups}
+                {subscription.limits.maxSubGroups > 0 ? ` / ${subscription.limits.maxSubGroups}` : ' (unlimited)'}
               </Text>
             </View>
           )}
         </View>
 
-        {/* Feature comparison */}
+        <Text style={styles.billingNote}>
+          Only the account creator is billed. Invited members join for free.
+        </Text>
+
+        {/* Plan comparison */}
         <Text style={styles.sectionTitle}>Plans</Text>
         {plans.map((plan) => {
           const isCurrent = plan.tier === currentTier;
@@ -73,15 +87,18 @@ export function SubscriptionScreen() {
                 <Text style={styles.planPrice}>
                   {plan.priceMonthly === 0
                     ? 'Free'
-                    : `$${(plan.priceMonthly / 100).toFixed(2)}/mo`}
+                    : `$${(plan.priceMonthly / 100).toFixed(0)}/mo`}
                 </Text>
               </View>
               <View style={styles.featureList}>
                 <Text style={styles.featureItem}>
-                  {plan.limits.maxGroups === -1 ? 'Unlimited' : plan.limits.maxGroups} group{plan.limits.maxGroups !== 1 ? 's' : ''}
+                  {formatLimit(plan.limits.maxLeadGroups, plan.limits.maxLeadGroups === 1 ? 'main group' : 'main groups')}
                 </Text>
                 <Text style={styles.featureItem}>
-                  {plan.limits.maxMembers === -1 ? 'Unlimited' : plan.limits.maxMembers} member{plan.limits.maxMembers !== 1 ? 's' : ''}
+                  {formatLimit(plan.limits.maxSubGroups, 'sub-groups')}
+                </Text>
+                <Text style={styles.featureItem}>
+                  {formatLimit(plan.limits.maxMembers, 'members')}
                 </Text>
                 {Object.entries(plan.limits.features).map(([key, enabled]) => (
                   <Text
@@ -136,7 +153,7 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 2,
     padding: SPACING.lg,
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.sm,
     ...SHADOWS.sm,
   },
   tierBadge: {
@@ -164,6 +181,12 @@ const styles = StyleSheet.create({
   usageText: {
     ...TYPOGRAPHY.bodySmall,
     color: COLORS.textMuted,
+  },
+  billingNote: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginBottom: SPACING.lg,
   },
   sectionTitle: {
     ...TYPOGRAPHY.heading3,

@@ -1,8 +1,9 @@
 import { SubscriptionTier } from '@prisma/client';
 
 export interface PlanLimits {
-  maxGroups: number;   // -1 = unlimited
-  maxMembers: number;  // -1 = unlimited
+  maxLeadGroups: number;  // -1 = unlimited
+  maxSubGroups: number;   // -1 = unlimited
+  maxMembers: number;     // -1 = unlimited
   features: {
     ptt: boolean;
     alerts: boolean;
@@ -21,19 +22,21 @@ export interface PlanDefinition {
 
 export const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
   FREE: {
-    maxGroups: 1,
-    maxMembers: 5,
+    maxLeadGroups: 1,
+    maxSubGroups: 5,
+    maxMembers: 20,
     features: {
-      ptt: false,
+      ptt: true,
       alerts: false,
       location: false,
       incidents: false,
       multiCampus: false,
     },
   },
-  TEAM: {
-    maxGroups: -1,
-    maxMembers: 25,
+  BASIC: {
+    maxLeadGroups: 2,
+    maxSubGroups: -1,
+    maxMembers: -1,
     features: {
       ptt: true,
       alerts: true,
@@ -42,8 +45,21 @@ export const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
       multiCampus: false,
     },
   },
-  PRO: {
-    maxGroups: -1,
+  STANDARD: {
+    maxLeadGroups: 5,
+    maxSubGroups: -1,
+    maxMembers: -1,
+    features: {
+      ptt: true,
+      alerts: true,
+      location: true,
+      incidents: true,
+      multiCampus: false,
+    },
+  },
+  ENTERPRISE: {
+    maxLeadGroups: -1,
+    maxSubGroups: -1,
     maxMembers: -1,
     features: {
       ptt: true,
@@ -57,8 +73,9 @@ export const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
 
 export const PLANS: PlanDefinition[] = [
   { tier: 'FREE', name: 'Free', priceMonthly: 0, limits: PLAN_LIMITS.FREE },
-  { tier: 'TEAM', name: 'Team', priceMonthly: 999, limits: PLAN_LIMITS.TEAM },
-  { tier: 'PRO', name: 'Pro', priceMonthly: 1999, limits: PLAN_LIMITS.PRO },
+  { tier: 'BASIC', name: 'Basic', priceMonthly: 2000, limits: PLAN_LIMITS.BASIC },
+  { tier: 'STANDARD', name: 'Standard', priceMonthly: 4000, limits: PLAN_LIMITS.STANDARD },
+  { tier: 'ENTERPRISE', name: 'Enterprise', priceMonthly: 6000, limits: PLAN_LIMITS.ENTERPRISE },
 ];
 
 export const FREE_TRIAL_DAYS = 14;

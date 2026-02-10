@@ -1,8 +1,9 @@
-export type SubscriptionTier = 'FREE' | 'TEAM' | 'PRO';
+export type SubscriptionTier = 'FREE' | 'BASIC' | 'STANDARD' | 'ENTERPRISE';
 export type SubscriptionStatus = 'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'CANCELED' | 'EXPIRED';
 
 export interface PlanLimits {
-  maxGroups: number;
+  maxLeadGroups: number;
+  maxSubGroups: number;
   maxMembers: number;
   features: {
     ptt: boolean;
@@ -27,6 +28,7 @@ export interface OrganizationSubscription {
   limits: PlanLimits;
   usage: {
     members: number;
-    groups: number;
+    leadGroups: number;
+    subGroups: number;
   };
 }
