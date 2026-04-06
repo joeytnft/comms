@@ -61,11 +61,43 @@ HTTP endpoints have rate limiting via `@fastify/rate-limit`, but socket events h
 
 **Fix:** Implement per-socket rate limiting using a sliding window counter per event type.
 
+### 6. Webhook Auth Bypass When Secret Is Unset (HIGH)
+
+**File:** `server/src/controllers/subscriptionController.ts:90`
+
+If `REVENUECAT_WEBHOOK_SECRET` is not configured, the auth check is skipped entirely — any request is accepted. An attacker could forge subscription tier changes.
+
+```typescript
+// Current: if secret is undefined, the entire check is skipped
+if (webhookSecret && authHeader !== `Bearer ${webhookSecret}`) {
+```
+
+**Fix:** Require the secret:
+```typescript
+if (!webhookSecret || authHeader !== `Bearer ${webhookSecret}`) {
+```
+
+### 7. No Authorization on Alert Resolution (MEDIUM)
+
+**File:** `server/src/controllers/alertController.ts:137-161`
+
+Any user in an organization can resolve any alert, including EMERGENCY alerts. There's no role check — only org membership is verified.
+
+**Fix:** Require ADMIN role or the original alert triggerer to resolve alerts.
+
+### 8. Cross-Org User Info Disclosure (MEDIUM)
+
+**File:** `server/src/controllers/userController.ts`
+
+The `getUser(userId)` endpoint returns user info without verifying the requesting user is in the same organization. Users can enumerate members of other organizations.
+
+**Fix:** Add `organizationId` filter to the query.
+
 ---
 
 ## Server Improvements
 
-### 6. Refresh Token Not Hashed (MEDIUM)
+### 9. Refresh Token Not Hashed (MEDIUM)
 
 **File:** `server/src/controllers/authController.ts:146-152`
 
@@ -76,7 +108,7 @@ Refresh tokens are stored as plaintext in the database. If the database is compr
 const hashedToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
 ```
 
-### 7. No Expired Token Cleanup (MEDIUM)
+### 10. No Expired Token Cleanup (MEDIUM)
 
 **File:** `server/prisma/schema.prisma:98-108`
 
@@ -87,7 +119,7 @@ Expired refresh tokens are only deleted when a user tries to use them. Over time
 DELETE FROM refresh_tokens WHERE expires_at < NOW();
 ```
 
-### 8. Missing Database Indexes (MEDIUM)
+### 11. Missing Database Indexes (MEDIUM)
 
 **File:** `server/prisma/schema.prisma`
 
@@ -95,13 +127,13 @@ DELETE FROM refresh_tokens WHERE expires_at < NOW();
 - `ReadReceipt` lacks an index on `userId` for efficient "unread count" queries
 - `RefreshToken` should index `userId` for logout-all scenarios
 
-### 9. N+1 Query in `canUserAccessGroup` (MEDIUM)
+### 12. N+1 Query in `canUserAccessGroup` (MEDIUM)
 
 **File:** `server/src/services/groups/hierarchyService.ts`
 
 This function is called on every message send and retrieval. If it performs multiple queries (check direct membership, then check parent group membership), it should be optimized into a single query or cached per-request.
 
-### 10. No Request Body Size Limits (LOW)
+### 13. No Request Body Size Limits (LOW)
 
 **File:** `server/src/app.ts`
 
@@ -114,7 +146,7 @@ const app = Fastify({ bodyLimit: 256 * 1024 }); // 256KB
 
 ## Mobile App Improvements
 
-### 11. No Error Boundaries (HIGH)
+### 14. No Error Boundaries (HIGH)
 
 **File:** `App.tsx`
 
@@ -127,7 +159,7 @@ A single unhandled error in any component crashes the entire app. For a security
 </ErrorBoundary>
 ```
 
-### 12. Silent Error Swallowing (HIGH)
+### 15. Silent Error Swallowing (HIGH)
 
 **Files:** Multiple stores — `useChatStore.ts:95-97`, `useAlertStore.ts`, `useGroupStore.ts`
 
@@ -135,7 +167,7 @@ Many catch blocks silently discard errors with empty catch or `catch(() => {})`.
 
 **Fix:** At minimum, log errors. For user-facing operations, show toast notifications.
 
-### 13. Stale Closure in useEffect Dependencies (MEDIUM)
+### 16. Stale Closure in useEffect Dependencies (MEDIUM)
 
 **File:** `src/screens/Chat/ChatRoomScreen.tsx:74-81`
 
@@ -143,7 +175,7 @@ The `useEffect` for marking messages as read depends on `messages.length` but ac
 
 **Fix:** Include all referenced values in the dependency array, or use `useCallback`/`useRef` patterns.
 
-### 14. No Offline Queue for Messages (MEDIUM)
+### 17. No Offline Queue for Messages (MEDIUM)
 
 **File:** `src/services/chatService.ts`, `src/store/useChatStore.ts`
 
@@ -151,13 +183,13 @@ The CLAUDE.md spec calls for "offline-first" with local queuing and sync. Curren
 
 **Fix:** Implement a persistent message queue using MMKV. On reconnect, flush the queue.
 
-### 15. Map View Not Implemented (LOW)
+### 18. Map View Not Implemented (LOW)
 
 **File:** `src/screens/Map/TeamMapScreen.tsx:90-99`
 
 Currently a placeholder. `react-native-maps` is listed as a dependency.
 
-### 16. Photo Upload Not Implemented (LOW)
+### 19. Photo Upload Not Implemented (LOW)
 
 **File:** `src/screens/Incidents/IncidentReportScreen.tsx:127-131`
 
@@ -219,6 +251,18 @@ The incident report screen has a placeholder "Add Photos" button. `expo-image-pi
 
 ---
 
+### Additional Server Issues
+
+**No Graceful Shutdown** (`server/src/index.ts`) — No SIGTERM/SIGINT handlers. In-flight requests and socket connections are dropped abruptly on deploy.
+
+**No Stricter Auth Rate Limiting** — The global rate limit (100/min) applies equally to all routes. Login and registration endpoints should have much stricter limits (e.g., 5/min) to prevent brute-force attacks.
+
+**Duplicate Business Logic** — Alert triggering/acknowledgment and message sending/read-receipts are implemented in both REST controllers and socket handlers independently. A bug fix in one path may not be applied to the other. Extract shared logic to a service layer.
+
+**No Geographic Bounds Validation** (`server/src/controllers/locationController.ts:20-22`) — Latitude and longitude are checked for `typeof number` but not validated against geographic ranges (-90 to 90, -180 to 180).
+
+---
+
 ## Architecture Suggestions
 
 ### Socket vs REST Duplication
@@ -248,16 +292,22 @@ The current design has a fundamental gap: group encryption keys are generated an
 |---|-------|----------|--------|
 | 1 | Remove XOR cipher fallback | Critical | Small |
 | 2 | Fix web token storage | Critical | Small |
-| 3 | Lock down CORS | High | Small |
-| 4 | Validate socket event data | High | Medium |
-| 5 | Add error boundaries | High | Small |
-| 6 | Implement group key distribution | High | Large |
-| 7 | Add push notifications | High | Medium |
-| 8 | Hash refresh tokens | Medium | Small |
-| 9 | Implement offline message queue | Medium | Medium |
-| 10 | Add crash reporting (Sentry) | Medium | Small |
-| 11 | Add database indexes | Medium | Small |
-| 12 | Add client-side tests | Medium | Large |
-| 13 | Implement map view | Low | Medium |
-| 14 | Implement photo upload | Low | Medium |
-| 15 | Add accessibility labels | Low | Small |
+| 3 | Lock down CORS (HTTP + Socket.IO) | High | Small |
+| 4 | Fix webhook auth bypass when secret unset | High | Small |
+| 5 | Validate socket event data | High | Medium |
+| 6 | Add error boundaries | High | Small |
+| 7 | Implement group key distribution | High | Large |
+| 8 | Add push notifications | High | Medium |
+| 9 | Add auth endpoint rate limiting | Medium | Small |
+| 10 | Fix cross-org user info disclosure | Medium | Small |
+| 11 | Add authorization to alert resolution | Medium | Small |
+| 12 | Hash refresh tokens | Medium | Small |
+| 13 | Extract shared REST/socket logic to services | Medium | Medium |
+| 14 | Implement offline message queue | Medium | Medium |
+| 15 | Add crash reporting (Sentry) | Medium | Small |
+| 16 | Add database indexes | Medium | Small |
+| 17 | Add graceful shutdown | Medium | Small |
+| 18 | Add client-side tests | Medium | Large |
+| 19 | Implement map view | Low | Medium |
+| 20 | Implement photo upload | Low | Medium |
+| 21 | Add accessibility labels | Low | Small |
