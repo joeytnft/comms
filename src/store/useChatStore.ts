@@ -92,8 +92,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         },
         cursors: { ...state.cursors, [groupId]: nextCursor },
       }));
-    } catch {
-      // Silently fail on pagination errors
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load more messages';
+      set({ error: message });
     }
   },
 
@@ -172,8 +173,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
           [message.groupId]: [...(state.messagesByGroup[message.groupId] || []), decrypted],
         },
       }));
-    } catch {
-      // Can't decrypt — skip
+    } catch (err: unknown) {
+      console.warn('[Chat] Failed to decrypt received message:', err instanceof Error ? err.message : err);
     }
   },
 
@@ -190,8 +191,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   markRead: async (groupId: string, messageIds: string[]) => {
     try {
       await chatService.markRead(groupId, messageIds);
-    } catch {
-      // Best-effort
+    } catch (err: unknown) {
+      console.warn('[Chat] Failed to mark messages as read:', err instanceof Error ? err.message : err);
     }
   },
 

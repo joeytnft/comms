@@ -92,6 +92,7 @@ model User {
   refreshTokens   RefreshToken[]
   location        UserLocation?
 
+  @@index([organizationId])
   @@map("users")
 }
 
@@ -104,6 +105,7 @@ model RefreshToken {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId, expiresAt])
   @@map("refresh_tokens")
 }
 
@@ -165,6 +167,7 @@ model GroupMembership {
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([groupId, userId])
+  @@index([userId])
   @@map("group_memberships")
 }
 
@@ -210,6 +213,7 @@ model ReadReceipt {
   message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   @@unique([messageId, userId])
+  @@index([userId])
   @@map("read_receipts")
 }
 

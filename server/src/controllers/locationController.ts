@@ -21,6 +21,10 @@ export async function updateLocation(
     throw new ValidationError('latitude and longitude are required numbers');
   }
 
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    throw new ValidationError('Coordinates out of valid range (lat: -90..90, lon: -180..180)');
+  }
+
   // Update user's last known location and lastSeenAt
   // We store location in a simple table — for production, consider PostGIS
   await prisma.userLocation.upsert({

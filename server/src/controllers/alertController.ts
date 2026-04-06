@@ -1,6 +1,8 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../config/database';
 import { NotFoundError, AuthorizationError, ValidationError } from '../utils/errors';
+import * as alertService from '../services/alerts/alertService';
+import { ALERT_SELECT } from '../services/alerts/alertService';
 
 interface TriggerBody {
   level: 'ATTENTION' | 'WARNING' | 'EMERGENCY';
@@ -13,26 +15,6 @@ interface AlertParams {
   id: string;
 }
 
-const ALERT_SELECT = {
-  id: true,
-  organizationId: true,
-  triggeredById: true,
-  level: true,
-  message: true,
-  latitude: true,
-  longitude: true,
-  resolvedAt: true,
-  resolvedById: true,
-  createdAt: true,
-  triggeredBy: { select: { id: true, displayName: true } },
-  acknowledgments: {
-    select: {
-      userId: true,
-      acknowledgedAt: true,
-    },
-  },
-};
-
 export async function triggerAlert(
   request: FastifyRequest<{ Body: TriggerBody }>,
   reply: FastifyReply,
@@ -44,16 +26,13 @@ export async function triggerAlert(
     throw new ValidationError('Invalid alert level');
   }
 
-  const alert = await prisma.alert.create({
-    data: {
-      organizationId,
-      triggeredById: userId,
-      level,
-      message: message || null,
-      latitude: latitude || null,
-      longitude: longitude || null,
-    },
-    select: ALERT_SELECT,
+  const alert = await alertService.createAlert({
+    organizationId,
+    triggeredById: userId,
+    level,
+    message,
+    latitude,
+    longitude,
   });
 
   reply.status(201).send({ alert });
@@ -110,26 +89,11 @@ export async function acknowledgeAlert(
   request: FastifyRequest<{ Params: AlertParams }>,
   reply: FastifyReply,
 ) {
-  const { id } = request.params;
-  const { userId, organizationId } = request;
-
-  const alert = await prisma.alert.findUnique({ where: { id } });
-  if (!alert) throw new NotFoundError('Alert');
-  if (alert.organizationId !== organizationId) {
-    throw new AuthorizationError('Alert does not belong to your organization');
-  }
-
-  // Upsert acknowledgment (idempotent)
-  await prisma.alertAcknowledgment.upsert({
-    where: { alertId_userId: { alertId: id, userId } },
-    create: { alertId: id, userId },
-    update: {},
-  });
-
-  const updated = await prisma.alert.findUnique({
-    where: { id },
-    select: ALERT_SELECT,
-  });
+  const updated = await alertService.acknowledgeAlert(
+    request.params.id,
+    request.userId,
+    request.organizationId,
+  );
 
   reply.send({ alert: updated });
 }
@@ -138,24 +102,11 @@ export async function resolveAlert(
   request: FastifyRequest<{ Params: AlertParams }>,
   reply: FastifyReply,
 ) {
-  const { id } = request.params;
-  const { userId, organizationId } = request;
-
-  const alert = await prisma.alert.findUnique({ where: { id } });
-  if (!alert) throw new NotFoundError('Alert');
-  if (alert.organizationId !== organizationId) {
-    throw new AuthorizationError('Alert does not belong to your organization');
-  }
-  if (alert.resolvedAt) {
-    reply.send({ alert });
-    return;
-  }
-
-  const updated = await prisma.alert.update({
-    where: { id },
-    data: { resolvedAt: new Date(), resolvedById: userId },
-    select: ALERT_SELECT,
-  });
+  const updated = await alertService.resolveAlertById(
+    request.params.id,
+    request.userId,
+    request.organizationId,
+  );
 
   reply.send({ alert: updated });
 }

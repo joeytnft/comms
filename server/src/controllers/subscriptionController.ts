@@ -87,7 +87,7 @@ export async function handleWebhook(
   const authHeader = request.headers.authorization;
   const webhookSecret = env.REVENUECAT_WEBHOOK_SECRET;
 
-  if (webhookSecret && authHeader !== `Bearer ${webhookSecret}`) {
+  if (!webhookSecret || authHeader !== `Bearer ${webhookSecret}`) {
     throw new AuthenticationError('Invalid webhook signature');
   }
 

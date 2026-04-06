@@ -23,6 +23,9 @@ const envSchema = z.object({
   REVENUECAT_API_KEY: z.string().optional(),
   REVENUECAT_WEBHOOK_SECRET: z.string().optional(),
 
+  // CORS (comma-separated origins for production)
+  CORS_ORIGINS: z.string().optional(),
+
   // Server
   PORT: z.coerce.number().default(3001),
   HOST: z.string().default('0.0.0.0'),
