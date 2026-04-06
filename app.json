@@ -10,7 +10,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#1a1a2e"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.guardiancomm.app",
@@ -19,7 +21,12 @@
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Guardian Comm needs background location to keep your team informed of your position.",
         "NSMicrophoneUsageDescription": "Guardian Comm needs microphone access for push-to-talk communication.",
         "NSCameraUsageDescription": "Guardian Comm needs camera access for incident reports.",
-        "UIBackgroundModes": ["audio", "voip", "location", "remote-notification"]
+        "UIBackgroundModes": [
+          "audio",
+          "voip",
+          "location",
+          "remote-notification"
+        ]
       }
     },
     "android": {
@@ -41,7 +48,8 @@
       "expo-camera",
       "expo-notifications",
       "expo-secure-store",
-      "expo-av"
+      "expo-av",
+      "expo-asset"
     ]
   }
 }
