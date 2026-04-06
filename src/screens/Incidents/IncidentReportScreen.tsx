@@ -9,13 +9,17 @@ import {
   Alert as RNAlert,
   KeyboardAvoidingView,
   Platform,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import * as ImagePicker from 'expo-image-picker';
 import { useIncidentStore } from '@/store/useIncidentStore';
 import { IncidentSeverity, SEVERITY_COLORS, SEVERITY_LABELS } from '@/types';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 import { IncidentStackParamList } from '@/navigation/IncidentStackNavigator';
+import { ENV } from '@/config/env';
 
 type Props = {
   navigation: NativeStackNavigationProp<IncidentStackParamList, 'IncidentReport'>;
@@ -23,25 +27,91 @@ type Props = {
 
 const SEVERITIES: IncidentSeverity[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 
+async function uploadPhoto(uri: string): Promise<string> {
+  const filename = uri.split('/').pop() ?? 'photo.jpg';
+  const match = /\.(\w+)$/.exec(filename);
+  const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+  const formData = new FormData();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  formData.append('file', { uri, name: filename, type } as any);
+
+  const { secureStorage } = await import('@/utils/secureStorage');
+  const { ACCESS_TOKEN_KEY } = await import('@/config/constants');
+  const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
+
+  const response = await fetch(`${ENV.apiUrl}/upload`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error('Photo upload failed');
+  }
+
+  const { url } = await response.json() as { url: string };
+  return `${ENV.apiUrl}${url}`;
+}
+
 export function IncidentReportScreen({ navigation }: Props) {
-  const { createIncident } = useIncidentStore();
+  const { createIncident, addPhoto } = useIncidentStore();
   const [title, setTitle] = useState('');
   const [details, setDetails] = useState('');
   const [severity, setSeverity] = useState<IncidentSeverity>('MEDIUM');
+  const [photos, setPhotos] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   const canSubmit = title.trim().length > 0 && details.trim().length > 0 && !isSubmitting;
+
+  const handleAddPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      RNAlert.alert('Permission required', 'Allow photo access to attach images.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.6,
+      allowsMultipleSelection: false,
+    });
+
+    if (result.canceled || !result.assets[0]) return;
+
+    const asset = result.assets[0];
+    setIsUploadingPhoto(true);
+    try {
+      const url = await uploadPhoto(asset.uri);
+      setPhotos((prev) => [...prev, url]);
+    } catch {
+      RNAlert.alert('Upload failed', 'Could not upload photo. Please try again.');
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  const handleRemovePhoto = (index: number) => {
+    setPhotos((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
 
     setIsSubmitting(true);
     try {
-      await createIncident({
+      const incident = await createIncident({
         title: title.trim(),
         encryptedDetails: details.trim(),
         severity,
       });
+
+      // Attach any uploaded photos
+      for (const url of photos) {
+        await addPhoto(incident.id, url);
+      }
+
       RNAlert.alert('Submitted', 'Incident report has been filed.', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
@@ -59,10 +129,7 @@ export function IncidentReportScreen({ navigation }: Props) {
           <Text style={styles.cancelText}>Cancel</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Report Incident</Text>
-        <TouchableOpacity
-          onPress={handleSubmit}
-          disabled={!canSubmit}
-        >
+        <TouchableOpacity onPress={handleSubmit} disabled={!canSubmit}>
           <Text style={[styles.submitText, !canSubmit && styles.submitDisabled]}>
             {isSubmitting ? 'Sending...' : 'Submit'}
           </Text>
@@ -123,10 +190,34 @@ export function IncidentReportScreen({ navigation }: Props) {
             textAlignVertical="top"
           />
 
-          {/* Photo placeholder */}
-          <TouchableOpacity style={styles.photoButton}>
-            <Text style={styles.photoButtonText}>+ Add Photos</Text>
-            <Text style={styles.photoHint}>Photo upload coming soon</Text>
+          {/* Photos */}
+          <Text style={styles.label}>Photos</Text>
+          {photos.length > 0 && (
+            <View style={styles.photoGrid}>
+              {photos.map((uri, index) => (
+                <View key={index} style={styles.photoThumbContainer}>
+                  <Image source={{ uri }} style={styles.photoThumb} resizeMode="cover" />
+                  <TouchableOpacity
+                    style={styles.removePhotoBtn}
+                    onPress={() => handleRemovePhoto(index)}
+                  >
+                    <Text style={styles.removePhotoBtnText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={[styles.photoButton, isUploadingPhoto && styles.photoButtonDisabled]}
+            onPress={handleAddPhoto}
+            disabled={isUploadingPhoto}
+          >
+            {isUploadingPhoto ? (
+              <ActivityIndicator color={COLORS.info} />
+            ) : (
+              <Text style={styles.photoButtonText}>+ Add Photo</Text>
+            )}
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -208,8 +299,38 @@ const styles = StyleSheet.create({
   textArea: {
     minHeight: 120,
   },
+  photoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  photoThumbContainer: {
+    position: 'relative',
+  },
+  photoThumb: {
+    width: 80,
+    height: 80,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  removePhotoBtn: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: COLORS.danger,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  removePhotoBtnText: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: '700',
+  },
   photoButton: {
-    marginTop: SPACING.lg,
+    marginTop: SPACING.sm,
     backgroundColor: COLORS.surface,
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
@@ -217,15 +338,15 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     padding: SPACING.lg,
     alignItems: 'center',
+    minHeight: 56,
+    justifyContent: 'center',
+  },
+  photoButtonDisabled: {
+    opacity: 0.6,
   },
   photoButtonText: {
     ...TYPOGRAPHY.body,
     color: COLORS.info,
     fontWeight: '600',
-  },
-  photoHint: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
-    marginTop: SPACING.xs,
   },
 });

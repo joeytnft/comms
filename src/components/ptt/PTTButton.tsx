@@ -39,7 +39,7 @@ export function PTTButton({
 
     Animated.spring(scaleAnim, {
       toValue: 0.92,
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start();
 
     // Start pulse animation for transmitting
@@ -48,12 +48,12 @@ export function PTTButton({
         Animated.timing(pulseAnim, {
           toValue: 1.15,
           duration: 600,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
           duration: 600,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ]),
     );
@@ -67,7 +67,7 @@ export function PTTButton({
 
     Animated.spring(scaleAnim, {
       toValue: 1,
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start();
 
     pulseRef.current?.stop();

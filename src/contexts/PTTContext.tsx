@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useCallback, useEffect } from 'react';
-import { Vibration } from 'react-native';
+import React, { createContext, useContext, useCallback, useEffect, useRef } from 'react';
+import { Platform, Vibration } from 'react-native';
 import { Audio } from 'expo-av';
 import { PTTState, PTTConfig } from '@/types';
 import { useSocket } from './SocketContext';
@@ -27,7 +27,14 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   const { socket } = useSocket();
   const store = usePTTStore();
 
-  // Set up socket listeners for PTT events
+  // Native recording ref
+  const recordingRef = useRef<Audio.Recording | null>(null);
+
+  // Web MediaRecorder ref
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  // Socket listeners
   useEffect(() => {
     if (!socket) return;
 
@@ -42,8 +49,6 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         displayName: data.displayName,
         startedAt: data.startedAt,
       });
-
-      // Vibrate on receive
       if (usePTTStore.getState().config.vibrateOnReceive) {
         Vibration.vibrate(100);
       }
@@ -61,12 +66,18 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       usePTTStore.getState().removeConnectedMember(data.userId);
     };
 
-    const handleRoomState = (data: {
-      groupId: string;
-      connectedMembers: number;
-      memberIds: string[];
-    }) => {
+    const handleRoomState = (data: { memberIds: string[] }) => {
       usePTTStore.getState().setConnectedMembers(data.memberIds);
+    };
+
+    // Receive audio chunk from another member (web only)
+    const handleAudioChunk = (data: { chunk: ArrayBuffer; mimeType: string }) => {
+      if (Platform.OS !== 'web') return;
+      const blob = new Blob([data.chunk], { type: data.mimeType });
+      const url = URL.createObjectURL(blob);
+      const audio = new window.Audio(url);
+      audio.play().catch(() => null);
+      audio.onended = () => URL.revokeObjectURL(url);
     };
 
     socket.on('ptt:speaking', handleSpeaking);
@@ -74,6 +85,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     socket.on('ptt:member_joined', handleMemberJoined);
     socket.on('ptt:member_left', handleMemberLeft);
     socket.on('ptt:room_state', handleRoomState);
+    socket.on('ptt:audio_chunk', handleAudioChunk);
 
     return () => {
       socket.off('ptt:speaking', handleSpeaking);
@@ -81,6 +93,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       socket.off('ptt:member_joined', handleMemberJoined);
       socket.off('ptt:member_left', handleMemberLeft);
       socket.off('ptt:room_state', handleRoomState);
+      socket.off('ptt:audio_chunk', handleAudioChunk);
     };
   }, [socket]);
 
@@ -88,30 +101,33 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     async (groupId: string) => {
       if (!socket) return;
 
-      // Fetch token from server (validates membership + subscription)
       const response = await usePTTStore.getState().fetchToken(groupId);
       usePTTStore.getState().setCurrentGroup(groupId, response.groupName);
 
-      // Request audio permissions
-      const { granted } = await Audio.requestPermissionsAsync();
-      if (!granted) {
-        usePTTStore.getState().disconnect();
-        throw new Error('Microphone permission is required for PTT');
+      if (Platform.OS === 'web') {
+        // Web: check microphone via browser API
+        try {
+          await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch {
+          usePTTStore.getState().disconnect();
+          throw new Error('Microphone permission is required for PTT');
+        }
+      } else {
+        const { granted } = await Audio.requestPermissionsAsync();
+        if (!granted) {
+          usePTTStore.getState().disconnect();
+          throw new Error('Microphone permission is required for PTT');
+        }
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: true,
+          shouldDuckAndroid: true,
+        });
       }
 
-      // Set audio mode for PTT
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: true,
-        shouldDuckAndroid: true,
-      });
-
-      // Join the PTT socket room for signaling
       socket.emit('ptt:join', { groupId });
       usePTTStore.getState().setConnected(true);
-
-      // Fetch participant list
       usePTTStore.getState().fetchParticipants(groupId);
     },
     [socket],
@@ -121,9 +137,22 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     const currentGroupId = usePTTStore.getState().currentGroupId;
     if (!socket || !currentGroupId) return;
 
+    // Stop any in-progress recording
+    stopAudio();
+
     socket.emit('ptt:leave', { groupId: currentGroupId });
     usePTTStore.getState().disconnect();
   }, [socket]);
+
+  const stopAudio = useCallback(() => {
+    if (Platform.OS === 'web') {
+      mediaRecorderRef.current?.stop();
+      mediaRecorderRef.current = null;
+    } else {
+      recordingRef.current?.stopAndUnloadAsync().catch(() => null);
+      recordingRef.current = null;
+    }
+  }, []);
 
   const startTransmitting = useCallback(() => {
     const { currentGroupId, pttState } = usePTTStore.getState();
@@ -131,6 +160,36 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
     usePTTStore.getState().setTransmitting(true);
     socket.emit('ptt:start', { groupId: currentGroupId });
+
+    if (Platform.OS === 'web') {
+      // Web: use MediaRecorder to capture and stream audio chunks
+      navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : 'audio/webm';
+
+        const recorder = new MediaRecorder(stream, { mimeType });
+        audioChunksRef.current = [];
+
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0 && socket) {
+            e.data.arrayBuffer().then((buf) => {
+              socket.emit('ptt:audio_chunk', { groupId: currentGroupId, chunk: buf, mimeType });
+            });
+          }
+        };
+
+        recorder.start(200); // emit every 200ms
+        mediaRecorderRef.current = recorder;
+      }).catch(() => null);
+    } else {
+      // Native: use expo-av Recording
+      Audio.Recording.createAsync(Audio.RecordingOptionsPresets.LOW_QUALITY)
+        .then(({ recording }) => {
+          recordingRef.current = recording;
+        })
+        .catch(() => null);
+    }
   }, [socket]);
 
   const stopTransmitting = useCallback(() => {
@@ -139,7 +198,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
     usePTTStore.getState().setTransmitting(false);
     socket.emit('ptt:stop', { groupId: currentGroupId });
-  }, [socket]);
+    stopAudio();
+  }, [socket, stopAudio]);
 
   const updateConfig = useCallback((updates: Partial<PTTConfig>) => {
     usePTTStore.getState().updateConfig(updates);

@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocationStore } from '@/store/useLocationStore';
 import { TeamMemberLocation } from '@/types';
+import { TeamMapView } from '@/components/map/TeamMapView';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 
 export function TeamMapScreen() {
@@ -15,22 +16,15 @@ export function TeamMapScreen() {
     useCallback(() => {
       fetchTeamLocations();
 
-      // Auto-refresh every 30 seconds while screen is focused
       refreshInterval.current = setInterval(() => {
         fetchTeamLocations();
       }, 30_000);
 
       return () => {
-        if (refreshInterval.current) {
-          clearInterval(refreshInterval.current);
-        }
+        if (refreshInterval.current) clearInterval(refreshInterval.current);
       };
     }, []),
   );
-
-  const toggleSharing = () => {
-    setSharing(!isSharing);
-  };
 
   const timeSince = (dateStr: string | null): string => {
     if (!dateStr) return 'Unknown';
@@ -46,9 +40,7 @@ export function TeamMapScreen() {
   const renderMember = ({ item }: { item: TeamMemberLocation }) => (
     <View style={styles.memberCard}>
       <View style={styles.memberAvatar}>
-        <Text style={styles.avatarText}>
-          {item.displayName.charAt(0).toUpperCase()}
-        </Text>
+        <Text style={styles.avatarText}>{item.displayName.charAt(0).toUpperCase()}</Text>
       </View>
       <View style={styles.memberInfo}>
         <Text style={styles.memberName}>{item.displayName}</Text>
@@ -79,7 +71,7 @@ export function TeamMapScreen() {
         <Text style={styles.title}>Team Map</Text>
         <TouchableOpacity
           style={[styles.sharingToggle, isSharing && styles.sharingActive]}
-          onPress={toggleSharing}
+          onPress={() => setSharing(!isSharing)}
         >
           <Text style={[styles.sharingText, isSharing && styles.sharingTextActive]}>
             {isSharing ? 'Sharing ON' : 'Sharing OFF'}
@@ -87,16 +79,7 @@ export function TeamMapScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Map placeholder — real map integration with react-native-maps in future */}
-      <View style={styles.mapPlaceholder}>
-        <Text style={styles.mapPlaceholderIcon}>M</Text>
-        <Text style={styles.mapPlaceholderText}>
-          Map view coming soon
-        </Text>
-        <Text style={styles.mapPlaceholderSubtext}>
-          {teamLocations.length} team member{teamLocations.length !== 1 ? 's' : ''} with locations
-        </Text>
-      </View>
+      <TeamMapView locations={teamLocations} style={styles.map} />
 
       {error ? (
         <View style={styles.errorContainer}>
@@ -104,8 +87,9 @@ export function TeamMapScreen() {
         </View>
       ) : null}
 
-      {/* Team members list with locations */}
-      <Text style={styles.sectionTitle}>Team Locations</Text>
+      <Text style={styles.sectionTitle}>
+        Team Locations ({teamLocations.length})
+      </Text>
       <FlatList
         data={teamLocations}
         renderItem={renderMember}
@@ -120,10 +104,8 @@ export function TeamMapScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No team locations available</Text>
-            <Text style={styles.emptySubtext}>
-              Team members need to enable location sharing
-            </Text>
+            <Text style={styles.emptyText}>No team locations</Text>
+            <Text style={styles.emptySubtext}>Team members need to enable location sharing</Text>
           </View>
         }
       />
@@ -132,10 +114,7 @@ export function TeamMapScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
+  container: { flex: 1, backgroundColor: COLORS.background },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -143,10 +122,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
   },
-  title: {
-    ...TYPOGRAPHY.heading1,
-    color: COLORS.textPrimary,
-  },
+  title: { ...TYPOGRAPHY.heading1, color: COLORS.textPrimary },
   sharingToggle: {
     borderWidth: 1,
     borderColor: COLORS.gray600,
@@ -154,42 +130,14 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
   },
-  sharingActive: {
-    backgroundColor: COLORS.success,
-    borderColor: COLORS.success,
-  },
-  sharingText: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
-    fontWeight: '600',
-  },
-  sharingTextActive: {
-    color: COLORS.white,
-  },
-  mapPlaceholder: {
+  sharingActive: { backgroundColor: COLORS.success, borderColor: COLORS.success },
+  sharingText: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, fontWeight: '600' },
+  sharingTextActive: { color: COLORS.white },
+  map: {
     marginHorizontal: SPACING.lg,
-    height: 180,
-    backgroundColor: COLORS.surface,
-    borderRadius: BORDER_RADIUS.lg,
-    justifyContent: 'center',
-    alignItems: 'center',
+    height: 220,
     marginBottom: SPACING.lg,
     ...SHADOWS.sm,
-  },
-  mapPlaceholderIcon: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: COLORS.accent,
-    marginBottom: SPACING.sm,
-  },
-  mapPlaceholderText: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.textSecondary,
-  },
-  mapPlaceholderSubtext: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
-    marginTop: SPACING.xs,
   },
   sectionTitle: {
     ...TYPOGRAPHY.heading3,
@@ -197,10 +145,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     marginBottom: SPACING.sm,
   },
-  list: {
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.xxl,
-  },
+  list: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xxl },
   memberCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -218,54 +163,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarText: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.white,
-    fontWeight: '700',
-  },
-  memberInfo: {
-    flex: 1,
-    marginLeft: SPACING.md,
-  },
-  memberName: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.textPrimary,
-    fontWeight: '600',
-  },
-  memberCoords: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
-    marginTop: 2,
-  },
-  memberMeta: {
-    alignItems: 'flex-end',
-  },
-  lastSeen: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textSecondary,
-    marginBottom: 4,
-  },
-  onlineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  errorContainer: {
-    alignItems: 'center',
-    paddingVertical: SPACING.sm,
-  },
-  errorText: {
-    ...TYPOGRAPHY.bodySmall,
-    color: COLORS.danger,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingTop: SPACING.xxl,
-  },
-  emptyText: {
-    ...TYPOGRAPHY.heading3,
-    color: COLORS.textPrimary,
-  },
+  avatarText: { ...TYPOGRAPHY.body, color: COLORS.white, fontWeight: '700' },
+  memberInfo: { flex: 1, marginLeft: SPACING.md },
+  memberName: { ...TYPOGRAPHY.body, color: COLORS.textPrimary, fontWeight: '600' },
+  memberCoords: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, marginTop: 2 },
+  memberMeta: { alignItems: 'flex-end' },
+  lastSeen: { ...TYPOGRAPHY.caption, color: COLORS.textSecondary, marginBottom: 4 },
+  onlineDot: { width: 8, height: 8, borderRadius: 4 },
+  errorContainer: { alignItems: 'center', paddingVertical: SPACING.sm },
+  errorText: { ...TYPOGRAPHY.bodySmall, color: COLORS.danger },
+  emptyContainer: { alignItems: 'center', paddingTop: SPACING.xxl },
+  emptyText: { ...TYPOGRAPHY.heading3, color: COLORS.textPrimary },
   emptySubtext: {
     ...TYPOGRAPHY.body,
     color: COLORS.textMuted,

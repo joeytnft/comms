@@ -3,7 +3,10 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import jwt from '@fastify/jwt';
+import multipart from '@fastify/multipart';
+import staticFiles from '@fastify/static';
 import { Server } from 'socket.io';
+import path from 'path';
 import { env } from './config/env';
 import { logger } from './utils/logger';
 import { AppError } from './utils/errors';
@@ -16,11 +19,12 @@ import { pttRoutes } from './routes/ptt';
 import { alertRoutes } from './routes/alerts';
 import { locationRoutes } from './routes/location';
 import { incidentRoutes } from './routes/incidents';
+import { uploadRoutes } from './routes/uploads';
 import { setupSocketHandlers } from './sockets/socketHandler';
 
 export async function buildApp() {
   const app = Fastify({
-    bodyLimit: 256 * 1024, // 256KB max request body
+    bodyLimit: 10 * 1024 * 1024, // 10MB (for image uploads)
     logger: {
       level: env.LOG_LEVEL,
       transport:
@@ -76,6 +80,15 @@ export async function buildApp() {
     sign: { expiresIn: env.JWT_ACCESS_EXPIRY },
   });
 
+  await app.register(multipart, {
+    limits: { fileSize: 8 * 1024 * 1024 }, // 8MB per file
+  });
+
+  await app.register(staticFiles, {
+    root: path.join(process.cwd(), 'uploads'),
+    prefix: '/files/',
+  });
+
   // Health check
   app.get('/health', async () => {
     return { status: 'ok', timestamp: new Date().toISOString() };
@@ -91,6 +104,7 @@ export async function buildApp() {
   app.register(alertRoutes, { prefix: '/alerts' });
   app.register(locationRoutes, { prefix: '/location' });
   app.register(incidentRoutes, { prefix: '/incidents' });
+  app.register(uploadRoutes, { prefix: '/upload' });
 
   // Socket.IO setup
   app.addHook('onReady', async () => {

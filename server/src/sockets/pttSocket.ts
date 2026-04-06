@@ -153,6 +153,13 @@ export function setupPTTSocket(io: Server, socket: Socket) {
     }
   });
 
+  // Relay raw audio chunk to other members in the PTT room (web clients)
+  socket.on('ptt:audio_chunk', (data: { groupId: string; chunk: ArrayBuffer; mimeType: string }) => {
+    if (!data || !isValidGroupId(data.groupId)) return;
+    const room = `ptt:${data.groupId}`;
+    socket.to(room).emit('ptt:audio_chunk', { chunk: data.chunk, mimeType: data.mimeType });
+  });
+
   // Clean up PTT rooms on disconnect
   socket.on('disconnect', () => {
     // Socket.IO auto-removes from all rooms on disconnect.

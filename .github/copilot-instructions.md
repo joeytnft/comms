@@ -1,4 +1,4 @@
-# Guardian Comm — AI Coding Agent Instructions
+w# Guardian Comm — AI Coding Agent Instructions
 
 **Project:** Encrypted real-time communication app for church security teams (React Native + Node.js/Fastify)
 
