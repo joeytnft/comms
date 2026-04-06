@@ -9,9 +9,9 @@ interface EnvConfig {
 }
 
 const DEV_CONFIG: EnvConfig = {
-  apiUrl: 'http://localhost:3001',
-  socketUrl: 'ws://localhost:3001',
-  livekitUrl: 'ws://localhost:7880',
+  apiUrl: 'http://192.168.10.169:3001',
+  socketUrl: 'ws://192.168.10.169:3001',
+  livekitUrl: 'ws://192.168.10.169:7880',
   isDev: true,
 };
 

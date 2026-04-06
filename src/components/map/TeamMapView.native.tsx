@@ -1,0 +1,76 @@
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import MapView, { Marker, Callout } from 'react-native-maps';
+import { TeamMemberLocation } from '@/types';
+import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
+
+interface Props {
+  locations: TeamMemberLocation[];
+  style?: object;
+}
+
+const isOnline = (updatedAt: string) =>
+  Date.now() - new Date(updatedAt).getTime() < 300_000;
+
+export function TeamMapView({ locations, style }: Props) {
+  const centerLat = locations.length
+    ? locations.reduce((s, l) => s + l.latitude, 0) / locations.length
+    : 37.7749;
+  const centerLng = locations.length
+    ? locations.reduce((s, l) => s + l.longitude, 0) / locations.length
+    : -122.4194;
+
+  return (
+    <View style={[styles.wrapper, style]}>
+      <MapView
+        style={{ flex: 1 }}
+        initialRegion={{
+          latitude: centerLat,
+          longitude: centerLng,
+          latitudeDelta: 0.02,
+          longitudeDelta: 0.02,
+        }}
+      >
+        {locations.map((member) => (
+          <Marker
+            key={member.userId}
+            coordinate={{ latitude: member.latitude, longitude: member.longitude }}
+            pinColor={isOnline(member.updatedAt) ? COLORS.success : COLORS.gray500}
+          >
+            <Callout>
+              <View style={styles.callout}>
+                <Text style={styles.calloutName}>{member.displayName}</Text>
+                <Text style={styles.calloutCoords}>
+                  {member.latitude.toFixed(4)}, {member.longitude.toFixed(4)}
+                </Text>
+              </View>
+            </Callout>
+          </Marker>
+        ))}
+      </MapView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrapper: {
+    borderRadius: BORDER_RADIUS.lg,
+    overflow: 'hidden',
+    backgroundColor: COLORS.surface,
+    ...SHADOWS.sm,
+  },
+  callout: {
+    padding: SPACING.sm,
+    minWidth: 120,
+  },
+  calloutName: {
+    ...TYPOGRAPHY.body,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  calloutCoords: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+});

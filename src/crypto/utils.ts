@@ -1,5 +1,5 @@
 import * as Crypto from 'expo-crypto';
-import * as SecureStore from 'expo-secure-store';
+import { secureStorage as SecureStore } from '@/utils/secureStorage';
 
 const GROUP_KEY_PREFIX = 'guardian_group_key_';
 

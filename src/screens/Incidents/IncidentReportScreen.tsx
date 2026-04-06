@@ -27,27 +27,54 @@ type Props = {
 
 const SEVERITIES: IncidentSeverity[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 
-async function uploadPhoto(uri: string): Promise<string> {
-  const filename = uri.split('/').pop() ?? 'photo.jpg';
-  const match = /\.(\w+)$/.exec(filename);
-  const type = match ? `image/${match[1]}` : 'image/jpeg';
+async function uriToBase64(uri: string): Promise<{ data: string; mimeType: string }> {
+  if (Platform.OS === 'web') {
+    const blob = await fetch(uri).then((r) => r.blob());
+    const mimeType = blob.type || 'image/jpeg';
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        resolve({ data: result.split(',')[1], mimeType });
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+  // Native: expo-image-picker base64 is requested via `base64: true` option
+  throw new Error('Use base64 option in ImagePicker for native');
+}
 
-  const formData = new FormData();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  formData.append('file', { uri, name: filename, type } as any);
-
+async function uploadPhoto(uri: string, base64?: string, mimeType?: string): Promise<string> {
   const { secureStorage } = await import('@/utils/secureStorage');
   const { ACCESS_TOKEN_KEY } = await import('@/config/constants');
   const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
 
+  let data: string;
+  let type: string;
+
+  if (Platform.OS === 'web') {
+    const result = await uriToBase64(uri);
+    data = result.data;
+    type = result.mimeType;
+  } else {
+    if (!base64) throw new Error('base64 data required on native');
+    data = base64;
+    type = mimeType ?? 'image/jpeg';
+  }
+
   const response = await fetch(`${ENV.apiUrl}/upload`, {
     method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    body: formData,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ data, mimeType: type }),
   });
 
   if (!response.ok) {
-    throw new Error('Photo upload failed');
+    const err = await response.json().catch(() => ({})) as { error?: string };
+    throw new Error(err.error ?? 'Photo upload failed');
   }
 
   const { url } = await response.json() as { url: string };
@@ -73,17 +100,19 @@ export function IncidentReportScreen({ navigation }: Props) {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: 'images',
       quality: 0.6,
       allowsMultipleSelection: false,
+      base64: Platform.OS !== 'web',
     });
 
     if (result.canceled || !result.assets[0]) return;
 
     const asset = result.assets[0];
+    const mimeType = asset.mimeType ?? 'image/jpeg';
     setIsUploadingPhoto(true);
     try {
-      const url = await uploadPhoto(asset.uri);
+      const url = await uploadPhoto(asset.uri, asset.base64 ?? undefined, mimeType);
       setPhotos((prev) => [...prev, url]);
     } catch {
       RNAlert.alert('Upload failed', 'Could not upload photo. Please try again.');
