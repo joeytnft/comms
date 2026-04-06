@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useCallback, useEffect, useRef } from 'react';
 import { Platform, Vibration } from 'react-native';
-import { Audio } from 'expo-av';
+import { useAudioRecorder, AudioModule, RecordingPresets } from '@/utils/audioStub';
 import { PTTState, PTTConfig } from '@/types';
 import { useSocket } from './SocketContext';
 import { usePTTStore } from '@/store/usePTTStore';
@@ -27,8 +27,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   const { socket } = useSocket();
   const store = usePTTStore();
 
-  // Native recording ref
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  // expo-audio recorder (must be called unconditionally — hooks rule)
+  const audioRecorder = useAudioRecorder(RecordingPresets.LOW_QUALITY);
 
   // Web MediaRecorder ref
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -113,12 +113,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           throw new Error('Microphone permission is required for PTT');
         }
       } else {
-        const { granted } = await Audio.requestPermissionsAsync();
+        const { granted } = await AudioModule.requestRecordingPermissionsAsync();
         if (!granted) {
           usePTTStore.getState().disconnect();
           throw new Error('Microphone permission is required for PTT');
         }
-        await Audio.setAudioModeAsync({
+        await AudioModule.setAudioModeAsync({
           allowsRecordingIOS: true,
           playsInSilentModeIOS: true,
           staysActiveInBackground: true,
@@ -149,8 +149,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       mediaRecorderRef.current?.stop();
       mediaRecorderRef.current = null;
     } else {
-      recordingRef.current?.stopAndUnloadAsync().catch(() => null);
-      recordingRef.current = null;
+      audioRecorder?.stop().catch(() => null);
     }
   }, []);
 
@@ -183,12 +182,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         mediaRecorderRef.current = recorder;
       }).catch(() => null);
     } else {
-      // Native: use expo-av Recording
-      Audio.Recording.createAsync(Audio.RecordingOptionsPresets.LOW_QUALITY)
-        .then(({ recording }) => {
-          recordingRef.current = recording;
-        })
-        .catch(() => null);
+      // Native: use expo-audio recorder
+      audioRecorder?.record().catch(() => null);
     }
   }, [socket]);
 

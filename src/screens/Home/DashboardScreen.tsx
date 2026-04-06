@@ -1,13 +1,19 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscriptionStore } from '@/store/useSubscriptionStore';
+import { MainTabParamList } from '@/navigation/MainTabNavigator';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
+
+type DashboardNav = BottomTabNavigationProp<MainTabParamList>;
 
 export function DashboardScreen() {
   const { user } = useAuth();
   const { subscription, daysLeftInTrial, fetchSubscription } = useSubscriptionStore();
+  const navigation = useNavigation<DashboardNav>();
 
   useEffect(() => {
     fetchSubscription();
@@ -50,22 +56,34 @@ export function DashboardScreen() {
         {/* Quick actions grid */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.grid}>
-          <View style={[styles.gridItem, { backgroundColor: COLORS.accent }]}>
+          <TouchableOpacity
+            style={[styles.gridItem, { backgroundColor: COLORS.accent }]}
+            onPress={() => navigation.navigate('Groups')}
+          >
             <Text style={styles.gridIcon}>M</Text>
             <Text style={styles.gridLabel}>Messages</Text>
-          </View>
-          <View style={[styles.gridItem, { backgroundColor: COLORS.danger }]}>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.gridItem, { backgroundColor: COLORS.danger }]}
+            onPress={() => navigation.navigate('PTT')}
+          >
             <Text style={styles.gridIcon}>T</Text>
             <Text style={styles.gridLabel}>Push to Talk</Text>
-          </View>
-          <View style={[styles.gridItem, { backgroundColor: COLORS.warning }]}>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.gridItem, { backgroundColor: COLORS.warning }]}
+            onPress={() => navigation.navigate('Alerts')}
+          >
             <Text style={styles.gridIcon}>A</Text>
             <Text style={styles.gridLabel}>Alerts</Text>
-          </View>
-          <View style={[styles.gridItem, { backgroundColor: COLORS.success }]}>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.gridItem, { backgroundColor: COLORS.success }]}
+            onPress={() => navigation.navigate('More')}
+          >
             <Text style={styles.gridIcon}>L</Text>
             <Text style={styles.gridLabel}>Team Map</Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* Info section */}

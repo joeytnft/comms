@@ -1,3 +1,5 @@
+import { polyfillWebCrypto } from 'expo-standard-web-crypto';
+polyfillWebCrypto();
 import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
