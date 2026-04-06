@@ -20,6 +20,7 @@ import { setupSocketHandlers } from './sockets/socketHandler';
 
 export async function buildApp() {
   const app = Fastify({
+    bodyLimit: 256 * 1024, // 256KB max request body
     logger: {
       level: env.LOG_LEVEL,
       transport:
@@ -57,7 +58,9 @@ export async function buildApp() {
 
   // Plugins
   await app.register(cors, {
-    origin: true, // TODO: Restrict in production
+    origin: env.NODE_ENV === 'production'
+      ? (env.CORS_ORIGINS?.split(',') ?? [])
+      : true,
     credentials: true,
   });
 
@@ -94,7 +97,9 @@ export async function buildApp() {
     const httpServer = app.server;
     const io = new Server(httpServer, {
       cors: {
-        origin: '*', // TODO: Restrict in production
+        origin: env.NODE_ENV === 'production'
+          ? (env.CORS_ORIGINS?.split(',') ?? [])
+          : '*',
         methods: ['GET', 'POST'],
       },
       transports: ['websocket'],

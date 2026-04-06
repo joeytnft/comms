@@ -9,11 +9,19 @@ import { logger } from '../utils/logger';
  * - Broadcasting who started/stopped talking
  * - Member presence in PTT rooms
  */
+function isValidGroupId(val: unknown): val is string {
+  return typeof val === 'string' && val.length > 0 && val.length <= 64;
+}
+
 export function setupPTTSocket(io: Server, socket: Socket) {
   const { userId } = socket.user;
 
   // User joins a group's PTT channel
   socket.on('ptt:join', async (data: { groupId: string }) => {
+    if (!data || !isValidGroupId(data.groupId)) {
+      socket.emit('ptt:error', { message: 'Invalid groupId' });
+      return;
+    }
     const { groupId } = data;
 
     // Verify membership
@@ -54,6 +62,7 @@ export function setupPTTSocket(io: Server, socket: Socket) {
 
   // User leaves a group's PTT channel
   socket.on('ptt:leave', (data: { groupId: string }) => {
+    if (!data || !isValidGroupId(data.groupId)) return;
     const room = `ptt:${data.groupId}`;
     socket.leave(room);
 
@@ -67,70 +76,81 @@ export function setupPTTSocket(io: Server, socket: Socket) {
 
   // User started transmitting (pressed PTT button)
   socket.on('ptt:start', async (data: { groupId: string }) => {
+    if (!data || !isValidGroupId(data.groupId)) return;
     const { groupId } = data;
     const room = `ptt:${groupId}`;
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { displayName: true },
-    });
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { displayName: true },
+      });
 
-    // Broadcast to everyone in the PTT room that this user is speaking
-    socket.to(room).emit('ptt:speaking', {
-      groupId,
-      userId,
-      displayName: user?.displayName || 'Unknown',
-      startedAt: new Date().toISOString(),
-    });
-
-    // Also broadcast to parent LEAD group if this is a SUB group
-    const group = await prisma.group.findUnique({
-      where: { id: groupId },
-      select: { parentGroupId: true, type: true },
-    });
-
-    if (group?.parentGroupId) {
-      const parentRoom = `ptt:${group.parentGroupId}`;
-      socket.to(parentRoom).emit('ptt:speaking', {
+      // Broadcast to everyone in the PTT room that this user is speaking
+      socket.to(room).emit('ptt:speaking', {
         groupId,
         userId,
         displayName: user?.displayName || 'Unknown',
         startedAt: new Date().toISOString(),
-        fromSubGroup: true,
       });
-    }
 
-    logger.debug(`[PTT] ${userId} started transmitting in ${room}`);
+      // Also broadcast to parent LEAD group if this is a SUB group
+      const group = await prisma.group.findUnique({
+        where: { id: groupId },
+        select: { parentGroupId: true, type: true },
+      });
+
+      if (group?.parentGroupId) {
+        const parentRoom = `ptt:${group.parentGroupId}`;
+        socket.to(parentRoom).emit('ptt:speaking', {
+          groupId,
+          userId,
+          displayName: user?.displayName || 'Unknown',
+          startedAt: new Date().toISOString(),
+          fromSubGroup: true,
+        });
+      }
+
+      logger.debug(`[PTT] ${userId} started transmitting in ${room}`);
+    } catch (error) {
+      logger.error({ err: error }, '[PTT] Error starting transmission');
+      socket.emit('ptt:error', { message: 'Failed to start transmission' });
+    }
   });
 
   // User stopped transmitting (released PTT button)
   socket.on('ptt:stop', async (data: { groupId: string }) => {
+    if (!data || !isValidGroupId(data.groupId)) return;
     const { groupId } = data;
     const room = `ptt:${groupId}`;
 
-    socket.to(room).emit('ptt:stopped', {
-      groupId,
-      userId,
-      endedAt: new Date().toISOString(),
-    });
-
-    // Also notify parent LEAD group
-    const group = await prisma.group.findUnique({
-      where: { id: groupId },
-      select: { parentGroupId: true },
-    });
-
-    if (group?.parentGroupId) {
-      const parentRoom = `ptt:${group.parentGroupId}`;
-      socket.to(parentRoom).emit('ptt:stopped', {
+    try {
+      socket.to(room).emit('ptt:stopped', {
         groupId,
         userId,
         endedAt: new Date().toISOString(),
-        fromSubGroup: true,
       });
-    }
 
-    logger.debug(`[PTT] ${userId} stopped transmitting in ${room}`);
+      // Also notify parent LEAD group
+      const group = await prisma.group.findUnique({
+        where: { id: groupId },
+        select: { parentGroupId: true },
+      });
+
+      if (group?.parentGroupId) {
+        const parentRoom = `ptt:${group.parentGroupId}`;
+        socket.to(parentRoom).emit('ptt:stopped', {
+          groupId,
+          userId,
+          endedAt: new Date().toISOString(),
+          fromSubGroup: true,
+        });
+      }
+
+      logger.debug(`[PTT] ${userId} stopped transmitting in ${room}`);
+    } catch (error) {
+      logger.error({ err: error }, '[PTT] Error stopping transmission');
+    }
   });
 
   // Clean up PTT rooms on disconnect

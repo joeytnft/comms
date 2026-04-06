@@ -24,12 +24,26 @@ interface ReadReceiptData {
   messageIds: string[];
 }
 
+function isNonEmptyString(val: unknown): val is string {
+  return typeof val === 'string' && val.length > 0;
+}
+
+function isValidGroupId(val: unknown): val is string {
+  return isNonEmptyString(val) && val.length <= 64;
+}
+
+const MAX_ENCRYPTED_CONTENT_LENGTH = 65536; // 64KB max for encrypted message content
+
 export function setupChatSocket(io: Server, socket: Socket) {
   const { userId } = socket.user;
 
   // Join a group's real-time channel
   socket.on('join_group', async (data: JoinGroupData) => {
     try {
+      if (!data || !isValidGroupId(data.groupId)) {
+        socket.emit('error', { message: 'Invalid groupId' });
+        return;
+      }
       const hasAccess = await hierarchyService.canUserAccessGroup(userId, data.groupId);
       if (!hasAccess) {
         socket.emit('error', { message: 'No access to this group' });
@@ -45,6 +59,7 @@ export function setupChatSocket(io: Server, socket: Socket) {
 
   // Leave a group's real-time channel
   socket.on('leave_group', (data: JoinGroupData) => {
+    if (!data || !isValidGroupId(data.groupId)) return;
     socket.leave(`group:${data.groupId}`);
     logger.info(`[Chat] User ${userId} left group ${data.groupId}`);
   });
@@ -52,8 +67,19 @@ export function setupChatSocket(io: Server, socket: Socket) {
   // Send a message via socket (alternative to REST endpoint)
   socket.on('send_message', async (data: NewMessageData, callback?: (response: unknown) => void) => {
     try {
-      if (!data.encryptedContent || !data.iv || !data.groupId) {
-        socket.emit('error', { message: 'Missing required fields' });
+      if (
+        !data ||
+        !isValidGroupId(data.groupId) ||
+        !isNonEmptyString(data.encryptedContent) ||
+        !isNonEmptyString(data.iv) ||
+        data.encryptedContent.length > MAX_ENCRYPTED_CONTENT_LENGTH
+      ) {
+        socket.emit('error', { message: 'Missing or invalid required fields' });
+        return;
+      }
+
+      if (data.type && !['TEXT', 'IMAGE', 'ALERT', 'SYSTEM'].includes(data.type)) {
+        socket.emit('error', { message: 'Invalid message type' });
         return;
       }
 
@@ -118,6 +144,7 @@ export function setupChatSocket(io: Server, socket: Socket) {
 
   // Typing indicator
   socket.on('typing', (data: TypingData) => {
+    if (!data || !isValidGroupId(data.groupId) || typeof data.isTyping !== 'boolean') return;
     socket.to(`group:${data.groupId}`).emit('user_typing', {
       userId,
       groupId: data.groupId,
@@ -128,7 +155,9 @@ export function setupChatSocket(io: Server, socket: Socket) {
   // Read receipts via socket
   socket.on('mark_read', async (data: ReadReceiptData) => {
     try {
-      if (!data.messageIds || data.messageIds.length === 0) return;
+      if (!data || !isValidGroupId(data.groupId)) return;
+      if (!Array.isArray(data.messageIds) || data.messageIds.length === 0 || data.messageIds.length > 100) return;
+      if (!data.messageIds.every((id) => isNonEmptyString(id))) return;
 
       await Promise.all(
         data.messageIds.map((messageId) =>

@@ -63,9 +63,10 @@ export async function encryptMessage(
     };
   }
 
-  // Fallback: XOR cipher for development (NOT secure for production)
-  const encrypted = xorCipher(plaintext, groupKeyHex);
-  return { encryptedContent: encrypted, iv };
+  // No fallback — encryption requires Web Crypto API
+  throw new Error(
+    'Secure encryption unavailable on this platform. Web Crypto API (crypto.subtle) is required.',
+  );
 }
 
 /**
@@ -99,8 +100,10 @@ export async function decryptMessage(
     return decoder.decode(decrypted);
   }
 
-  // Fallback: XOR decipher
-  return xorDecipher(encryptedContentHex, groupKeyHex);
+  // No fallback — decryption requires Web Crypto API
+  throw new Error(
+    'Secure decryption unavailable on this platform. Web Crypto API (crypto.subtle) is required.',
+  );
 }
 
 /**
@@ -142,22 +145,3 @@ function hexToBytes(hex: string): Uint8Array {
   return bytes;
 }
 
-// Dev-only XOR cipher fallback (NOT cryptographically secure)
-function xorCipher(text: string, keyHex: string): string {
-  const keyBytes = hexToBytes(keyHex);
-  const result: number[] = [];
-  for (let i = 0; i < text.length; i++) {
-    result.push(text.charCodeAt(i) ^ keyBytes[i % keyBytes.length]);
-  }
-  return bytesToHex(new Uint8Array(result));
-}
-
-function xorDecipher(hexCipher: string, keyHex: string): string {
-  const cipherBytes = hexToBytes(hexCipher);
-  const keyBytes = hexToBytes(keyHex);
-  const result: string[] = [];
-  for (let i = 0; i < cipherBytes.length; i++) {
-    result.push(String.fromCharCode(cipherBytes[i] ^ keyBytes[i % keyBytes.length]));
-  }
-  return result.join('');
-}

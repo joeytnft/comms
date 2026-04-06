@@ -35,6 +35,10 @@ function generateRefreshToken(): string {
   return crypto.randomBytes(48).toString('hex');
 }
 
+function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
 function getRefreshExpiry(): Date {
   const expiry = new Date();
   expiry.setDate(expiry.getDate() + REFRESH_TOKEN_EXPIRY_DAYS);
@@ -145,7 +149,7 @@ export async function register(
   const refreshToken = generateRefreshToken();
   await prisma.refreshToken.create({
     data: {
-      token: refreshToken,
+      token: hashToken(refreshToken),
       userId: user.id,
       expiresAt: getRefreshExpiry(),
     },
@@ -195,7 +199,7 @@ export async function login(
   const refreshToken = generateRefreshToken();
   await prisma.refreshToken.create({
     data: {
-      token: refreshToken,
+      token: hashToken(refreshToken),
       userId: user.id,
       expiresAt: getRefreshExpiry(),
     },
@@ -231,7 +235,7 @@ export async function refresh(
   }
 
   const storedToken = await prisma.refreshToken.findUnique({
-    where: { token: refreshToken },
+    where: { token: hashToken(refreshToken) },
     include: { user: true },
   });
 
@@ -256,7 +260,7 @@ export async function refresh(
   const newRefreshToken = generateRefreshToken();
   await prisma.refreshToken.create({
     data: {
-      token: newRefreshToken,
+      token: hashToken(newRefreshToken),
       userId: storedToken.user.id,
       expiresAt: getRefreshExpiry(),
     },
@@ -277,9 +281,9 @@ export async function logout(
   const { refreshToken } = request.body;
 
   if (refreshToken) {
-    // Delete the specific refresh token
+    // Delete the specific refresh token (look up by hash)
     await prisma.refreshToken.deleteMany({
-      where: { token: refreshToken },
+      where: { token: hashToken(refreshToken) },
     });
   }
 

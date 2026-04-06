@@ -78,7 +78,7 @@ export function ChatRoomScreen({ navigation, route }: Props) {
     if (unreadIds.length > 0) {
       markRead(groupId, unreadIds);
     }
-  }, [messages.length]);
+  }, [messages, user?.id, groupId, markRead]);
 
   const handleSend = useCallback(
     (text: string) => {

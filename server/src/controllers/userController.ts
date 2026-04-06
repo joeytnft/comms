@@ -83,8 +83,8 @@ export async function getUser(
   request: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,
 ) {
-  const user = await prisma.user.findUnique({
-    where: { id: request.params.id },
+  const user = await prisma.user.findFirst({
+    where: { id: request.params.id, organizationId: request.organizationId },
     select: {
       id: true,
       displayName: true,
