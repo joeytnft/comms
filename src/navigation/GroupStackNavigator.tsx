@@ -9,7 +9,7 @@ import { COLORS } from '@/config/theme';
 export type GroupStackParamList = {
   GroupList: undefined;
   GroupDetail: { groupId: string };
-  CreateGroup: undefined;
+  CreateGroup: { defaultParentGroupId?: string; defaultType?: 'lead' | 'sub' } | undefined;
   ChatRoom: { groupId: string; groupName: string };
 };
 

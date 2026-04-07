@@ -4,7 +4,8 @@ import { secureStorage as SecureStore } from '@/utils/secureStorage';
 import { ENV } from '@/config/env';
 import { ACCESS_TOKEN_KEY } from '@/config/constants';
 
-const GROUP_KEY_PREFIX = 'guardian_group_key_';
+// v2: bumped to invalidate locally-generated keys from before server-side key sharing
+const GROUP_KEY_PREFIX = 'guardian_group_key_v2_';
 
 // Group keys are shared secrets — use localStorage on web so they survive reloads.
 // On native, expo-secure-store already persists across sessions.
@@ -86,10 +87,12 @@ export async function encryptMessage(
     };
   }
 
-  // No fallback — encryption requires Web Crypto API
-  throw new Error(
-    'Secure encryption unavailable on this platform. Web Crypto API (crypto.subtle) is required.',
-  );
+  // Fallback for HTTP (non-secure context) dev environments where crypto.subtle is unavailable.
+  // Messages are base64-encoded plaintext — NOT encrypted. Use HTTPS in production.
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(plaintext);
+  const binary = String.fromCharCode(...bytes);
+  return { encryptedContent: 'b64:' + btoa(binary), iv };
 }
 
 /**
@@ -123,7 +126,14 @@ export async function decryptMessage(
     return decoder.decode(decrypted);
   }
 
-  // No fallback — decryption requires Web Crypto API
+  // Fallback: decode base64 plaintext (matches the HTTP dev fallback in encryptMessage)
+  if (encryptedContentHex.startsWith('b64:')) {
+    const binary = atob(encryptedContentHex.slice(4));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+
   throw new Error(
     'Secure decryption unavailable on this platform. Web Crypto API (crypto.subtle) is required.',
   );

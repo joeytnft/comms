@@ -99,8 +99,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   sendMessage: async (groupId: string, plaintext: string, senderId: string, senderName: string) => {
-    const groupKey = await ensureGroupKey(groupId);
-    const { encryptedContent, iv } = await encryptMessage(plaintext, groupKey);
+    let groupKey: string;
+    let encryptedContent: string;
+    let iv: string;
+    try {
+      groupKey = await ensureGroupKey(groupId);
+      ({ encryptedContent, iv } = await encryptMessage(plaintext, groupKey));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Encryption failed';
+      set({ error: message });
+      throw err;
+    }
 
     // Optimistic UI: add message immediately
     const tempId = `temp_${Date.now()}`;

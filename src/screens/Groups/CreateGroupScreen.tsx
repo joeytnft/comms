@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RouteProp } from '@react-navigation/native';
 import { useGroupStore } from '@/store/useGroupStore';
 import { Button, Input } from '@/components/common';
 import { GroupType } from '@/types';
@@ -11,14 +12,18 @@ import { GroupStackParamList } from '@/navigation/GroupStackNavigator';
 
 type Props = {
   navigation: NativeStackNavigationProp<GroupStackParamList, 'CreateGroup'>;
+  route: RouteProp<GroupStackParamList, 'CreateGroup'>;
 };
 
-export function CreateGroupScreen({ navigation }: Props) {
+export function CreateGroupScreen({ navigation, route }: Props) {
   const { groups, createGroup, fetchGroups, isLoading } = useGroupStore();
+  const defaultType = route.params?.defaultType ?? 'lead';
+  const defaultParentGroupId = route.params?.defaultParentGroupId;
+
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [type, setType] = useState<GroupType>('lead');
-  const [parentGroupId, setParentGroupId] = useState<string | undefined>();
+  const [type, setType] = useState<GroupType>(defaultType);
+  const [parentGroupId, setParentGroupId] = useState<string | undefined>(defaultParentGroupId);
   const [iconColor, setIconColor] = useState(GROUP_COLORS[0]);
 
   const leadGroups = groups.filter((g) => g.type === 'lead');
@@ -32,7 +37,7 @@ export function CreateGroupScreen({ navigation }: Props) {
     if (type === 'lead') {
       setParentGroupId(undefined);
     } else if (leadGroups.length > 0 && !parentGroupId) {
-      setParentGroupId(leadGroups[0].id);
+      setParentGroupId(defaultParentGroupId ?? leadGroups[0].id);
     }
   }, [type]);
 

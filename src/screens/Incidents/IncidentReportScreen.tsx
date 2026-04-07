@@ -51,16 +51,16 @@ async function uploadPhoto(uri: string, base64?: string, mimeType?: string): Pro
   const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
 
   let data: string;
-  let type: string;
+  let type: string = mimeType ?? 'image/jpeg';
 
-  if (Platform.OS === 'web') {
+  if (base64) {
+    // expo-image-picker base64 is already the raw base64 string
+    data = base64;
+  } else {
+    // Fallback: fetch the blob URI and convert (web only, when base64 not provided)
     const result = await uriToBase64(uri);
     data = result.data;
     type = result.mimeType;
-  } else {
-    if (!base64) throw new Error('base64 data required on native');
-    data = base64;
-    type = mimeType ?? 'image/jpeg';
   }
 
   const response = await fetch(`${ENV.apiUrl}/upload`, {
@@ -103,7 +103,7 @@ export function IncidentReportScreen({ navigation }: Props) {
       mediaTypes: 'images',
       quality: 0.6,
       allowsMultipleSelection: false,
-      base64: Platform.OS !== 'web',
+      base64: true, // request base64 on all platforms — avoids blob URI re-fetch issues
     });
 
     if (result.canceled || !result.assets[0]) return;

@@ -24,6 +24,7 @@ export function ChatRoomScreen({ navigation, route }: Props) {
     messagesByGroup,
     cursors,
     isLoading,
+    error,
     typingUsers,
     fetchMessages,
     fetchMore,
@@ -31,6 +32,7 @@ export function ChatRoomScreen({ navigation, route }: Props) {
     receiveMessage,
     setTyping,
     markRead,
+    clearError,
   } = useChatStore();
 
   const messages = messagesByGroup[groupId] || [];
@@ -81,9 +83,13 @@ export function ChatRoomScreen({ navigation, route }: Props) {
   }, [messages, user?.id, groupId, markRead]);
 
   const handleSend = useCallback(
-    (text: string) => {
+    async (text: string) => {
       if (!user) return;
-      sendMessage(groupId, text, user.id, user.displayName);
+      try {
+        await sendMessage(groupId, text, user.id, user.displayName);
+      } catch {
+        // Error is already set in the store — the banner will show it
+      }
     },
     [groupId, user],
   );
@@ -118,6 +124,11 @@ export function ChatRoomScreen({ navigation, route }: Props) {
 
       {/* Messages */}
       <View style={styles.messageArea}>
+        {error ? (
+          <TouchableOpacity style={styles.errorBanner} onPress={clearError}>
+            <Text style={styles.errorText}>{error}  ✕</Text>
+          </TouchableOpacity>
+        ) : null}
         <MessageList
           messages={messages}
           currentUserId={user?.id || ''}
@@ -175,5 +186,17 @@ const styles = StyleSheet.create({
   },
   messageArea: {
     flex: 1,
+  },
+  errorBanner: {
+    backgroundColor: COLORS.danger + '22',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.danger + '44',
+  },
+  errorText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.danger,
+    textAlign: 'center',
   },
 });

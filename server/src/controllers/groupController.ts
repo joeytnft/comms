@@ -64,6 +64,14 @@ const GROUP_SELECT = {
   updatedAt: true,
 } as const;
 
+function formatMemberRole(role: string): string {
+  return role.toLowerCase();
+}
+
+function formatMembership(m: { role: string; [key: string]: unknown }) {
+  return { ...m, role: formatMemberRole(m.role) };
+}
+
 function generateInviteCode(): string {
   // 8-char alphanumeric code, e.g. "A3K9X2M7"
   return crypto.randomBytes(4).toString('hex').toUpperCase();
@@ -145,7 +153,7 @@ export async function createGroup(
       ...group,
       type: formatGroupType(group.type),
       memberCount: group._count.memberships,
-      members: group.memberships,
+      members: group.memberships.map(formatMembership),
       _count: undefined,
       memberships: undefined,
     },
@@ -187,7 +195,7 @@ export async function getGroup(
       ...group,
       type: formatGroupType(group!.type),
       memberCount: group!._count.memberships,
-      members: group!.memberships,
+      members: group!.memberships.map(formatMembership),
       _count: undefined,
       memberships: undefined,
     },
@@ -286,7 +294,7 @@ export async function getMembers(
     orderBy: { joinedAt: 'asc' },
   });
 
-  reply.send({ members: memberships });
+  reply.send({ members: memberships.map(formatMembership) });
 }
 
 export async function addMember(
@@ -333,7 +341,7 @@ export async function addMember(
     },
   });
 
-  reply.status(201).send({ member: membership });
+  reply.status(201).send({ member: formatMembership(membership) });
 }
 
 export async function removeMember(
@@ -497,7 +505,7 @@ export async function joinByInvite(
     },
   });
 
-  reply.status(201).send({ membership });
+  reply.status(201).send({ membership: formatMembership(membership) });
 }
 
 export async function getGroupKey(

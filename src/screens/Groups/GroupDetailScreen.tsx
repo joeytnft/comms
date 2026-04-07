@@ -167,13 +167,21 @@ export function GroupDetailScreen({ navigation, route }: Props) {
           </View>
         </View>
 
-        {/* Chat button */}
+        {/* Action buttons */}
         <Button
           title="Open Chat"
           variant="primary"
           onPress={() => navigation.navigate('ChatRoom', { groupId, groupName: currentGroup.name })}
           style={styles.chatButton}
         />
+        {currentGroup.type === 'lead' && isAdmin && (
+          <Button
+            title="+ Create Sub-Group"
+            variant="secondary"
+            onPress={() => navigation.navigate('CreateGroup', { defaultParentGroupId: groupId, defaultType: 'sub' })}
+            style={styles.subGroupButton}
+          />
+        )}
 
         {/* Invite section — admin only */}
         {isAdmin && (
@@ -373,6 +381,9 @@ const styles = StyleSheet.create({
     minHeight: 40,
   },
   chatButton: {
+    marginBottom: SPACING.sm,
+  },
+  subGroupButton: {
     marginBottom: SPACING.lg,
   },
   inviteCodeRow: {
