@@ -1,10 +1,11 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { TeamMemberLocation } from '@/types';
+import { TeamMemberLocation, Geofence } from '@/types';
 import { COLORS, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 
 interface Props {
   locations: TeamMemberLocation[];
+  geofence?: Geofence | null;
   style?: object;
 }
 
@@ -15,14 +16,17 @@ const PAD = 10;
 const isOnline = (updatedAt: string) =>
   Date.now() - new Date(updatedAt).getTime() < 300_000;
 
-export function TeamMapView({ locations, style }: Props) {
-  const lats = locations.map((l) => l.latitude);
-  const lngs = locations.map((l) => l.longitude);
+export function TeamMapView({ locations, geofence, style }: Props) {
+  // Include geofence center in bounds calculation
+  const allLats = [...locations.map((l) => l.latitude), ...(geofence ? [geofence.latitude] : [])];
+  const allLngs = [...locations.map((l) => l.longitude), ...(geofence ? [geofence.longitude] : [])];
+  const lats = allLats.length ? allLats : [0];
+  const lngs = allLngs.length ? allLngs : [0];
 
-  const minLat = lats.length ? Math.min(...lats) : 0;
-  const maxLat = lats.length ? Math.max(...lats) : 1;
-  const minLng = lngs.length ? Math.min(...lngs) : 0;
-  const maxLng = lngs.length ? Math.max(...lngs) : 1;
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
 
   const latRange = maxLat - minLat || 0.01;
   const lngRange = maxLng - minLng || 0.01;
@@ -40,6 +44,23 @@ export function TeamMapView({ locations, style }: Props) {
         {/* Border */}
         <rect x={PAD} y={PAD} width={W - PAD * 2} height={H - PAD * 2}
           fill="none" stroke={COLORS.gray700} strokeWidth="0.3" />
+
+        {/* Geofence circle — radius scaled relative to map extent */}
+        {geofence && (() => {
+          const cx = toX(geofence.longitude);
+          const cy = toY(geofence.latitude);
+          // 1 degree lat ≈ 111km. Map lngRange maps to (W - PAD*2) SVG units.
+          const metersPerSvgUnit = (lngRange * 111320) / (W - PAD * 2);
+          const r = geofence.radius / metersPerSvgUnit;
+          return (
+            <g key="geofence">
+              <circle cx={cx} cy={cy} r={r}
+                fill={COLORS.info + '18'} stroke={COLORS.info} strokeWidth="0.5" />
+              <text x={cx} y={cy - r - 1.5} textAnchor="middle"
+                fontSize="2.5" fill={COLORS.info}>{geofence.name}</text>
+            </g>
+          );
+        })()}
 
         {locations.length === 0 && (
           <text x={W / 2} y={H / 2} textAnchor="middle" fontSize="4" fill={COLORS.textMuted}>

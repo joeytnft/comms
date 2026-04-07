@@ -31,6 +31,27 @@ export interface PTTTransmission {
   durationMs?: number;
 }
 
+export interface PttLog {
+  id: string;
+  groupId: string;
+  senderId: string;
+  audioUrl: string;
+  durationMs: number;
+  createdAt: string;
+  sender: { id: string; displayName: string; avatarUrl: string | null };
+}
+
+export interface Geofence {
+  id: string;
+  organizationId: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  radius: number; // metres
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const DEFAULT_PTT_CONFIG: PTTConfig = {
   primaryButton: 'screen_button',
   beepOnTransmit: true,

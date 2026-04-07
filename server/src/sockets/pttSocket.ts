@@ -1,6 +1,37 @@
 import { Server, Socket } from 'socket.io';
+import fs from 'fs';
+import path from 'path';
 import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
+
+// In-memory store: "userId:groupId" → { chunks, startedAt, mimeType }
+const activeSessions = new Map<string, { chunks: Buffer[]; startedAt: number; mimeType: string }>();
+
+async function saveWebPttLog(
+  userId: string,
+  groupId: string,
+  chunks: Buffer[],
+  mimeType: string,
+  startedAt: number,
+) {
+  try {
+    const ext = mimeType.includes('ogg') ? 'ogg' : 'webm';
+    const filename = `ptt_${userId}_${Date.now()}.${ext}`;
+    const uploadsDir = path.join(process.cwd(), 'uploads');
+    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+    const filepath = path.join(uploadsDir, filename);
+    fs.writeFileSync(filepath, Buffer.concat(chunks));
+    const durationMs = Date.now() - startedAt;
+    await prisma.pttLog.create({
+      data: { groupId, senderId: userId, audioUrl: `/files/${filename}`, durationMs },
+    });
+    logger.info(`[PTT] Saved voice log: ${filename} (${durationMs}ms)`);
+    return `/files/${filename}`;
+  } catch (err) {
+    logger.error({ err }, '[PTT] Failed to save voice log');
+    return null;
+  }
+}
 
 /**
  * PTT socket events for signaling who is speaking.
@@ -75,10 +106,16 @@ export function setupPTTSocket(io: Server, socket: Socket) {
   });
 
   // User started transmitting (pressed PTT button)
-  socket.on('ptt:start', async (data: { groupId: string }) => {
+  socket.on('ptt:start', async (data: { groupId: string; mimeType?: string }) => {
     if (!data || !isValidGroupId(data.groupId)) return;
     const { groupId } = data;
     const room = `ptt:${groupId}`;
+    // Initialize chunk buffer for this web session
+    activeSessions.set(`${userId}:${groupId}`, {
+      chunks: [],
+      startedAt: Date.now(),
+      mimeType: data.mimeType || 'audio/webm',
+    });
 
     try {
       const user = await prisma.user.findUnique({
@@ -125,11 +162,22 @@ export function setupPTTSocket(io: Server, socket: Socket) {
     const room = `ptt:${groupId}`;
 
     try {
-      socket.to(room).emit('ptt:stopped', {
-        groupId,
-        userId,
-        endedAt: new Date().toISOString(),
-      });
+      const endedAt = new Date().toISOString();
+      socket.to(room).emit('ptt:stopped', { groupId, userId, endedAt });
+
+      // Save web audio log if chunks exist
+      const sessionKey = `${userId}:${groupId}`;
+      const session = activeSessions.get(sessionKey);
+      if (session && session.chunks.length > 0) {
+        activeSessions.delete(sessionKey);
+        const audioUrl = await saveWebPttLog(userId, groupId, session.chunks, session.mimeType, session.startedAt);
+        if (audioUrl) {
+          // Notify all room members about new log entry
+          io.to(room).emit('ptt:log_saved', { groupId, userId, audioUrl, createdAt: endedAt });
+        }
+      } else {
+        activeSessions.delete(sessionKey);
+      }
 
       // Also notify parent LEAD group
       const group = await prisma.group.findUnique({
@@ -140,10 +188,7 @@ export function setupPTTSocket(io: Server, socket: Socket) {
       if (group?.parentGroupId) {
         const parentRoom = `ptt:${group.parentGroupId}`;
         socket.to(parentRoom).emit('ptt:stopped', {
-          groupId,
-          userId,
-          endedAt: new Date().toISOString(),
-          fromSubGroup: true,
+          groupId, userId, endedAt, fromSubGroup: true,
         });
       }
 
@@ -153,11 +198,33 @@ export function setupPTTSocket(io: Server, socket: Socket) {
     }
   });
 
-  // Relay raw audio chunk to other members in the PTT room (web clients)
+  // Native client submits a completed recording after upload
+  socket.on('ptt:native_log', async (data: { groupId: string; audioUrl: string; durationMs: number }) => {
+    if (!data || !isValidGroupId(data.groupId)) return;
+    try {
+      await prisma.pttLog.create({
+        data: { groupId: data.groupId, senderId: userId, audioUrl: data.audioUrl, durationMs: data.durationMs || 0 },
+      });
+      const room = `ptt:${data.groupId}`;
+      io.to(room).emit('ptt:log_saved', {
+        groupId: data.groupId,
+        userId,
+        audioUrl: data.audioUrl,
+        createdAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      logger.error({ err }, '[PTT] Failed to save native log');
+    }
+  });
+
+  // Relay raw audio chunk to other members in the PTT room (web clients) and buffer for log
   socket.on('ptt:audio_chunk', (data: { groupId: string; chunk: ArrayBuffer; mimeType: string }) => {
     if (!data || !isValidGroupId(data.groupId)) return;
     const room = `ptt:${data.groupId}`;
     socket.to(room).emit('ptt:audio_chunk', { chunk: data.chunk, mimeType: data.mimeType });
+    // Buffer chunk for log
+    const session = activeSessions.get(`${userId}:${data.groupId}`);
+    if (session) session.chunks.push(Buffer.from(data.chunk));
   });
 
   // Clean up PTT rooms on disconnect

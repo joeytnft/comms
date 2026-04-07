@@ -1,20 +1,28 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocationStore } from '@/store/useLocationStore';
-import { TeamMemberLocation } from '@/types';
+import { TeamMemberLocation, Geofence } from '@/types';
 import { TeamMapView } from '@/components/map/TeamMapView';
+import { geofenceService } from '@/services/geofenceService';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 
 export function TeamMapScreen() {
   const { teamLocations, isSharing, isLoading, error, fetchTeamLocations, setSharing } =
     useLocationStore();
   const refreshInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [geofence, setGeofence] = useState<Geofence | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       fetchTeamLocations();
+
+      // Load geofence and start background monitoring
+      geofenceService.fetchGeofence().then((gf) => {
+        setGeofence(gf);
+        if (gf) geofenceService.startGeofencing(gf).catch(() => null);
+      });
 
       refreshInterval.current = setInterval(() => {
         fetchTeamLocations();
@@ -79,7 +87,17 @@ export function TeamMapScreen() {
         </TouchableOpacity>
       </View>
 
-      <TeamMapView locations={teamLocations} style={styles.map} />
+      <TeamMapView locations={teamLocations} geofence={geofence} style={styles.map} />
+
+      {geofence && (
+        <View style={styles.geofenceBar}>
+          <Text style={styles.geofenceText}>
+            Geofence: {geofence.name} · {geofence.radius >= 1000
+              ? `${(geofence.radius / 1000).toFixed(1)}km`
+              : `${Math.round(geofence.radius)}m`}
+          </Text>
+        </View>
+      )}
 
       {error ? (
         <View style={styles.errorContainer}>
@@ -170,6 +188,15 @@ const styles = StyleSheet.create({
   memberMeta: { alignItems: 'flex-end' },
   lastSeen: { ...TYPOGRAPHY.caption, color: COLORS.textSecondary, marginBottom: 4 },
   onlineDot: { width: 8, height: 8, borderRadius: 4 },
+  geofenceBar: {
+    marginHorizontal: SPACING.lg,
+    marginBottom: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+    backgroundColor: COLORS.info + '22',
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  geofenceText: { ...TYPOGRAPHY.caption, color: COLORS.info },
   errorContainer: { alignItems: 'center', paddingVertical: SPACING.sm },
   errorText: { ...TYPOGRAPHY.bodySmall, color: COLORS.danger },
   emptyContainer: { alignItems: 'center', paddingTop: SPACING.xxl },

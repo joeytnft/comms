@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert as RNAlert,
+  Image,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -138,7 +140,11 @@ export function IncidentDetailScreen({ navigation, route }: Props) {
             </Text>
             {currentIncident.photos.map((photo) => (
               <View key={photo.id} style={styles.photoCard}>
-                <Text style={styles.photoText}>Encrypted photo</Text>
+                <Image
+                  source={{ uri: photo.encryptedUrl }}
+                  style={styles.photoImage}
+                  resizeMode="cover"
+                />
                 <Text style={styles.photoDate}>
                   {new Date(photo.createdAt).toLocaleString()}
                 </Text>
@@ -264,15 +270,16 @@ const styles = StyleSheet.create({
   photoCard: {
     backgroundColor: COLORS.surface,
     borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
+    overflow: 'hidden',
     marginBottom: SPACING.sm,
     ...SHADOWS.sm,
   },
-  photoText: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.textSecondary,
+  photoImage: {
+    width: '100%',
+    height: Dimensions.get('window').width - SPACING.lg * 2,
   },
   photoDate: {
+    padding: SPACING.sm,
     ...TYPOGRAPHY.caption,
     color: COLORS.textMuted,
     marginTop: 4,

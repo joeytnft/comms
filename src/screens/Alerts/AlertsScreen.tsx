@@ -8,6 +8,10 @@ import {
   RefreshControl,
   Alert as RNAlert,
   Vibration,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -32,6 +36,11 @@ export function AlertsScreen() {
   } = useAlertStore();
   const [showHistory, setShowHistory] = useState(false);
   const [triggering, setTriggering] = useState(false);
+  const [reasonModal, setReasonModal] = useState<{ visible: boolean; level: AlertLevel | null }>({
+    visible: false,
+    level: null,
+  });
+  const [reason, setReason] = useState('');
 
   useFocusEffect(
     useCallback(() => {
@@ -40,29 +49,22 @@ export function AlertsScreen() {
   );
 
   const handleTriggerAlert = (level: AlertLevel) => {
-    const label = ALERT_LABELS[level];
-    RNAlert.alert(
-      `Trigger ${label} Alert`,
-      `This will notify all team members with a ${label.toLowerCase()} alert. Continue?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Send Alert',
-          style: 'destructive',
-          onPress: async () => {
-            setTriggering(true);
-            try {
-              await triggerAlert({ level });
-              Vibration.vibrate(200);
-            } catch {
-              RNAlert.alert('Error', 'Failed to trigger alert');
-            } finally {
-              setTriggering(false);
-            }
-          },
-        },
-      ],
-    );
+    setReason('');
+    setReasonModal({ visible: true, level });
+  };
+
+  const handleSendAlert = async () => {
+    if (!reasonModal.level) return;
+    setReasonModal({ visible: false, level: null });
+    setTriggering(true);
+    try {
+      await triggerAlert({ level: reasonModal.level, message: reason.trim() || undefined });
+      Vibration.vibrate(200);
+    } catch {
+      RNAlert.alert('Error', 'Failed to trigger alert');
+    } finally {
+      setTriggering(false);
+    }
   };
 
   const handlePanicPress = () => {
@@ -222,6 +224,56 @@ export function AlertsScreen() {
           </View>
         }
       />
+
+      {/* Alert reason modal */}
+      <Modal
+        visible={reasonModal.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReasonModal({ visible: false, level: null })}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>
+              {reasonModal.level ? ALERT_LABELS[reasonModal.level] : ''} Alert
+            </Text>
+            <Text style={styles.modalSubtitle}>
+              Add an optional reason so your team knows what's happening.
+            </Text>
+            <TextInput
+              style={styles.reasonInput}
+              placeholder="e.g. Suspicious person near entrance"
+              placeholderTextColor={COLORS.textMuted}
+              value={reason}
+              onChangeText={setReason}
+              multiline
+              maxLength={200}
+              autoFocus
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setReasonModal({ visible: false, level: null })}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.sendButton,
+                  { backgroundColor: reasonModal.level ? ALERT_COLORS[reasonModal.level] : COLORS.danger },
+                ]}
+                onPress={handleSendAlert}
+                disabled={triggering}
+              >
+                <Text style={styles.sendButtonText}>Send Alert</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -395,5 +447,65 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.body,
     color: COLORS.textMuted,
     marginTop: SPACING.xs,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.lg,
+  },
+  modalCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.lg,
+  },
+  modalTitle: {
+    ...TYPOGRAPHY.heading2,
+    color: COLORS.textPrimary,
+    marginBottom: SPACING.xs,
+  },
+  modalSubtitle: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.textMuted,
+    marginBottom: SPACING.md,
+  },
+  reasonInput: {
+    backgroundColor: COLORS.background,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.gray700,
+    color: COLORS.textPrimary,
+    padding: SPACING.md,
+    minHeight: 80,
+    textAlignVertical: 'top',
+    ...TYPOGRAPHY.body,
+    marginBottom: SPACING.md,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: SPACING.sm + 2,
+    borderRadius: BORDER_RADIUS.sm,
+    alignItems: 'center',
+    backgroundColor: COLORS.gray700,
+  },
+  cancelButtonText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+  },
+  sendButton: {
+    flex: 2,
+    paddingVertical: SPACING.sm + 2,
+    borderRadius: BORDER_RADIUS.sm,
+    alignItems: 'center',
+  },
+  sendButtonText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.white,
+    fontWeight: '700',
   },
 });

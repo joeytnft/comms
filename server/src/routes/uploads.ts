@@ -11,6 +11,11 @@ const ALLOWED_MIME: Record<string, string> = {
   'image/png': 'png',
   'image/webp': 'webp',
   'image/gif': 'gif',
+  'audio/m4a': 'm4a',
+  'audio/mp4': 'm4a',
+  'audio/aac': 'm4a',
+  'audio/webm': 'webm',
+  'audio/ogg': 'ogg',
 };
 const MAX_BYTES = 8 * 1024 * 1024; // 8MB
 

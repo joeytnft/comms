@@ -1,5 +1,7 @@
 import { polyfillWebCrypto } from 'expo-standard-web-crypto';
 polyfillWebCrypto();
+// Register background tasks before any component renders
+import '@/services/geofenceService';
 import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';

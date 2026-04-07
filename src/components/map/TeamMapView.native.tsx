@@ -1,24 +1,25 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import MapView, { Marker, Callout } from 'react-native-maps';
-import { TeamMemberLocation } from '@/types';
+import MapView, { Marker, Callout, Circle } from 'react-native-maps';
+import { TeamMemberLocation, Geofence } from '@/types';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 
 interface Props {
   locations: TeamMemberLocation[];
+  geofence?: Geofence | null;
   style?: object;
 }
 
 const isOnline = (updatedAt: string) =>
   Date.now() - new Date(updatedAt).getTime() < 300_000;
 
-export function TeamMapView({ locations, style }: Props) {
-  const centerLat = locations.length
+export function TeamMapView({ locations, geofence, style }: Props) {
+  const centerLat = geofence?.latitude ?? (locations.length
     ? locations.reduce((s, l) => s + l.latitude, 0) / locations.length
-    : 37.7749;
-  const centerLng = locations.length
+    : 37.7749);
+  const centerLng = geofence?.longitude ?? (locations.length
     ? locations.reduce((s, l) => s + l.longitude, 0) / locations.length
-    : -122.4194;
+    : -122.4194);
 
   return (
     <View style={[styles.wrapper, style]}>
@@ -31,6 +32,17 @@ export function TeamMapView({ locations, style }: Props) {
           longitudeDelta: 0.02,
         }}
       >
+        {/* Geofence boundary circle */}
+        {geofence && (
+          <Circle
+            center={{ latitude: geofence.latitude, longitude: geofence.longitude }}
+            radius={geofence.radius}
+            strokeColor={COLORS.info}
+            fillColor={COLORS.info + '20'}
+            strokeWidth={2}
+          />
+        )}
+
         {locations.map((member) => (
           <Marker
             key={member.userId}

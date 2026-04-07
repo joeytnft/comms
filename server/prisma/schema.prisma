@@ -33,6 +33,7 @@ model Organization {
   alerts        Alert[]
   incidents     Incident[]
   billingEvents BillingEvent[]
+  geofence      Geofence?
 
   @@map("organizations")
 }
@@ -91,6 +92,7 @@ model User {
   reportedIncidents Incident[]      @relation("reportedBy")
   refreshTokens   RefreshToken[]
   location        UserLocation?
+  pttLogs         PttLog[]
 
   @@index([organizationId])
   @@map("users")
@@ -147,6 +149,7 @@ model Group {
   subGroups       Group[]           @relation("GroupHierarchy")
   memberships     GroupMembership[]
   messages        Message[]
+  pttLogs         PttLog[]
 
   @@map("groups")
 }
@@ -308,4 +311,42 @@ model IncidentPhoto {
   incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
 
   @@map("incident_photos")
+}
+
+// ============================================================================
+// PTT VOICE LOGS
+// ============================================================================
+
+model PttLog {
+  id         String   @id @default(cuid())
+  groupId    String
+  senderId   String
+  audioUrl   String
+  durationMs Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  group  Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  sender User  @relation(fields: [senderId], references: [id])
+
+  @@index([groupId, createdAt])
+  @@map("ptt_logs")
+}
+
+// ============================================================================
+// GEOFENCING
+// ============================================================================
+
+model Geofence {
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  name           String
+  latitude       Float
+  longitude      Float
+  radius         Float    // metres
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@map("geofences")
 }
