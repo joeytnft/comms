@@ -2,6 +2,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SettingsScreen } from '@/screens/Settings/SettingsScreen';
 import { SubscriptionScreen } from '@/screens/Settings/SubscriptionScreen';
+import { GeofenceScreen } from '@/screens/Settings/GeofenceScreen';
 import { TeamMapScreen } from '@/screens/Map/TeamMapScreen';
 import { IncidentStackNavigator } from './IncidentStackNavigator';
 import { COLORS } from '@/config/theme';
@@ -11,6 +12,7 @@ export type MoreStackParamList = {
   Subscription: undefined;
   TeamMap: undefined;
   Incidents: undefined;
+  Geofence: undefined;
 };
 
 const Stack = createNativeStackNavigator<MoreStackParamList>();
@@ -41,6 +43,11 @@ export function MoreStackNavigator() {
       <Stack.Screen
         name="Incidents"
         component={IncidentStackNavigator}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="Geofence"
+        component={GeofenceScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -22,12 +22,24 @@ type Props = {
 export function IncidentListScreen({ navigation }: Props) {
   const { incidents, isLoading, error, nextCursor, fetchIncidents, loadMore } =
     useIncidentStore();
+  const [showHistory, setShowHistory] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       fetchIncidents();
     }, []),
   );
+
+  const handleToggleHistory = () => {
+    const next = !showHistory;
+    setShowHistory(next);
+    fetchIncidents({ status: next ? undefined : 'active' });
+  };
+
+  // Active = OPEN or IN_PROGRESS; history = RESOLVED or CLOSED
+  const displayIncidents = showHistory
+    ? incidents
+    : incidents.filter((i) => i.status === 'OPEN' || i.status === 'IN_PROGRESS');
 
   const handlePress = (incident: Incident) => {
     navigation.navigate('IncidentDetail', { incidentId: incident.id });
@@ -72,9 +84,16 @@ export function IncidentListScreen({ navigation }: Props) {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>Incidents</Text>
-        <TouchableOpacity style={styles.createButton} onPress={handleCreate}>
-          <Text style={styles.createButtonText}>+ Report</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={handleToggleHistory} style={styles.historyToggle}>
+            <Text style={styles.historyToggleText}>
+              {showHistory ? 'Active Only' : 'History'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.createButton} onPress={handleCreate}>
+            <Text style={styles.createButtonText}>+ Report</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {error ? (
@@ -87,7 +106,7 @@ export function IncidentListScreen({ navigation }: Props) {
       ) : null}
 
       <FlatList
-        data={incidents}
+        data={displayIncidents}
         renderItem={renderIncident}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
@@ -102,9 +121,13 @@ export function IncidentListScreen({ navigation }: Props) {
         onEndReachedThreshold={0.3}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyTitle}>No incidents</Text>
+            <Text style={styles.emptyTitle}>
+              {showHistory ? 'No incidents' : 'No active incidents'}
+            </Text>
             <Text style={styles.emptySubtext}>
-              When incidents are reported, they will appear here.
+              {showHistory
+                ? 'No incidents have been reported yet.'
+                : 'All clear. Tap History to see resolved incidents.'}
             </Text>
             <TouchableOpacity style={styles.emptyButton} onPress={handleCreate}>
               <Text style={styles.emptyButtonText}>Report Incident</Text>
@@ -131,6 +154,20 @@ const styles = StyleSheet.create({
   title: {
     ...TYPOGRAPHY.heading1,
     color: COLORS.textPrimary,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  historyToggle: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
+  },
+  historyToggleText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.info,
+    fontWeight: '600',
   },
   createButton: {
     backgroundColor: COLORS.accent,

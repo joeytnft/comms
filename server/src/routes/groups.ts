@@ -27,4 +27,7 @@ export async function groupRoutes(app: FastifyInstance) {
   // Invites
   app.post('/:id/invite', groupController.generateInvite);
   app.delete('/:id/invite', groupController.revokeInvite);
+
+  // Group encryption key (shared among all members)
+  app.get('/:id/key', groupController.getGroupKey);
 }

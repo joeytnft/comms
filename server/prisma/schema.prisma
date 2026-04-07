@@ -140,6 +140,7 @@ model Group {
   parentGroupId   String?   // Points to lead group (for sub-groups)
   iconColor       String?
   inviteCode      String?   @unique  // Shareable code for self-join
+  groupKey        String?   // Shared AES-256 key (hex) for message encryption
   createdBy       String
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt

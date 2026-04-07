@@ -499,3 +499,36 @@ export async function joinByInvite(
 
   reply.status(201).send({ membership });
 }
+
+export async function getGroupKey(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) {
+  const { id: groupId } = request.params;
+
+  // Verify membership
+  const membership = await prisma.groupMembership.findUnique({
+    where: { groupId_userId: { groupId, userId: request.userId } },
+  });
+  if (!membership) {
+    throw new AuthorizationError('Not a member of this group');
+  }
+
+  let group = await prisma.group.findUnique({
+    where: { id: groupId },
+    select: { id: true, groupKey: true },
+  });
+  if (!group) throw new NotFoundError('Group');
+
+  // Generate and persist key if not yet set
+  if (!group.groupKey) {
+    const key = crypto.randomBytes(32).toString('hex');
+    group = await prisma.group.update({
+      where: { id: groupId },
+      data: { groupKey: key },
+      select: { id: true, groupKey: true },
+    });
+  }
+
+  return reply.send({ groupKey: group.groupKey });
+}

@@ -1,7 +1,29 @@
 import * as Crypto from 'expo-crypto';
+import { Platform } from 'react-native';
 import { secureStorage as SecureStore } from '@/utils/secureStorage';
+import { ENV } from '@/config/env';
 
 const GROUP_KEY_PREFIX = 'guardian_group_key_';
+
+// Group keys are shared secrets — use localStorage on web so they survive reloads.
+// On native, expo-secure-store already persists across sessions.
+const groupKeyStorage = {
+  async get(groupId: string): Promise<string | null> {
+    const k = `${GROUP_KEY_PREFIX}${groupId}`;
+    if (Platform.OS === 'web') {
+      return typeof localStorage !== 'undefined' ? localStorage.getItem(k) : null;
+    }
+    return SecureStore.getItemAsync(k);
+  },
+  async set(groupId: string, key: string): Promise<void> {
+    const k = `${GROUP_KEY_PREFIX}${groupId}`;
+    if (Platform.OS === 'web') {
+      if (typeof localStorage !== 'undefined') localStorage.setItem(k, key);
+      return;
+    }
+    await SecureStore.setItemAsync(k, key);
+  },
+};
 
 /**
  * Generate a random 256-bit key as a hex string.
@@ -107,26 +129,48 @@ export async function decryptMessage(
 }
 
 /**
- * Store a group's encryption key in secure storage.
+ * Store a group's encryption key in local storage (persistent across reloads).
  */
 export async function storeGroupKey(groupId: string, keyHex: string): Promise<void> {
-  await SecureStore.setItemAsync(`${GROUP_KEY_PREFIX}${groupId}`, keyHex);
+  await groupKeyStorage.set(groupId, keyHex);
 }
 
 /**
- * Retrieve a group's encryption key from secure storage.
+ * Retrieve the group key — checks local cache first, then fetches from server.
+ * The server generates a shared key on first request and all members get the same key.
  */
 export async function getGroupKey(groupId: string): Promise<string | null> {
-  return SecureStore.getItemAsync(`${GROUP_KEY_PREFIX}${groupId}`);
+  // Check local cache first
+  const cached = await groupKeyStorage.get(groupId);
+  if (cached) return cached;
+
+  // Fetch shared key from server
+  try {
+    const token = await SecureStore.getItemAsync('accessToken');
+    if (!token) return null;
+    const res = await fetch(`${ENV.apiUrl}/groups/${groupId}/key`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const { groupKey } = await res.json();
+    if (groupKey) {
+      await groupKeyStorage.set(groupId, groupKey);
+      return groupKey;
+    }
+  } catch {
+    // Network failure — key unavailable
+  }
+  return null;
 }
 
 /**
- * Generate and store a new group key. Called when creating a group.
+ * Ensure a group key exists (fetches from server, creates if needed).
  */
 export async function initGroupKey(groupId: string): Promise<string> {
-  const key = await generateGroupKey();
-  await storeGroupKey(groupId, key);
-  return key;
+  const key = await getGroupKey(groupId);
+  if (key) return key;
+  // Should not reach here — server always returns a key for valid group members
+  throw new Error('Unable to obtain group encryption key');
 }
 
 // --- Helpers ---
