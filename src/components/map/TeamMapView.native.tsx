@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import MapView, { Marker, Callout, Circle } from 'react-native-maps';
+import * as Location from 'expo-location';
 import { TeamMemberLocation, Geofence } from '@/types';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 
@@ -14,12 +15,25 @@ const isOnline = (updatedAt: string) =>
   Date.now() - new Date(updatedAt).getTime() < 300_000;
 
 export function TeamMapView({ locations, geofence, style }: Props) {
-  const centerLat = geofence?.latitude ?? (locations.length
-    ? locations.reduce((s, l) => s + l.latitude, 0) / locations.length
-    : 37.7749);
-  const centerLng = geofence?.longitude ?? (locations.length
-    ? locations.reduce((s, l) => s + l.longitude, 0) / locations.length
-    : -122.4194);
+  const [deviceCoords, setDeviceCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    Location.requestForegroundPermissionsAsync().then(({ status }) => {
+      if (status !== 'granted') return;
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).then((loc) => {
+        setDeviceCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+      }).catch(() => null);
+    });
+  }, []);
+
+  const centerLat = geofence?.latitude
+    ?? (locations.length ? locations.reduce((s, l) => s + l.latitude, 0) / locations.length : null)
+    ?? deviceCoords?.lat
+    ?? 37.7749;
+  const centerLng = geofence?.longitude
+    ?? (locations.length ? locations.reduce((s, l) => s + l.longitude, 0) / locations.length : null)
+    ?? deviceCoords?.lng
+    ?? -122.4194;
 
   return (
     <View style={[styles.wrapper, style]}>

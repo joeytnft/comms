@@ -4,6 +4,7 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { ENV } from '@/config/env';
 import { secureStorage } from '@/utils/secureStorage';
+import { ACCESS_TOKEN_KEY } from '@/config/constants';
 import { Geofence } from '@/types';
 
 export const GEOFENCE_TASK = 'GUARDIAN_COMM_GEOFENCE';
@@ -35,7 +36,7 @@ if (Platform.OS !== 'web') {
 export const geofenceService = {
   async fetchGeofence(): Promise<Geofence | null> {
     try {
-      const token = await secureStorage.getItemAsync('accessToken');
+      const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
       const res = await fetch(`${ENV.apiUrl}/geofence`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -49,7 +50,7 @@ export const geofenceService = {
 
   async saveGeofence(data: { name: string; latitude: number; longitude: number; radius: number }): Promise<Geofence | null> {
     try {
-      const token = await secureStorage.getItemAsync('accessToken');
+      const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
       const res = await fetch(`${ENV.apiUrl}/geofence`, {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -65,7 +66,7 @@ export const geofenceService = {
 
   async deleteGeofence(): Promise<void> {
     try {
-      const token = await secureStorage.getItemAsync('accessToken');
+      const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
       await fetch(`${ENV.apiUrl}/geofence`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },

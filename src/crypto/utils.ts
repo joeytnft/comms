@@ -2,6 +2,7 @@ import * as Crypto from 'expo-crypto';
 import { Platform } from 'react-native';
 import { secureStorage as SecureStore } from '@/utils/secureStorage';
 import { ENV } from '@/config/env';
+import { ACCESS_TOKEN_KEY } from '@/config/constants';
 
 const GROUP_KEY_PREFIX = 'guardian_group_key_';
 
@@ -146,7 +147,7 @@ export async function getGroupKey(groupId: string): Promise<string | null> {
 
   // Fetch shared key from server
   try {
-    const token = await SecureStore.getItemAsync('accessToken');
+    const token = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
     if (!token) return null;
     const res = await fetch(`${ENV.apiUrl}/groups/${groupId}/key`, {
       headers: { Authorization: `Bearer ${token}` },
