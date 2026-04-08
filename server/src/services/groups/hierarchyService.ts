@@ -15,12 +15,13 @@ interface CreateGroupInput {
  * - If they are in a LEAD group, they also see all its SUB groups
  */
 export async function getGroupsForUser(userId: string, organizationId: string) {
-  // Get groups the user is a direct member of
+  // Get groups the user is a direct member of (with their role)
   const memberships = await prisma.groupMembership.findMany({
     where: { userId },
-    select: { groupId: true },
+    select: { groupId: true, role: true },
   });
 
+  const membershipMap = new Map(memberships.map((m) => [m.groupId, m.role]));
   const directGroupIds = memberships.map((m) => m.groupId);
 
   // Find LEAD groups the user is in — they can see all SUB groups under them
@@ -51,7 +52,7 @@ export async function getGroupsForUser(userId: string, organizationId: string) {
   // Combine all visible group IDs (deduplicated)
   const visibleGroupIds = [...new Set([...directGroupIds, ...subGroupIds])];
 
-  return prisma.group.findMany({
+  const groups = await prisma.group.findMany({
     where: {
       id: { in: visibleGroupIds },
       organizationId,
@@ -61,6 +62,12 @@ export async function getGroupsForUser(userId: string, organizationId: string) {
     },
     orderBy: [{ type: 'asc' }, { name: 'asc' }], // LEAD first, then SUB
   });
+
+  // Attach the user's role for groups they are a direct member of
+  return groups.map((g) => ({
+    ...g,
+    myRole: membershipMap.get(g.id)?.toLowerCase() ?? null,
+  }));
 }
 
 /**

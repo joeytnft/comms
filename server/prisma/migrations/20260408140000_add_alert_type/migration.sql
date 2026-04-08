@@ -1,0 +1,2 @@
+ALTER TABLE "alerts" ADD COLUMN "alertType" TEXT;
+ALTER TABLE "alerts" ADD COLUMN "priorityTone" BOOLEAN NOT NULL DEFAULT false;

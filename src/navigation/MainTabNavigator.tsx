@@ -53,8 +53,9 @@ export function MainTabNavigator() {
         name="Groups"
         component={GroupStackNavigator}
         options={{
+          title: 'Channels',
           headerShown: false,
-          tabBarIcon: ({ color }) => <TabIcon label="G" color={color} />,
+          tabBarIcon: ({ color }) => <TabIcon label="Ch" color={color} />,
         }}
       />
       <Tab.Screen

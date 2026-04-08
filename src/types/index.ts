@@ -6,3 +6,4 @@ export * from './incident';
 export * from './location';
 export * from './ptt';
 export * from './subscription';
+export * from './schedule';

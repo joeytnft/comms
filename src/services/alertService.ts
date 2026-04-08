@@ -32,4 +32,8 @@ export const alertService = {
   async resolveAlert(id: string): Promise<AlertResponse> {
     return apiClient.post<AlertResponse>(ENDPOINTS.ALERTS.RESOLVE(id), {});
   },
+
+  async deleteAlert(id: string): Promise<void> {
+    return apiClient.delete<void>(ENDPOINTS.ALERTS.DELETE(id));
+  },
 };

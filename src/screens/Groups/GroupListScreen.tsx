@@ -42,9 +42,9 @@ export function GroupListScreen({ navigation }: Props) {
       await joinByInvite(code);
       setInviteCode('');
       setShowJoinForm(false);
-      Alert.alert('Joined!', 'You have successfully joined the group.');
+      Alert.alert('Joined!', 'You have successfully joined the channel.');
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to join group';
+      const message = error instanceof Error ? error.message : 'Failed to join channel';
       Alert.alert('Error', message);
     } finally {
       setIsJoining(false);
@@ -52,13 +52,13 @@ export function GroupListScreen({ navigation }: Props) {
   };
 
   if (isLoading && groups.length === 0) {
-    return <LoadingOverlay message="Loading groups..." />;
+    return <LoadingOverlay message="Loading channels..." />;
   }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Groups</Text>
+        <Text style={styles.title}>Channels</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.joinButton}
@@ -116,12 +116,12 @@ export function GroupListScreen({ navigation }: Props) {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyTitle}>No groups yet</Text>
+            <Text style={styles.emptyTitle}>No channels yet</Text>
             <Text style={styles.emptySubtext}>
-              Create your first group to get your team organized.
+              Create your first channel to get your team organized.
             </Text>
             <TouchableOpacity style={styles.emptyButton} onPress={handleCreatePress}>
-              <Text style={styles.emptyButtonText}>Create Group</Text>
+              <Text style={styles.emptyButtonText}>Create Channel</Text>
             </TouchableOpacity>
           </View>
         }

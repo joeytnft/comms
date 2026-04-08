@@ -28,12 +28,15 @@ model Organization {
   trialEndsAt          DateTime?
   rcCustomerId         String?            @unique // RevenueCat customer ID
 
-  users         User[]
-  groups        Group[]
-  alerts        Alert[]
-  incidents     Incident[]
-  billingEvents BillingEvent[]
-  geofence      Geofence?
+  users            User[]
+  groups           Group[]
+  alerts           Alert[]
+  incidents        Incident[]
+  billingEvents    BillingEvent[]
+  geofence         Geofence?
+  serviceSchedules ServiceSchedule[]
+  serviceTemplates ServiceTemplate[]
+  posts            Post[]
 
   @@map("organizations")
 }
@@ -93,6 +96,10 @@ model User {
   refreshTokens   RefreshToken[]
   location        UserLocation?
   pttLogs         PttLog[]
+  shiftAssignments     ShiftAssignment[]  @relation("shiftAssignments")
+  swapRequestsReceived ShiftSwapRequest[] @relation("swapRequestsReceived")
+  createdServices      ServiceSchedule[]  @relation("serviceCreatedBy")
+  createdTemplates     ServiceTemplate[]  @relation("templateCreatedBy")
 
   @@index([organizationId])
   @@map("users")
@@ -232,9 +239,12 @@ model Alert {
   organizationId  String
   triggeredById   String
   level           AlertLevel
+  alertType       String?    // e.g. MEDICAL, SUSPICIOUS_PERSON, LOCKDOWN, etc.
   message         String?
   latitude        Float?
   longitude       Float?
+  priorityTone    Boolean    @default(false)
+  photoUrl        String?
   resolvedAt      DateTime?
   resolvedById    String?
   createdAt       DateTime   @default(now())
@@ -346,6 +356,130 @@ model PttLog {
 
   @@index([groupId, createdAt])
   @@map("ptt_logs")
+}
+
+// ============================================================================
+// SCHEDULE / SHIFT MANAGEMENT
+// ============================================================================
+
+model Post {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  zone           String?
+  description    String?
+  createdAt      DateTime @default(now())
+
+  organization   Organization       @relation(fields: [organizationId], references: [id])
+  assignments    ShiftAssignment[]
+  templateSlots  TemplateRoleSlot[]
+
+  @@unique([organizationId, name])
+  @@map("posts")
+}
+
+model ServiceTemplate {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  dayOfWeek      Int      // 0=Sun 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat
+  startTime      String   // "09:00" 24h
+  description    String?
+  isActive       Boolean  @default(true)
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  createdBy    User               @relation("templateCreatedBy", fields: [createdById], references: [id])
+  roleSlots    TemplateRoleSlot[]
+  services     ServiceSchedule[]
+
+  @@index([organizationId])
+  @@map("service_templates")
+}
+
+model TemplateRoleSlot {
+  id         String  @id @default(cuid())
+  templateId String
+  postId     String?
+  roleName   String
+  count      Int     @default(1)
+
+  template ServiceTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  post     Post?           @relation(fields: [postId], references: [id])
+
+  @@map("template_role_slots")
+}
+
+model ServiceSchedule {
+  id             String   @id @default(cuid())
+  organizationId String
+  templateId     String?  // null = one-off special service
+  name           String
+  serviceDate    DateTime
+  description    String?
+  createdById    String
+  createdAt      DateTime @default(now())
+
+  organization Organization      @relation(fields: [organizationId], references: [id])
+  template     ServiceTemplate?  @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  createdBy    User              @relation("serviceCreatedBy", fields: [createdById], references: [id])
+  assignments  ShiftAssignment[]
+
+  @@index([organizationId, serviceDate])
+  @@map("service_schedules")
+}
+
+model ShiftAssignment {
+  id        String   @id @default(cuid())
+  serviceId String
+  userId    String
+  postId    String?
+  role      String?
+  notes     String?
+  createdAt DateTime @default(now())
+
+  service      ServiceSchedule   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  user         User              @relation("shiftAssignments", fields: [userId], references: [id])
+  post         Post?             @relation(fields: [postId], references: [id])
+  checkIn      CheckIn?
+  swapRequests ShiftSwapRequest[] @relation("fromAssignment")
+
+  @@unique([serviceId, userId])
+  @@map("shift_assignments")
+}
+
+model CheckIn {
+  id           String    @id @default(cuid())
+  assignmentId String    @unique
+  checkedInAt  DateTime  @default(now())
+  checkedOutAt DateTime?
+
+  assignment ShiftAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@map("check_ins")
+}
+
+model ShiftSwapRequest {
+  id               String     @id @default(cuid())
+  fromAssignmentId String
+  toUserId         String
+  message          String?
+  status           SwapStatus @default(PENDING)
+  respondedAt      DateTime?
+  createdAt        DateTime   @default(now())
+
+  fromAssignment ShiftAssignment @relation("fromAssignment", fields: [fromAssignmentId], references: [id], onDelete: Cascade)
+  toUser         User            @relation("swapRequestsReceived", fields: [toUserId], references: [id])
+
+  @@map("shift_swap_requests")
+}
+
+enum SwapStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
 }
 
 // ============================================================================

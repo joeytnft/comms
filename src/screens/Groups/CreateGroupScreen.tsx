@@ -43,11 +43,11 @@ export function CreateGroupScreen({ navigation, route }: Props) {
 
   const handleCreate = async () => {
     if (!name.trim()) {
-      Alert.alert('Error', 'Group name is required.');
+      Alert.alert('Error', 'Channel name is required.');
       return;
     }
     if (type === 'sub' && !parentGroupId) {
-      Alert.alert('Error', 'Please select a parent lead group.');
+      Alert.alert('Error', 'Please select a parent lead channel.');
       return;
     }
 
@@ -61,7 +61,7 @@ export function CreateGroupScreen({ navigation, route }: Props) {
       });
       navigation.goBack();
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to create group';
+      const message = error instanceof Error ? error.message : 'Failed to create channel';
       Alert.alert('Error', message);
     }
   };
@@ -69,10 +69,10 @@ export function CreateGroupScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Create Group</Text>
+        <Text style={styles.title}>Create Channel</Text>
 
         <Input
-          label="Group Name *"
+          label="Channel Name *"
           value={name}
           onChangeText={(text) => setName(text.slice(0, MAX_GROUP_NAME_LENGTH))}
           placeholder="e.g., Security Lead, Parking Team"
@@ -82,7 +82,7 @@ export function CreateGroupScreen({ navigation, route }: Props) {
           label="Description"
           value={description}
           onChangeText={(text) => setDescription(text.slice(0, MAX_GROUP_DESCRIPTION_LENGTH))}
-          placeholder="Brief description of this group"
+          placeholder="Brief description of this channel"
           multiline
           numberOfLines={2}
           containerStyle={styles.field}
@@ -90,23 +90,23 @@ export function CreateGroupScreen({ navigation, route }: Props) {
 
         {/* Type picker */}
         <View style={styles.field}>
-          <Text style={styles.label}>Group Type *</Text>
+          <Text style={styles.label}>Channel Type *</Text>
           <View style={styles.typePicker}>
             <TouchableOpacity
               style={[styles.typeOption, type === 'lead' && styles.typeOptionSelected]}
               onPress={() => setType('lead')}
             >
               <Text style={[styles.typeOptionText, type === 'lead' && styles.typeOptionTextSelected]}>
-                Lead Group
+                Lead Channel
               </Text>
-              <Text style={styles.typeOptionDesc}>Sees all sub-group activity</Text>
+              <Text style={styles.typeOptionDesc}>Sees all sub-channel activity</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.typeOption, type === 'sub' && styles.typeOptionSelected]}
               onPress={() => setType('sub')}
             >
               <Text style={[styles.typeOptionText, type === 'sub' && styles.typeOptionTextSelected]}>
-                Sub Group
+                Sub Channel
               </Text>
               <Text style={styles.typeOptionDesc}>Isolated team channel</Text>
             </TouchableOpacity>
@@ -116,10 +116,10 @@ export function CreateGroupScreen({ navigation, route }: Props) {
         {/* Parent group picker (only for SUB) */}
         {type === 'sub' && (
           <View style={styles.field}>
-            <Text style={styles.label}>Parent Lead Group *</Text>
+            <Text style={styles.label}>Parent Lead Channel *</Text>
             {leadGroups.length === 0 ? (
               <Text style={styles.noLeadText}>
-                No lead groups exist yet. Create a lead group first.
+                No lead channels exist yet. Create a lead channel first.
               </Text>
             ) : (
               <View style={styles.parentPicker}>
@@ -167,7 +167,7 @@ export function CreateGroupScreen({ navigation, route }: Props) {
         </View>
 
         <Button
-          title="Create Group"
+          title="Create Channel"
           onPress={handleCreate}
           loading={isLoading}
           disabled={!name.trim() || (type === 'sub' && !parentGroupId)}

@@ -6,6 +6,7 @@ import { GeofenceScreen } from '@/screens/Settings/GeofenceScreen';
 import { PTTConfigScreen } from '@/screens/Settings/PTTConfigScreen';
 import { TeamMapScreen } from '@/screens/Map/TeamMapScreen';
 import { IncidentStackNavigator } from './IncidentStackNavigator';
+import { ScheduleStackNavigator } from './ScheduleStackNavigator';
 import { COLORS } from '@/config/theme';
 
 export type MoreStackParamList = {
@@ -15,6 +16,7 @@ export type MoreStackParamList = {
   Incidents: undefined;
   Geofence: undefined;
   PTTConfig: undefined;
+  Schedule: undefined;
 };
 
 const Stack = createNativeStackNavigator<MoreStackParamList>();
@@ -55,6 +57,11 @@ export function MoreStackNavigator() {
       <Stack.Screen
         name="PTTConfig"
         component={PTTConfigScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="Schedule"
+        component={ScheduleStackNavigator}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

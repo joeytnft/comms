@@ -12,4 +12,5 @@ export async function alertRoutes(app: FastifyInstance) {
   app.get('/:id', alertController.getAlert);
   app.post('/:id/acknowledge', alertController.acknowledgeAlert);
   app.post('/:id/resolve', alertController.resolveAlert);
+  app.delete('/:id', alertController.deleteAlert);
 }

@@ -109,6 +109,13 @@ export function SettingsScreen() {
             <Text style={styles.settingLabel}>PTT Button</Text>
             <Text style={styles.chevron}>{'>'}</Text>
           </Pressable>
+          <Pressable
+            style={styles.settingRow}
+            onPress={() => navigation.navigate('Schedule')}
+          >
+            <Text style={styles.settingLabel}>Schedule & Check-In</Text>
+            <Text style={styles.chevron}>{'>'}</Text>
+          </Pressable>
         </View>
 
         {organization && (

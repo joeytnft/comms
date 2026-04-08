@@ -91,7 +91,7 @@ export function PTTScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
           <Text style={styles.title}>Push to Talk</Text>
-          <Text style={styles.subtitle}>Select a group to start</Text>
+          <Text style={styles.subtitle}>Select a channel to start</Text>
         </View>
 
         <FlatList
@@ -107,7 +107,7 @@ export function PTTScreen() {
               <View style={styles.groupInfo}>
                 <Text style={styles.groupName}>{item.name}</Text>
                 <Text style={styles.groupType}>
-                  {item.type === 'LEAD' ? 'Lead Group' : 'Sub Group'}
+                  {item.type === 'LEAD' ? 'Lead Channel' : 'Sub Channel'}
                 </Text>
               </View>
               <View style={styles.groupMembers}>
@@ -118,9 +118,9 @@ export function PTTScreen() {
           )}
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No groups available</Text>
+              <Text style={styles.emptyText}>No channels available</Text>
               <Text style={styles.emptySubtext}>
-                Join or create a group first
+                Join or create a channel first
               </Text>
             </View>
           }
@@ -237,14 +237,14 @@ export function PTTScreen() {
         />
       )}
 
-      {/* Change group button */}
+      {/* Change channel button */}
       <TouchableOpacity
         style={styles.changeGroupButton}
         onPress={() => {
           handleDisconnect();
         }}
       >
-        <Text style={styles.changeGroupText}>Switch Group</Text>
+        <Text style={styles.changeGroupText}>Switch Channel</Text>
       </TouchableOpacity>
     </SafeAreaView>
   );

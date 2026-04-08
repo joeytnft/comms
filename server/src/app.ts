@@ -22,6 +22,7 @@ import { incidentRoutes } from './routes/incidents';
 import { uploadRoutes } from './routes/uploads';
 import { pttLogRoutes } from './routes/pttLogs';
 import { geofenceRoutes } from './routes/geofence';
+import { scheduleRoutes } from './routes/schedule';
 import { setupSocketHandlers } from './sockets/socketHandler';
 
 export async function buildApp() {
@@ -109,6 +110,7 @@ export async function buildApp() {
   app.register(uploadRoutes, { prefix: '/upload' });
   app.register(pttLogRoutes, { prefix: '/ptt-logs' });
   app.register(geofenceRoutes, { prefix: '/geofence' });
+  app.register(scheduleRoutes, { prefix: '/schedule' });
 
   // Socket.IO setup
   app.addHook('onReady', async () => {

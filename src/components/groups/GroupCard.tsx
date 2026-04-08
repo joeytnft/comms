@@ -20,7 +20,7 @@ export function GroupCard({ group, onPress }: GroupCardProps) {
         <View style={styles.header}>
           <Text style={styles.name} numberOfLines={1}>{group.name}</Text>
           <View style={[styles.typeBadge, group.type === 'lead' ? styles.leadBadge : styles.subBadge]}>
-            <Text style={styles.typeText}>{group.type === 'lead' ? 'LEAD' : 'SUB'}</Text>
+            <Text style={styles.typeText}>{group.type === 'lead' ? 'LEAD CH' : 'SUB CH'}</Text>
           </View>
         </View>
         {group.description ? (

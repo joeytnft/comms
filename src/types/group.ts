@@ -16,6 +16,7 @@ export interface Group {
   iconColor?: string; // For visual identification
   inviteCode?: string | null; // Shareable code for self-join
   alertsEnabled: boolean;
+  myRole?: MemberRole | null; // Current user's role in this group (null = visible but not a member)
 }
 
 export interface GroupWithMembers extends Group {

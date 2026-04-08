@@ -14,6 +14,7 @@ interface AlertState {
   triggerAlert: (data: TriggerAlertData) => Promise<Alert>;
   acknowledgeAlert: (id: string) => Promise<void>;
   resolveAlert: (id: string) => Promise<void>;
+  deleteAlert: (id: string) => Promise<void>;
 
   // Socket-driven updates
   addAlert: (alert: Alert) => void;
@@ -107,6 +108,21 @@ export const useAlertStore = create<AlertState>((set, get) => ({
       }));
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to resolve alert';
+      set({ error: message });
+      throw error;
+    }
+  },
+
+  deleteAlert: async (id) => {
+    set({ error: null });
+    try {
+      await alertService.deleteAlert(id);
+      set((state) => ({
+        alerts: state.alerts.filter((a) => a.id !== id),
+        activeAlerts: state.activeAlerts.filter((a) => a.id !== id),
+      }));
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to delete alert';
       set({ error: message });
       throw error;
     }

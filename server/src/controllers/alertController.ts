@@ -6,9 +6,12 @@ import { ALERT_SELECT } from '../services/alerts/alertService';
 
 interface TriggerBody {
   level: 'ATTENTION' | 'WARNING' | 'EMERGENCY';
+  alertType?: string;
   message?: string;
   latitude?: number;
   longitude?: number;
+  priorityTone?: boolean;
+  photoUrl?: string;
   groupIds?: string[]; // Empty/absent = global (all groups)
 }
 
@@ -20,7 +23,7 @@ export async function triggerAlert(
   request: FastifyRequest<{ Body: TriggerBody }>,
   reply: FastifyReply,
 ) {
-  const { level, message, latitude, longitude, groupIds } = request.body;
+  const { level, alertType, message, latitude, longitude, priorityTone, photoUrl, groupIds } = request.body;
   const { userId, organizationId } = request;
 
   if (!level || !['ATTENTION', 'WARNING', 'EMERGENCY'].includes(level)) {
@@ -45,9 +48,12 @@ export async function triggerAlert(
     organizationId,
     triggeredById: userId,
     level,
+    alertType,
     message,
     latitude,
     longitude,
+    priorityTone,
+    photoUrl,
     groupIds: groupIds && groupIds.length > 0 ? groupIds : undefined,
   });
 
@@ -124,6 +130,19 @@ export async function acknowledgeAlert(
   );
 
   reply.send({ alert: updated });
+}
+
+export async function deleteAlert(
+  request: FastifyRequest<{ Params: AlertParams }>,
+  reply: FastifyReply,
+) {
+  await alertService.deleteAlertById(
+    request.params.id,
+    request.userId,
+    request.organizationId,
+  );
+
+  reply.status(204).send();
 }
 
 export async function resolveAlert(

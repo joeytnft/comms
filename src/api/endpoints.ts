@@ -56,12 +56,16 @@ export const ENDPOINTS = {
     PARTICIPANTS: (groupId: string) => `/ptt/${groupId}/participants`,
   },
 
+  // Upload
+  UPLOAD: '/upload',
+
   // Alerts
   ALERTS: {
     LIST: '/alerts',
     TRIGGER: '/alerts',
     ACKNOWLEDGE: (id: string) => `/alerts/${id}/acknowledge`,
     RESOLVE: (id: string) => `/alerts/${id}/resolve`,
+    DELETE: (id: string) => `/alerts/${id}`,
   },
 
   // Incidents
@@ -71,6 +75,28 @@ export const ENDPOINTS = {
     GET: (id: string) => `/incidents/${id}`,
     UPDATE: (id: string) => `/incidents/${id}`,
     UPLOAD_PHOTO: (id: string) => `/incidents/${id}/photos`,
+  },
+
+  // Schedule
+  SCHEDULE: {
+    TEMPLATES: '/schedule/templates',
+    TEMPLATE: (id: string) => `/schedule/templates/${id}`,
+    GENERATE: (id: string) => `/schedule/templates/${id}/generate`,
+    ROLE_SLOTS: (templateId: string) => `/schedule/templates/${templateId}/role-slots`,
+    ROLE_SLOT: (templateId: string, slotId: string) => `/schedule/templates/${templateId}/role-slots/${slotId}`,
+    POSTS: '/schedule/posts',
+    POST: (id: string) => `/schedule/posts/${id}`,
+    SERVICES: '/schedule/services',
+    TODAY: '/schedule/services/today',
+    SERVICE: (id: string) => `/schedule/services/${id}`,
+    MY_ASSIGNMENT: (serviceId: string) => `/schedule/services/${serviceId}/my-assignment`,
+    ASSIGNMENTS: (serviceId: string) => `/schedule/services/${serviceId}/assignments`,
+    REMOVE_ASSIGNMENT: (serviceId: string, assignmentId: string) => `/schedule/services/${serviceId}/assignments/${assignmentId}`,
+    CHECK_IN: (assignmentId: string) => `/schedule/check-in/${assignmentId}`,
+    CHECK_OUT: (assignmentId: string) => `/schedule/check-out/${assignmentId}`,
+    SWAP_REQUESTS: '/schedule/swap-requests',
+    REQUEST_SWAP: (assignmentId: string) => `/schedule/swap-requests/${assignmentId}`,
+    RESPOND_SWAP: (id: string) => `/schedule/swap-requests/${id}/respond`,
   },
 
   // Subscription

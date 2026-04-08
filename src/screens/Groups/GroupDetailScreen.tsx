@@ -62,7 +62,7 @@ export function GroupDetailScreen({ navigation, route }: Props) {
 
   const handleDelete = () => {
     Alert.alert(
-      'Delete Group',
+      'Delete Channel',
       `Are you sure you want to delete "${currentGroup?.name}"? This cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
@@ -74,7 +74,7 @@ export function GroupDetailScreen({ navigation, route }: Props) {
               await deleteGroup(groupId);
               navigation.goBack();
             } catch (error: unknown) {
-              const message = error instanceof Error ? error.message : 'Failed to delete group';
+              const message = error instanceof Error ? error.message : 'Failed to delete channel';
               Alert.alert('Error', message);
             }
           },
@@ -88,10 +88,10 @@ export function GroupDetailScreen({ navigation, route }: Props) {
     try {
       const code = await generateInvite(groupId);
       await Share.share({
-        message: `Join my group on Guardian Comm! Use invite code: ${code}`,
+        message: `Join my channel on Guardian Comm! Use invite code: ${code}`,
       });
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to generate invite';
+      const message = error instanceof Error ? error.message : 'Failed to generate invite code';
       Alert.alert('Error', message);
     } finally {
       setIsGeneratingInvite(false);
@@ -102,7 +102,7 @@ export function GroupDetailScreen({ navigation, route }: Props) {
     if (!currentGroup?.inviteCode) return;
     try {
       await Share.share({
-        message: `Join my group on Guardian Comm! Use invite code: ${currentGroup.inviteCode}`,
+        message: `Join my channel on Guardian Comm! Use invite code: ${currentGroup.inviteCode}`,
       });
     } catch {
       // User cancelled share
@@ -132,13 +132,13 @@ export function GroupDetailScreen({ navigation, route }: Props) {
   };
 
   if (isLoading && !currentGroup) {
-    return <LoadingOverlay message="Loading group..." />;
+    return <LoadingOverlay message="Loading channel..." />;
   }
 
   if (!currentGroup) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text style={styles.errorText}>Group not found</Text>
+        <Text style={styles.errorText}>Channel not found</Text>
       </SafeAreaView>
     );
   }
@@ -154,7 +154,7 @@ export function GroupDetailScreen({ navigation, route }: Props) {
               <Text style={styles.groupName}>{currentGroup.name}</Text>
               <View style={[styles.typeBadge, currentGroup.type === 'lead' ? styles.leadBadge : styles.subBadge]}>
                 <Text style={styles.typeText}>
-                  {currentGroup.type === 'lead' ? 'LEAD' : 'SUB'}
+                  {currentGroup.type === 'lead' ? 'LEAD CH' : 'SUB CH'}
                 </Text>
               </View>
             </View>
@@ -176,7 +176,7 @@ export function GroupDetailScreen({ navigation, route }: Props) {
         />
         {currentGroup.type === 'lead' && isAdmin && (
           <Button
-            title="+ Create Sub-Group"
+            title="+ Create Sub-Channel"
             variant="secondary"
             onPress={() => navigation.navigate('CreateGroup', { defaultParentGroupId: groupId, defaultType: 'sub' })}
             style={styles.subGroupButton}
@@ -292,7 +292,7 @@ export function GroupDetailScreen({ navigation, route }: Props) {
         {/* Admin actions */}
         {isAdmin && (
           <Button
-            title="Delete Group"
+            title="Delete Channel"
             variant="danger"
             onPress={handleDelete}
             style={styles.deleteButton}
