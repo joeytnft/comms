@@ -36,6 +36,31 @@ function nextOccurrence(dayOfWeek: number, startTime: string): Date {
   return d;
 }
 
+function formatTimeInput(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 4);
+  if (digits.length >= 3) return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+  return digits;
+}
+
+function to24h(time: string, ampm: 'AM' | 'PM'): string {
+  const [hStr, mStr] = time.split(':');
+  let h = parseInt(hStr, 10);
+  const m = parseInt(mStr || '0', 10);
+  if (isNaN(h)) return '09:00';
+  if (ampm === 'AM' && h === 12) h = 0;
+  if (ampm === 'PM' && h !== 12) h += 12;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function from24h(time: string): { display: string; ampm: 'AM' | 'PM' } {
+  const [hStr, mStr] = time.split(':');
+  let h = parseInt(hStr, 10);
+  const ampm: 'AM' | 'PM' = h >= 12 ? 'PM' : 'AM';
+  if (h === 0) h = 12;
+  else if (h > 12) h -= 12;
+  return { display: `${String(h).padStart(2, '0')}:${mStr ?? '00'}`, ampm };
+}
+
 function checkinStats(service: ServiceSchedule) {
   const total = service.assignments.length;
   const checkedIn = service.assignments.filter((a) => a.checkIn && !a.checkIn.checkedOutAt).length;
@@ -63,6 +88,7 @@ export function ScheduleScreen() {
   const [tplName, setTplName] = useState('');
   const [tplDay, setTplDay] = useState(0); // 0=Sun
   const [tplTime, setTplTime] = useState('09:00');
+  const [tplAmPm, setTplAmPm] = useState<'AM' | 'PM'>('AM');
   const [tplDesc, setTplDesc] = useState('');
   const [tplSaving, setTplSaving] = useState(false);
 
@@ -70,6 +96,7 @@ export function ScheduleScreen() {
   const [editTemplate, setEditTemplate] = useState<ServiceTemplate | null>(null);
   const [editName, setEditName] = useState('');
   const [editTime, setEditTime] = useState('');
+  const [editAmPm, setEditAmPm] = useState<'AM' | 'PM'>('AM');
   const [editDesc, setEditDesc] = useState('');
 
   // Generate modal
@@ -108,9 +135,9 @@ export function ScheduleScreen() {
     if (!tplName.trim()) return;
     setTplSaving(true);
     try {
-      await createTemplate({ name: tplName.trim(), dayOfWeek: tplDay, startTime: tplTime, description: tplDesc.trim() || undefined });
+      await createTemplate({ name: tplName.trim(), dayOfWeek: tplDay, startTime: to24h(tplTime, tplAmPm), description: tplDesc.trim() || undefined });
       setShowCreateTemplate(false);
-      setTplName(''); setTplDesc(''); setTplDay(0); setTplTime('09:00');
+      setTplName(''); setTplDesc(''); setTplDay(0); setTplTime('09:00'); setTplAmPm('AM');
     } catch (e: unknown) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Failed to create template');
     } finally { setTplSaving(false); }
@@ -119,7 +146,7 @@ export function ScheduleScreen() {
   const handleSaveEdit = async () => {
     if (!editTemplate) return;
     try {
-      await updateTemplate(editTemplate.id, { name: editName.trim(), startTime: editTime, description: editDesc.trim() || undefined });
+      await updateTemplate(editTemplate.id, { name: editName.trim(), startTime: to24h(editTime, editAmPm), description: editDesc.trim() || undefined });
       setEditTemplate(null);
     } catch (e: unknown) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save');
@@ -230,7 +257,7 @@ export function ScheduleScreen() {
           </View>
           {isAdmin && (
             <View style={styles.templateActions}>
-              <TouchableOpacity style={styles.tplActionBtn} onPress={() => { setEditTemplate(t); setEditName(t.name); setEditTime(t.startTime); setEditDesc(t.description ?? ''); }}>
+              <TouchableOpacity style={styles.tplActionBtn} onPress={() => { const { display, ampm } = from24h(t.startTime); setEditTemplate(t); setEditName(t.name); setEditTime(display); setEditAmPm(ampm); setEditDesc(t.description ?? ''); }}>
                 <Text style={styles.tplActionText}>Edit</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.tplActionBtn, styles.tplActionPrimary]} onPress={() => { setGenerateTarget(t); setGenEndDate(endOfYear().toISOString().slice(0, 10)); }}>
@@ -425,9 +452,16 @@ export function ScheduleScreen() {
               ))}
             </ScrollView>
 
-            <Text style={styles.fieldLabel}>START TIME (24h, e.g. 09:00)</Text>
+            <Text style={styles.fieldLabel}>START TIME</Text>
             <TextInput style={styles.input} placeholder="09:00" placeholderTextColor={COLORS.textMuted}
-              value={tplTime} onChangeText={setTplTime} maxLength={5} keyboardType="numeric" />
+              value={tplTime} onChangeText={(raw) => setTplTime(formatTimeInput(raw))} maxLength={5} keyboardType="numbers-and-punctuation" />
+            <View style={styles.ampmRow}>
+              {(['AM', 'PM'] as const).map((ap) => (
+                <TouchableOpacity key={ap} style={[styles.dayChip, tplAmPm === ap && styles.dayChipActive]} onPress={() => setTplAmPm(ap)}>
+                  <Text style={[styles.dayChipText, tplAmPm === ap && styles.dayChipTextActive]}>{ap}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
             <TouchableOpacity style={[styles.primaryBtn, (!tplName.trim() || tplSaving) && styles.primaryBtnDisabled]}
               onPress={handleCreateTemplate} disabled={!tplName.trim() || tplSaving}>
@@ -449,9 +483,16 @@ export function ScheduleScreen() {
               value={editName} onChangeText={setEditName} maxLength={60} />
             <TextInput style={styles.input} placeholder="Description" placeholderTextColor={COLORS.textMuted}
               value={editDesc} onChangeText={setEditDesc} maxLength={120} />
-            <Text style={styles.fieldLabel}>START TIME (24h)</Text>
+            <Text style={styles.fieldLabel}>START TIME</Text>
             <TextInput style={styles.input} placeholder="09:00" placeholderTextColor={COLORS.textMuted}
-              value={editTime} onChangeText={setEditTime} maxLength={5} keyboardType="numeric" />
+              value={editTime} onChangeText={(raw) => setEditTime(formatTimeInput(raw))} maxLength={5} keyboardType="numbers-and-punctuation" />
+            <View style={styles.ampmRow}>
+              {(['AM', 'PM'] as const).map((ap) => (
+                <TouchableOpacity key={ap} style={[styles.dayChip, editAmPm === ap && styles.dayChipActive]} onPress={() => setEditAmPm(ap)}>
+                  <Text style={[styles.dayChipText, editAmPm === ap && styles.dayChipTextActive]}>{ap}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
             <TouchableOpacity style={[styles.primaryBtn, !editName.trim() && styles.primaryBtnDisabled]}
               onPress={handleSaveEdit} disabled={!editName.trim()}>
               <Text style={styles.primaryBtnText}>Save Changes</Text>
@@ -665,6 +706,7 @@ const styles = StyleSheet.create({
     padding: SPACING.md, ...TYPOGRAPHY.body, marginBottom: SPACING.sm,
   },
   dayRow: { marginBottom: SPACING.sm },
+  ampmRow: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.md },
   dayChip: {
     paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm, borderWidth: 1, borderColor: COLORS.gray700,
