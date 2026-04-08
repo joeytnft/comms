@@ -42,13 +42,16 @@ export function useHardwareButton({ buttonMapping, enabled, onPress, onRelease }
     }
 
     // ── Volume key (Android only) ─────────────────────────────────────────────
-    // React Native's KeyEvent module is available via a native module or via the
-    // android.view.KeyEvent constants. We use the built-in `RCTDeviceEventEmitter`
-    // which fires 'keyDown' / 'keyUp' when the native side forwards volume events.
-    // This requires the MainActivity to override dispatchKeyEvent and forward to
-    // DeviceEventEmitter — see docs/PTT_IMPLEMENTATION.md for native setup.
+    // Requires MainActivity.kt to forward dispatchKeyEvent to DeviceEventEmitter.
+    // Not available in Expo Go — only works in a development/production build.
+    // See docs/PTT_IMPLEMENTATION.md for the one-time native setup.
     if (Platform.OS === 'android' && (buttonMapping === 'volume_up' || buttonMapping === 'volume_down')) {
-      const emitter = new NativeEventEmitter(NativeModules.RCTDeviceEventEmitter ?? NativeModules.DeviceEventEmitter);
+      const nativeModule = NativeModules.GuardianKeyEvents ?? null;
+      if (!nativeModule) {
+        // Native key-event module not present (Expo Go or not yet set up) — skip silently
+        return;
+      }
+      const emitter = new NativeEventEmitter(nativeModule);
       const targetKeyCode = buttonMapping === 'volume_down' ? 25 : 24; // KEYCODE_VOLUME_DOWN / UP
 
       const downSub = emitter.addListener('keyDown', (e: { keyCode: number }) => {
