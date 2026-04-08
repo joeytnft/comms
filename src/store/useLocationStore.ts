@@ -2,6 +2,12 @@ import { create } from 'zustand';
 import * as Location from 'expo-location';
 import { TeamMemberLocation } from '@/types';
 import { locationService } from '@/services/locationService';
+import { secureStorage } from '@/utils/secureStorage';
+import {
+  LOCATION_UPDATE_INTERVAL,
+  LOCATION_DISTANCE_FILTER,
+  LOCATION_SHARING_KEY,
+} from '@/config/constants';
 
 interface LocationState {
   teamLocations: TeamMemberLocation[];
@@ -14,6 +20,8 @@ interface LocationState {
   startSharing: () => Promise<void>;
   stopSharing: () => void;
   setSharing: (sharing: boolean) => void;
+  /** Called once on app start — resumes sharing if it was on before */
+  initSharing: () => Promise<void>;
   clearError: () => void;
 }
 
@@ -46,6 +54,12 @@ export const useLocationStore = create<LocationState>((set, get) => ({
   },
 
   startSharing: async () => {
+    // Already watching — nothing to do
+    if (watchSubscription) {
+      set({ isSharing: true });
+      return;
+    }
+
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
       set({ error: 'Location permission denied' });
@@ -53,15 +67,15 @@ export const useLocationStore = create<LocationState>((set, get) => ({
     }
 
     // Get initial position immediately
-    const initial = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    const initial = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
     await get().updateMyLocation(initial.coords.latitude, initial.coords.longitude);
 
-    // Watch for updates every ~15 seconds (minimum distance 10m)
+    // Watch for updates every 5 seconds / 5 metres
     watchSubscription = await Location.watchPositionAsync(
       {
-        accuracy: Location.Accuracy.Balanced,
-        timeInterval: 15_000,
-        distanceInterval: 10,
+        accuracy: Location.Accuracy.High,
+        timeInterval: LOCATION_UPDATE_INTERVAL,
+        distanceInterval: LOCATION_DISTANCE_FILTER,
       },
       (loc) => {
         get().updateMyLocation(loc.coords.latitude, loc.coords.longitude);
@@ -69,6 +83,7 @@ export const useLocationStore = create<LocationState>((set, get) => ({
     );
 
     set({ isSharing: true, error: null });
+    await secureStorage.setItemAsync(LOCATION_SHARING_KEY, 'true');
   },
 
   stopSharing: () => {
@@ -77,6 +92,7 @@ export const useLocationStore = create<LocationState>((set, get) => ({
       watchSubscription = null;
     }
     set({ isSharing: false });
+    secureStorage.setItemAsync(LOCATION_SHARING_KEY, 'false').catch(() => null);
   },
 
   // Convenience toggle used by the UI
@@ -85,6 +101,18 @@ export const useLocationStore = create<LocationState>((set, get) => ({
       get().startSharing();
     } else {
       get().stopSharing();
+    }
+  },
+
+  // Restore sharing state after app restart
+  initSharing: async () => {
+    try {
+      const persisted = await secureStorage.getItemAsync(LOCATION_SHARING_KEY);
+      if (persisted === 'true') {
+        await get().startSharing();
+      }
+    } catch {
+      // Ignore — non-critical
     }
   },
 

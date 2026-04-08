@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import MapView, { Marker, Callout, Circle } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -11,39 +11,77 @@ interface Props {
   style?: object;
 }
 
+const DELTA = 0.01; // ~1km zoom
+
 const isOnline = (updatedAt: string) =>
   Date.now() - new Date(updatedAt).getTime() < 300_000;
 
 export function TeamMapView({ locations, geofence, style }: Props) {
+  const mapRef = useRef<MapView>(null);
   const [deviceCoords, setDeviceCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const centeredRef = useRef(false); // has the map been centered at least once?
 
+  // Get device location once and keep it updated
   useEffect(() => {
+    let sub: Location.LocationSubscription | null = null;
+
     Location.requestForegroundPermissionsAsync().then(({ status }) => {
       if (status !== 'granted') return;
-      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).then((loc) => {
-        setDeviceCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
-      }).catch(() => null);
+
+      // Get immediate fix
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
+        .then((loc) => {
+          setDeviceCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+        })
+        .catch(() => null);
+
+      // Keep updating so the map can follow the user
+      Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.Balanced, timeInterval: 5_000, distanceInterval: 5 },
+        (loc) => {
+          setDeviceCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+        },
+      ).then((s) => { sub = s; }).catch(() => null);
     });
+
+    return () => { sub?.remove(); };
   }, []);
 
-  const centerLat = geofence?.latitude
+  // Center the map whenever deviceCoords first resolves, then follow on every update
+  useEffect(() => {
+    if (!deviceCoords) return;
+    mapRef.current?.animateToRegion(
+      {
+        latitude: deviceCoords.lat,
+        longitude: deviceCoords.lng,
+        latitudeDelta: DELTA,
+        longitudeDelta: DELTA,
+      },
+      centeredRef.current ? 800 : 0, // no animation on first center
+    );
+    centeredRef.current = true;
+  }, [deviceCoords]);
+
+  // Fallback initial region — overridden once deviceCoords arrives
+  const fallbackLat = geofence?.latitude
     ?? (locations.length ? locations.reduce((s, l) => s + l.latitude, 0) / locations.length : null)
-    ?? deviceCoords?.lat
     ?? 37.7749;
-  const centerLng = geofence?.longitude
+  const fallbackLng = geofence?.longitude
     ?? (locations.length ? locations.reduce((s, l) => s + l.longitude, 0) / locations.length : null)
-    ?? deviceCoords?.lng
     ?? -122.4194;
 
   return (
     <View style={[styles.wrapper, style]}>
       <MapView
+        ref={mapRef}
         style={{ flex: 1 }}
+        showsUserLocation
+        showsMyLocationButton={false}
         initialRegion={{
-          latitude: centerLat,
-          longitude: centerLng,
-          latitudeDelta: 0.02,
-          longitudeDelta: 0.02,
+          latitude: fallbackLat,
+          longitude: fallbackLng,
+          latitudeDelta: DELTA,
+          longitudeDelta: DELTA,
         }}
       >
         {/* Geofence boundary circle */}

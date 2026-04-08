@@ -195,9 +195,29 @@ export function GeofenceScreen({ navigation }: Props) {
           />
 
           <Text style={styles.label}>Radius (metres)</Text>
+          <View style={styles.presetRow}>
+            {[
+              { label: '50m', value: '50', hint: 'Small' },
+              { label: '100m', value: '100', hint: 'Medium' },
+              { label: '200m', value: '200', hint: 'Large' },
+            ].map((preset) => (
+              <TouchableOpacity
+                key={preset.value}
+                style={[styles.presetButton, radius === preset.value && styles.presetButtonActive]}
+                onPress={() => setRadius(preset.value)}
+              >
+                <Text style={[styles.presetLabel, radius === preset.value && styles.presetLabelActive]}>
+                  {preset.label}
+                </Text>
+                <Text style={[styles.presetHint, radius === preset.value && styles.presetHintActive]}>
+                  {preset.hint}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
           <TextInput
             style={styles.input}
-            placeholder="200"
+            placeholder="or enter custom metres"
             placeholderTextColor={COLORS.textMuted}
             value={radius}
             onChangeText={setRadius}
@@ -293,6 +313,40 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     ...TYPOGRAPHY.body,
     marginBottom: SPACING.xs,
+  },
+  presetRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  presetButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.gray700,
+    backgroundColor: COLORS.background,
+  },
+  presetButtonActive: {
+    borderColor: COLORS.accent,
+    backgroundColor: COLORS.accent + '18',
+  },
+  presetLabel: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.textPrimary,
+    fontWeight: '700',
+  },
+  presetLabelActive: {
+    color: COLORS.accent,
+  },
+  presetHint: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+    marginTop: 1,
+  },
+  presetHintActive: {
+    color: COLORS.accent,
   },
   hint: {
     ...TYPOGRAPHY.caption,

@@ -9,10 +9,15 @@ import { geofenceService } from '@/services/geofenceService';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 
 export function TeamMapScreen() {
-  const { teamLocations, isSharing, isLoading, error, fetchTeamLocations, setSharing } =
+  const { teamLocations, isSharing, isLoading, error, fetchTeamLocations, setSharing, initSharing } =
     useLocationStore();
   const refreshInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const [geofence, setGeofence] = useState<Geofence | null>(null);
+
+  // Restore persisted sharing state once on mount
+  useEffect(() => {
+    initSharing();
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -26,7 +31,7 @@ export function TeamMapScreen() {
 
       refreshInterval.current = setInterval(() => {
         fetchTeamLocations();
-      }, 30_000);
+      }, 10_000);
 
       return () => {
         if (refreshInterval.current) clearInterval(refreshInterval.current);
