@@ -3,8 +3,15 @@ import { User, LoginCredentials, RegisterData } from '@/types';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useSubscriptionStore } from '@/store/useSubscriptionStore';
 
+interface Organization {
+  id: string;
+  name: string;
+  inviteCode: string;
+}
+
 interface AuthContextType {
   user: User | null;
+  organization: Organization | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (credentials: LoginCredentials) => Promise<void>;
@@ -16,7 +23,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { user, isLoading, isAuthenticated, login, register, logout: authLogout, refreshSession, loadStoredSession } = useAuthStore();
+  const { user, organization, isLoading, isAuthenticated, login, register, logout: authLogout, refreshSession, loadStoredSession } = useAuthStore();
   const { fetchSubscription, clear: clearSubscription } = useSubscriptionStore();
 
   // Check for existing session on mount
@@ -40,6 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
+        organization,
         isLoading,
         isAuthenticated,
         login,

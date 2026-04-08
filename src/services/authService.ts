@@ -28,7 +28,7 @@ export const authService = {
     await apiClient.post(ENDPOINTS.AUTH.LOGOUT, { refreshToken });
   },
 
-  async getMe(): Promise<{ user: User }> {
-    return apiClient.get<{ user: User }>(ENDPOINTS.USERS.ME);
+  async getMe(): Promise<{ user: User; organization?: { id: string; name: string; inviteCode: string } }> {
+    return apiClient.get(ENDPOINTS.USERS.ME);
   },
 };

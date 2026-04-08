@@ -54,8 +54,8 @@ async function uploadPhoto(uri: string, base64?: string, mimeType?: string): Pro
   let type: string = mimeType ?? 'image/jpeg';
 
   if (base64) {
-    // expo-image-picker base64 is already the raw base64 string
-    data = base64;
+    // Strip data URI prefix if present (some platforms include it)
+    data = base64.includes(',') ? base64.split(',')[1] : base64;
   } else {
     // Fallback: fetch the blob URI and convert (web only, when base64 not provided)
     const result = await uriToBase64(uri);
@@ -114,8 +114,9 @@ export function IncidentReportScreen({ navigation }: Props) {
     try {
       const url = await uploadPhoto(asset.uri, asset.base64 ?? undefined, mimeType);
       setPhotos((prev) => [...prev, url]);
-    } catch {
-      RNAlert.alert('Upload failed', 'Could not upload photo. Please try again.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Could not upload photo. Please try again.';
+      RNAlert.alert('Upload failed', msg);
     } finally {
       setIsUploadingPhoto(false);
     }

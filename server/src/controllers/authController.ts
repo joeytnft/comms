@@ -15,8 +15,9 @@ interface RegisterBody {
   password: string;
   displayName: string;
   phone?: string;
-  organizationCode?: string;   // Optional: for joining existing org
-  organizationName?: string;    // Optional: for creating new org
+  organizationCode?: string;   // Org invite code — joins org only
+  organizationName?: string;   // Creates new org
+  groupInviteCode?: string;    // Group invite code — joins org + group in one step
 }
 
 interface LoginBody {
@@ -49,23 +50,20 @@ export async function register(
   request: FastifyRequest<{ Body: RegisterBody }>,
   reply: FastifyReply,
 ) {
-  const { email, password, displayName, phone, organizationCode, organizationName } = request.body;
+  const { email, password, displayName, phone, organizationCode, organizationName, groupInviteCode } = request.body;
 
   if (!email || !password || !displayName) {
     throw new ValidationError('Email, password, and displayName are required');
   }
 
-  // Must provide EITHER organizationCode OR organizationName
-  if (!organizationCode && !organizationName) {
+  const codeCount = [organizationCode, organizationName, groupInviteCode].filter(Boolean).length;
+  if (codeCount === 0) {
     throw new ValidationError(
-      'Either organizationCode (to join) or organizationName (to create) is required',
+      'Provide an organizationCode, groupInviteCode (to join), or organizationName (to create)',
     );
   }
-
-  if (organizationCode && organizationName) {
-    throw new ValidationError(
-      'Cannot provide both organizationCode and organizationName. Choose one.',
-    );
+  if (codeCount > 1) {
+    throw new ValidationError('Provide only one of: organizationCode, groupInviteCode, organizationName');
   }
 
   if (password.length < 8) {
@@ -80,18 +78,31 @@ export async function register(
 
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
   let organization;
+  let groupToJoin: { id: string } | null = null;
 
-  // FLOW 1: Join existing organization with invite code
-  if (organizationCode) {
+  // FLOW 1: Join via group invite code — resolves org automatically
+  if (groupInviteCode) {
+    const group = await prisma.group.findUnique({
+      where: { inviteCode: groupInviteCode.toUpperCase() },
+      select: { id: true, organizationId: true },
+    });
+    if (!group) {
+      throw new NotFoundError('Group with that invite code');
+    }
+    organization = await prisma.organization.findUnique({ where: { id: group.organizationId } });
+    if (!organization) throw new Error('Organization not found');
+    groupToJoin = group;
+  }
+  // FLOW 2: Join existing organization with org invite code
+  else if (organizationCode) {
     organization = await prisma.organization.findUnique({
       where: { inviteCode: organizationCode },
     });
-
     if (!organization) {
       throw new NotFoundError('Organization with that invite code');
     }
   }
-  // FLOW 2: Create new organization (admin signup)
+  // FLOW 3: Create new organization (admin signup)
   else if (organizationName) {
     const trialEnd = new Date();
     trialEnd.setDate(trialEnd.getDate() + FREE_TRIAL_DAYS);
@@ -137,6 +148,13 @@ export async function register(
     await prisma.organization.update({
       where: { id: organization.id },
       data: { createdBy: user.id },
+    });
+  }
+
+  // Auto-join the group if they registered via a group invite code
+  if (groupToJoin) {
+    await prisma.groupMembership.create({
+      data: { groupId: groupToJoin.id, userId: user.id, role: 'MEMBER' },
     });
   }
 

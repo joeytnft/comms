@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, TextInput, Share } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, TextInput, Share, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -19,7 +19,7 @@ type Props = {
 export function GroupDetailScreen({ navigation, route }: Props) {
   const { groupId } = route.params;
   const { user } = useAuth();
-  const { currentGroup, isLoading, fetchGroup, addMember, removeMember, deleteGroup, generateInvite, revokeInvite, clearCurrentGroup } = useGroupStore();
+  const { currentGroup, isLoading, fetchGroup, addMember, removeMember, deleteGroup, updateGroup, generateInvite, revokeInvite, clearCurrentGroup } = useGroupStore();
   const [showAddMember, setShowAddMember] = useState(false);
   const [memberEmail, setMemberEmail] = useState('');
   const [isAdding, setIsAdding] = useState(false);
@@ -217,6 +217,33 @@ export function GroupDetailScreen({ navigation, route }: Props) {
                 />
               </View>
             )}
+          </View>
+        )}
+
+        {/* Permissions — admin only */}
+        {isAdmin && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Permissions</Text>
+            <View style={styles.permissionRow}>
+              <View style={styles.permissionInfo}>
+                <Text style={styles.permissionLabel}>Alerts</Text>
+                <Text style={styles.permissionDesc}>
+                  Members can send and receive emergency alerts
+                </Text>
+              </View>
+              <Switch
+                value={currentGroup.alertsEnabled}
+                onValueChange={async (val) => {
+                  try {
+                    await updateGroup(groupId, { alertsEnabled: val });
+                  } catch {
+                    Alert.alert('Error', 'Failed to update permission');
+                  }
+                }}
+                trackColor={{ false: COLORS.gray700, true: COLORS.accent + '80' }}
+                thumbColor={currentGroup.alertsEnabled ? COLORS.accent : COLORS.gray500}
+              />
+            </View>
           </View>
         )}
 
@@ -439,6 +466,26 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     marginTop: SPACING.md,
+  },
+  permissionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: SPACING.xs,
+  },
+  permissionInfo: {
+    flex: 1,
+    marginRight: SPACING.md,
+  },
+  permissionLabel: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textPrimary,
+    fontWeight: '600',
+  },
+  permissionDesc: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+    marginTop: 2,
   },
   errorText: {
     ...TYPOGRAPHY.body,

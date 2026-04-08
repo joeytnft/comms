@@ -31,6 +31,7 @@ export interface RegisterData {
   password: string;
   displayName: string;
   phone?: string;
-  organizationCode?: string; // Invite code to join existing org
-  organizationName?: string; // Name for creating new org (admin signup)
+  organizationCode?: string; // Org invite code — joins org only
+  organizationName?: string; // Creates a new org (admin signup)
+  groupInviteCode?: string;  // Group invite code — joins org + group in one step
 }

@@ -15,6 +15,7 @@ export interface Group {
   memberCount: number;
   iconColor?: string; // For visual identification
   inviteCode?: string | null; // Shareable code for self-join
+  alertsEnabled: boolean;
 }
 
 export interface GroupWithMembers extends Group {
@@ -41,6 +42,7 @@ export interface CreateGroupData {
   type: GroupType;
   parentGroupId?: string; // Required if type is 'sub'
   iconColor?: string;
+  alertsEnabled?: boolean;
 }
 
 export interface InviteMemberData {

@@ -141,6 +141,7 @@ model Group {
   iconColor       String?
   inviteCode      String?   @unique  // Shareable code for self-join
   groupKey        String?   // Shared AES-256 key (hex) for message encryption
+  alertsEnabled   Boolean   @default(true)  // Whether members can send/receive alerts
   createdBy       String
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt

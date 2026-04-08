@@ -34,7 +34,13 @@ export async function getMe(request: FastifyRequest, reply: FastifyReply) {
     throw new NotFoundError('User');
   }
 
-  reply.send({ user });
+  // Include the org invite code so members can share it from Settings
+  const org = await prisma.organization.findUnique({
+    where: { id: request.organizationId },
+    select: { id: true, name: true, inviteCode: true },
+  });
+
+  reply.send({ user, organization: org });
 }
 
 export async function updateMe(

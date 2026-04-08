@@ -15,6 +15,17 @@ interface AlertParams {
   id: string;
 }
 
+async function userHasAlertAccess(userId: string, organizationId: string): Promise<boolean> {
+  // User must be a member of at least one alerts-enabled group in the org
+  const membership = await prisma.groupMembership.findFirst({
+    where: {
+      userId,
+      group: { organizationId, alertsEnabled: true },
+    },
+  });
+  return !!membership;
+}
+
 export async function triggerAlert(
   request: FastifyRequest<{ Body: TriggerBody }>,
   reply: FastifyReply,
@@ -24,6 +35,11 @@ export async function triggerAlert(
 
   if (!level || !['ATTENTION', 'WARNING', 'EMERGENCY'].includes(level)) {
     throw new ValidationError('Invalid alert level');
+  }
+
+  const canAccess = await userHasAlertAccess(userId, organizationId);
+  if (!canAccess) {
+    throw new AuthorizationError('Your groups do not have alerts enabled');
   }
 
   const alert = await alertService.createAlert({
@@ -42,9 +58,15 @@ export async function listAlerts(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const { organizationId } = request;
+  const { userId, organizationId } = request;
   const query = request.query as { cursor?: string; limit?: string; active?: string };
   const limit = Math.min(parseInt(query.limit || '20', 10), 50);
+
+  // Only show alerts to users in an alerts-enabled group
+  const canAccess = await userHasAlertAccess(userId, organizationId);
+  if (!canAccess) {
+    return reply.send({ alerts: [], nextCursor: null });
+  }
 
   const where: Record<string, unknown> = { organizationId };
 

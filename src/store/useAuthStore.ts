@@ -4,8 +4,15 @@ import { User, AuthTokens, LoginCredentials, RegisterData } from '@/types';
 import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY } from '@/config/constants';
 import { authService } from '@/services/authService';
 
+interface Organization {
+  id: string;
+  name: string;
+  inviteCode: string;
+}
+
 interface AuthState {
   user: User | null;
+  organization: Organization | null;
   isLoading: boolean;
   isAuthenticated: boolean;
 
@@ -30,6 +37,7 @@ async function clearTokens(): Promise<void> {
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
+  organization: null,
   isLoading: true,
   isAuthenticated: false,
 
@@ -108,8 +116,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // Validate the session by fetching current user in the background
       try {
-        const { user: freshUser } = await authService.getMe();
-        set({ user: freshUser });
+        const { user: freshUser, organization } = await authService.getMe();
+        set({ user: freshUser, organization: organization ?? null });
         await secureStorage.setItemAsync(USER_KEY, JSON.stringify(freshUser));
       } catch {
         // Token may be expired — try refresh

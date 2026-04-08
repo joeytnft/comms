@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   RefreshControl,
+  Image,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -74,7 +76,21 @@ export function IncidentListScreen({ navigation }: Props) {
           {new Date(item.createdAt).toLocaleDateString()}
         </Text>
         {item.photos.length > 0 && (
-          <Text style={styles.photoCount}>{item.photos.length} photo(s)</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.photoStrip}
+            onStartShouldSetResponder={() => true}
+          >
+            {item.photos.map((photo) => (
+              <Image
+                key={photo.id}
+                source={{ uri: photo.encryptedUrl }}
+                style={styles.photoThumb}
+                resizeMode="cover"
+              />
+            ))}
+          </ScrollView>
         )}
       </TouchableOpacity>
     );
@@ -229,10 +245,15 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.caption,
     color: COLORS.textMuted,
   },
-  photoCount: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textSecondary,
-    marginTop: 4,
+  photoStrip: {
+    marginTop: SPACING.sm,
+    marginHorizontal: -SPACING.xs,
+  },
+  photoThumb: {
+    width: 80,
+    height: 80,
+    borderRadius: BORDER_RADIUS.sm,
+    marginHorizontal: SPACING.xs,
   },
   errorContainer: {
     alignItems: 'center',

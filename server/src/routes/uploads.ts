@@ -11,6 +11,8 @@ const ALLOWED_MIME: Record<string, string> = {
   'image/png': 'png',
   'image/webp': 'webp',
   'image/gif': 'gif',
+  'image/heic': 'jpg',  // iPhone photos — stored as jpg
+  'image/heif': 'jpg',
   'audio/m4a': 'm4a',
   'audio/mp4': 'm4a',
   'audio/aac': 'm4a',

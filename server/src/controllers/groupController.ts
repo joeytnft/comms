@@ -21,6 +21,7 @@ interface UpdateGroupBody {
   name?: string;
   description?: string;
   iconColor?: string;
+  alertsEnabled?: boolean;
 }
 
 interface AddMemberBody {
@@ -59,6 +60,7 @@ const GROUP_SELECT = {
   parentGroupId: true,
   iconColor: true,
   inviteCode: true,
+  alertsEnabled: true,
   createdBy: true,
   createdAt: true,
   updatedAt: true,
@@ -213,15 +215,16 @@ export async function updateGroup(
     throw new AuthorizationError('Only group admins can update the group');
   }
 
-  const { name, description, iconColor } = request.body;
-  if (!name && description === undefined && iconColor === undefined) {
+  const { name, description, iconColor, alertsEnabled } = request.body;
+  if (!name && description === undefined && iconColor === undefined && alertsEnabled === undefined) {
     throw new ValidationError('At least one field must be provided');
   }
 
-  const data: Record<string, string | null> = {};
+  const data: Record<string, string | boolean | null> = {};
   if (name) data.name = name.trim();
   if (description !== undefined) data.description = description?.trim() || null;
   if (iconColor !== undefined) data.iconColor = iconColor || null;
+  if (alertsEnabled !== undefined) data.alertsEnabled = alertsEnabled;
 
   const group = await prisma.group.update({
     where: { id: request.params.id },

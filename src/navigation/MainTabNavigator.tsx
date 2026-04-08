@@ -78,8 +78,9 @@ export function MainTabNavigator() {
         name="More"
         component={MoreStackNavigator}
         options={{
+          title: 'Settings',
           headerShown: false,
-          tabBarIcon: ({ color }) => <TabIcon label="..." color={color} />,
+          tabBarIcon: ({ color }) => <TabIcon label="⚙" color={color} />,
         }}
       />
     </Tab.Navigator>

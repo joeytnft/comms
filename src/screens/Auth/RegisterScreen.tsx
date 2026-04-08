@@ -23,7 +23,7 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [organizationCode, setOrganizationCode] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [organizationName, setOrganizationName] = useState('');
 
   const handleRegister = async () => {
@@ -32,8 +32,8 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
       return;
     }
 
-    if (mode === 'join' && !organizationCode.trim()) {
-      Alert.alert('Error', 'Please enter an organization invite code.');
+    if (mode === 'join' && !inviteCode.trim()) {
+      Alert.alert('Error', 'Please enter an invite code.');
       return;
     }
 
@@ -53,12 +53,18 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
     }
 
     try {
+      const code = inviteCode.trim().toUpperCase();
+      // Group invite codes are 8 hex chars (e.g. "A3K9X2M7")
+      // Org invite codes are cuid format (longer, starts with 'c')
+      const isGroupCode = mode === 'join' && /^[0-9A-F]{8}$/.test(code);
+
       await register({
         displayName: displayName.trim(),
         email: email.trim(),
         phone: phone.trim() || undefined,
         password,
-        organizationCode: mode === 'join' ? organizationCode.trim() : undefined,
+        groupInviteCode: isGroupCode ? code : undefined,
+        organizationCode: mode === 'join' && !isGroupCode ? inviteCode.trim() : undefined,
         organizationName: mode === 'create' ? organizationName.trim() : undefined,
       });
     } catch (error: any) {
@@ -102,18 +108,21 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
         </View>
 
         <View style={styles.form}>
-          {/* Organization Code (Join Mode) */}
+          {/* Invite Code (Join Mode) */}
           {mode === 'join' && (
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Organization Invite Code *</Text>
+              <Text style={styles.label}>Invite Code *</Text>
               <TextInput
                 style={styles.input}
-                value={organizationCode}
-                onChangeText={setOrganizationCode}
-                placeholder="Enter invite code from your team lead"
+                value={inviteCode}
+                onChangeText={setInviteCode}
+                placeholder="Group or organization invite code"
                 placeholderTextColor={COLORS.gray500}
                 autoCapitalize="characters"
               />
+              <Text style={styles.helperText}>
+                Use a group code (8 characters) to join a specific team, or an organization code to join the org without a group.
+              </Text>
             </View>
           )}
 
