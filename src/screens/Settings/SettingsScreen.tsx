@@ -102,6 +102,13 @@ export function SettingsScreen() {
             <Text style={styles.settingLabel}>Geofence</Text>
             <Text style={styles.chevron}>{'>'}</Text>
           </Pressable>
+          <Pressable
+            style={styles.settingRow}
+            onPress={() => navigation.navigate('PTTConfig')}
+          >
+            <Text style={styles.settingLabel}>PTT Button</Text>
+            <Text style={styles.chevron}>{'>'}</Text>
+          </Pressable>
         </View>
 
         {organization && (

@@ -5,6 +5,9 @@ import { PTTState, PTTConfig } from '@/types';
 import { useSocket } from './SocketContext';
 import { usePTTStore } from '@/store/usePTTStore';
 import { usePTTLogStore } from '@/store/usePTTLogStore';
+import { useHardwareButton } from '@/hooks/useHardwareButton';
+import { backgroundService } from '@/services/backgroundService';
+import { bluetoothPTTService } from '@/services/bluetoothPTTService';
 import { ENV } from '@/config/env';
 import { secureStorage } from '@/utils/secureStorage';
 import { ACCESS_TOKEN_KEY } from '@/config/constants';
@@ -34,6 +37,11 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
   // expo-audio recorder (must be called unconditionally — hooks rule)
   const audioRecorder = useAudioRecorder(RecordingPresets.LOW_QUALITY);
+
+  // Init BLE service once on mount
+  useEffect(() => {
+    bluetoothPTTService.init();
+  }, []);
 
   // Web MediaRecorder ref
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -157,6 +165,9 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       socket.emit('ptt:join', { groupId });
       usePTTStore.getState().setConnected(true);
       usePTTStore.getState().fetchParticipants(groupId);
+
+      // Start foreground notification so the OS won't kill the process when backgrounded
+      backgroundService.startForegroundNotification(response.groupName).catch(() => null);
     },
     [socket],
   );
@@ -170,6 +181,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
     socket.emit('ptt:leave', { groupId: currentGroupId });
     usePTTStore.getState().disconnect();
+    backgroundService.stopForegroundNotification().catch(() => null);
   }, [socket]);
 
   const stopAudio = useCallback(() => {
@@ -259,6 +271,14 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   const updateConfig = useCallback((updates: Partial<PTTConfig>) => {
     usePTTStore.getState().updateConfig(updates);
   }, []);
+
+  // Hardware / BLE button → same as pressing the on-screen PTT button
+  useHardwareButton({
+    buttonMapping: store.config.primaryButton,
+    enabled: store.isConnected && store.config.primaryButton !== 'screen_button',
+    onPress: startTransmitting,
+    onRelease: stopTransmitting,
+  });
 
   return (
     <PTTContext.Provider

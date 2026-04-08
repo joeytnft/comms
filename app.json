@@ -50,7 +50,15 @@
       "expo-secure-store",
       "expo-av",
       "expo-asset",
-      "expo-audio"
+      "expo-audio",
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": true,
+          "modes": ["peripheral", "central"],
+          "bluetoothAlwaysPermission": "Allow Guardian Comm to connect to Bluetooth PTT accessories."
+        }
+      ]
     ]
   }
 }
