@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { PttLog } from '@/types';
 import { ENV } from '@/config/env';
 import { secureStorage } from '@/utils/secureStorage';
+import { ACCESS_TOKEN_KEY } from '@/config/constants';
 
 interface PTTLogState {
   logs: Record<string, PttLog[]>; // keyed by groupId
@@ -21,7 +22,7 @@ export const usePTTLogStore = create<PTTLogState>((set, get) => ({
   fetchLogs: async (groupId: string) => {
     set({ isLoading: true, error: null });
     try {
-      const token = await secureStorage.getItemAsync('accessToken');
+      const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
       const res = await fetch(`${ENV.apiUrl}/ptt-logs/${groupId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });

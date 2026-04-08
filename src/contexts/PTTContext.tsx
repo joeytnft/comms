@@ -7,6 +7,7 @@ import { usePTTStore } from '@/store/usePTTStore';
 import { usePTTLogStore } from '@/store/usePTTLogStore';
 import { ENV } from '@/config/env';
 import { secureStorage } from '@/utils/secureStorage';
+import { ACCESS_TOKEN_KEY } from '@/config/constants';
 import * as FileSystem from '@/utils/fileSystemStub';
 
 interface PTTContextType {
@@ -37,6 +38,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // Web MediaRecorder ref
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  // Track when transmit started so durationMs is accurate
+  const transmitStartedAtRef = useRef<number>(0);
 
   // Socket listeners
   useEffect(() => {
@@ -84,16 +87,22 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       audio.onended = () => URL.revokeObjectURL(url);
     };
 
-    const handleLogSaved = (data: { groupId: string; userId: string; audioUrl: string; createdAt: string }) => {
-      // Will be filled in by usePTTLogStore listener in PTTScreen
+    const handleLogSaved = (data: {
+      groupId: string;
+      userId: string;
+      displayName?: string;
+      audioUrl: string;
+      durationMs?: number;
+      createdAt: string;
+    }) => {
       usePTTLogStore.getState().prependLog({
         id: `${data.userId}_${data.createdAt}`,
         groupId: data.groupId,
         senderId: data.userId,
         audioUrl: data.audioUrl,
-        durationMs: 0,
+        durationMs: data.durationMs ?? 0,
         createdAt: data.createdAt,
-        sender: { id: data.userId, displayName: 'Team member', avatarUrl: null },
+        sender: { id: data.userId, displayName: data.displayName ?? 'Team member', avatarUrl: null },
       });
     };
 
@@ -177,6 +186,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     if (!socket || !currentGroupId || pttState === 'transmitting') return;
 
     usePTTStore.getState().setTransmitting(true);
+    transmitStartedAtRef.current = Date.now();
 
     if (Platform.OS === 'web') {
       // Web: use MediaRecorder to capture and stream audio chunks
@@ -216,7 +226,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     const { currentGroupId, pttState } = usePTTStore.getState();
     if (!socket || !currentGroupId || pttState !== 'transmitting') return;
 
-    const startedAt = Date.now();
+    const durationMs = Date.now() - transmitStartedAtRef.current;
     usePTTStore.getState().setTransmitting(false);
     socket.emit('ptt:stop', { groupId: currentGroupId });
 
@@ -224,12 +234,11 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       audioRecorder.stop().then(() => {
         const uri = audioRecorder.uri;
         if (!uri) return;
-        const durationMs = Date.now() - startedAt;
         // Upload native recording and notify server
         (async () => {
           try {
             const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-            const token = await secureStorage.getItemAsync('accessToken');
+            const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
             const uploadRes = await fetch(`${ENV.apiUrl}/upload`, {
               method: 'POST',
               headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
