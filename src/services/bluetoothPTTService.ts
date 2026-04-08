@@ -34,15 +34,18 @@ class BluetoothPTTService {
   /** Must be called once at app startup (outside React tree) */
   init() {
     if (Platform.OS === 'web') return;
-    this.manager = new BleManager();
-
-    // Monitor BLE adapter state
-    this.manager.onStateChange((state) => {
-      if (state === State.PoweredOn) {
-        // Try to reconnect previously bonded device on BT power-on
-        this.reconnectBonded();
-      }
-    }, true);
+    try {
+      this.manager = new BleManager();
+      // Monitor BLE adapter state
+      this.manager.onStateChange((state) => {
+        if (state === State.PoweredOn) {
+          this.reconnectBonded();
+        }
+      }, true);
+    } catch {
+      // BLE native module not available (Expo Go). BT PTT will be disabled.
+      this.manager = null;
+    }
   }
 
   /** Subscribe to PTT button press/release events */
