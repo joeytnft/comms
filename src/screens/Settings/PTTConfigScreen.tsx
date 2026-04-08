@@ -53,10 +53,11 @@ export function PTTConfigScreen({ navigation }: Props) {
   const [foundDevices, setFoundDevices] = useState<Device[]>([]);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [btConnected, setBtConnected] = useState(bluetoothPTTService.isConnected);
-  const bondedId = bluetoothPTTService.bondedDeviceId;
+  const [bondedId, setBondedId] = useState<string | null>(null);
 
   useEffect(() => {
     setBtConnected(bluetoothPTTService.isConnected);
+    bluetoothPTTService.getBondedDeviceId().then(setBondedId).catch(() => null);
   }, []);
 
   const handleSelectMapping = (value: ButtonMapping) => {
@@ -99,6 +100,7 @@ export function PTTConfigScreen({ navigation }: Props) {
       await bluetoothPTTService.connectDevice(device.id);
       setBtConnected(true);
       updateConfig({ primaryButton: 'bluetooth_hid' });
+      bluetoothPTTService.getBondedDeviceId().then(setBondedId).catch(() => null);
       Alert.alert('Connected', `Paired with ${device.name ?? device.id}. Press the button to test it.`);
       setFoundDevices([]);
       handleStopScan();
@@ -119,6 +121,7 @@ export function PTTConfigScreen({ navigation }: Props) {
         onPress: () => {
           bluetoothPTTService.forgetDevice();
           setBtConnected(false);
+          setBondedId(null);
           if (config.primaryButton === 'bluetooth_hid') {
             updateConfig({ primaryButton: 'screen_button' });
           }

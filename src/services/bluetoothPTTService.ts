@@ -11,7 +11,7 @@
 
 import { Platform } from 'react-native';
 import { BleManager, Device, State, BleError } from 'react-native-ble-plx';
-import { MMKV } from 'react-native-mmkv';
+import { secureStorage } from '@/utils/secureStorage';
 import { logger } from '@/utils/logger';
 
 // HID service UUID (standard Bluetooth SIG)
@@ -22,8 +22,7 @@ const HID_REPORT_UUID = '00002a4d-0000-1000-8000-00805f9b34fb';
 type PTTButtonEvent = 'press' | 'release';
 type ButtonListener = (event: PTTButtonEvent) => void;
 
-const storage = new MMKV({ id: 'bluetooth-ptt' });
-const BONDED_DEVICE_KEY = 'bonded_ptt_device_id';
+const BONDED_DEVICE_KEY = 'guardian_ptt_bonded_device';
 
 class BluetoothPTTService {
   private manager: BleManager | null = null;
@@ -107,7 +106,7 @@ class BluetoothPTTService {
     this.connectedDevice = device;
 
     // Persist for auto-reconnect
-    storage.set(BONDED_DEVICE_KEY, deviceId);
+    secureStorage.setItemAsync(BONDED_DEVICE_KEY, deviceId).catch(() => null);
 
     // Subscribe to HID report characteristic for button events
     device.monitorCharacteristicForService(
@@ -143,7 +142,7 @@ class BluetoothPTTService {
   }
 
   private async reconnectBonded() {
-    const savedId = storage.getString(BONDED_DEVICE_KEY);
+    const savedId = await secureStorage.getItemAsync(BONDED_DEVICE_KEY);
     if (!savedId || this.connectedDevice) return;
     try {
       await this.connectDevice(savedId);
@@ -164,15 +163,15 @@ class BluetoothPTTService {
   /** Remove the bonded device and stop auto-reconnect */
   forgetDevice() {
     this.disconnect();
-    storage.delete(BONDED_DEVICE_KEY);
+    secureStorage.deleteItemAsync(BONDED_DEVICE_KEY).catch(() => null);
   }
 
   get isConnected(): boolean {
     return this.connectedDevice !== null;
   }
 
-  get bondedDeviceId(): string | undefined {
-    return storage.getString(BONDED_DEVICE_KEY);
+  async getBondedDeviceId(): Promise<string | null> {
+    return secureStorage.getItemAsync(BONDED_DEVICE_KEY);
   }
 }
 
