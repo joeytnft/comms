@@ -152,6 +152,7 @@ model Group {
   memberships     GroupMembership[]
   messages        Message[]
   pttLogs         PttLog[]
+  alertTargets    AlertGroupTarget[]
 
   @@map("groups")
 }
@@ -238,12 +239,25 @@ model Alert {
   resolvedById    String?
   createdAt       DateTime   @default(now())
 
-  organization Organization        @relation(fields: [organizationId], references: [id])
-  triggeredBy  User                 @relation("triggeredBy", fields: [triggeredById], references: [id])
+  organization    Organization          @relation(fields: [organizationId], references: [id])
+  triggeredBy     User                  @relation("triggeredBy", fields: [triggeredById], references: [id])
   acknowledgments AlertAcknowledgment[]
+  targetGroups    AlertGroupTarget[]    // Empty = global (all groups in org)
 
   @@index([organizationId, createdAt])
   @@map("alerts")
+}
+
+model AlertGroupTarget {
+  id      String @id @default(cuid())
+  alertId String
+  groupId String
+
+  alert Alert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([alertId, groupId])
+  @@map("alert_group_targets")
 }
 
 enum AlertLevel {

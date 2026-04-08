@@ -9,37 +9,36 @@ interface TriggerBody {
   message?: string;
   latitude?: number;
   longitude?: number;
+  groupIds?: string[]; // Empty/absent = global (all groups)
 }
 
 interface AlertParams {
   id: string;
 }
 
-async function userHasAlertAccess(userId: string, organizationId: string): Promise<boolean> {
-  // User must be a member of at least one alerts-enabled group in the org
-  const membership = await prisma.groupMembership.findFirst({
-    where: {
-      userId,
-      group: { organizationId, alertsEnabled: true },
-    },
-  });
-  return !!membership;
-}
-
 export async function triggerAlert(
   request: FastifyRequest<{ Body: TriggerBody }>,
   reply: FastifyReply,
 ) {
-  const { level, message, latitude, longitude } = request.body;
+  const { level, message, latitude, longitude, groupIds } = request.body;
   const { userId, organizationId } = request;
 
   if (!level || !['ATTENTION', 'WARNING', 'EMERGENCY'].includes(level)) {
     throw new ValidationError('Invalid alert level');
   }
 
-  const canAccess = await userHasAlertAccess(userId, organizationId);
-  if (!canAccess) {
+  // User must be in at least one alerts-enabled group
+  const userGroupIds = await alertService.getUserVisibleGroupIds(userId, organizationId);
+  if (userGroupIds.length === 0) {
     throw new AuthorizationError('Your groups do not have alerts enabled');
+  }
+
+  // If groupIds are specified, verify the user is actually a member of each one
+  if (groupIds && groupIds.length > 0) {
+    const invalid = groupIds.filter((gid) => !userGroupIds.includes(gid));
+    if (invalid.length > 0) {
+      throw new AuthorizationError('You are not a member of one or more specified groups');
+    }
   }
 
   const alert = await alertService.createAlert({
@@ -49,6 +48,7 @@ export async function triggerAlert(
     message,
     latitude,
     longitude,
+    groupIds: groupIds && groupIds.length > 0 ? groupIds : undefined,
   });
 
   reply.status(201).send({ alert });
@@ -62,15 +62,21 @@ export async function listAlerts(
   const query = request.query as { cursor?: string; limit?: string; active?: string };
   const limit = Math.min(parseInt(query.limit || '20', 10), 50);
 
-  // Only show alerts to users in an alerts-enabled group
-  const canAccess = await userHasAlertAccess(userId, organizationId);
-  if (!canAccess) {
+  // Get the groups the user is a member of (with alerts enabled)
+  const userGroupIds = await alertService.getUserVisibleGroupIds(userId, organizationId);
+  if (userGroupIds.length === 0) {
     return reply.send({ alerts: [], nextCursor: null });
   }
 
-  const where: Record<string, unknown> = { organizationId };
+  const where: Record<string, unknown> = {
+    organizationId,
+    // Show global alerts (no targetGroups) OR alerts targeted at user's groups
+    OR: [
+      { targetGroups: { none: {} } },
+      { targetGroups: { some: { groupId: { in: userGroupIds } } } },
+    ],
+  };
 
-  // Filter active (unresolved) alerts only
   if (query.active === 'true') {
     where.resolvedAt = null;
   }

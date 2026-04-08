@@ -18,6 +18,7 @@ export interface Alert {
   resolvedAt: string | null;
   resolvedById: string | null;
   createdAt: string;
+  targetGroups: { group: { id: string; name: string } }[]; // Empty = global
 }
 
 export interface TriggerAlertData {
@@ -25,6 +26,7 @@ export interface TriggerAlertData {
   message?: string;
   latitude?: number;
   longitude?: number;
+  groupIds?: string[]; // Empty/absent = global
 }
 
 export const ALERT_COLORS: Record<AlertLevel, string> = {

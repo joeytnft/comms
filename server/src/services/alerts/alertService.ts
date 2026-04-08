@@ -19,6 +19,11 @@ const ALERT_SELECT = {
       acknowledgedAt: true,
     },
   },
+  targetGroups: {
+    select: {
+      group: { select: { id: true, name: true } },
+    },
+  },
 } as const;
 
 export { ALERT_SELECT };
@@ -30,8 +35,9 @@ export async function createAlert(params: {
   message?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  groupIds?: string[];
 }) {
-  return prisma.alert.create({
+  const alert = await prisma.alert.create({
     data: {
       organizationId: params.organizationId,
       triggeredById: params.triggeredById,
@@ -42,6 +48,38 @@ export async function createAlert(params: {
     },
     select: ALERT_SELECT,
   });
+
+  if (params.groupIds && params.groupIds.length > 0) {
+    // Fan-out: for every targeted sub-group, also include its lead group so
+    // lead-group members always receive the alert.
+    const groups = await prisma.group.findMany({
+      where: { id: { in: params.groupIds } },
+      select: { id: true, parentGroupId: true },
+    });
+
+    const allTargetIds = new Set(params.groupIds);
+    for (const g of groups) {
+      if (g.parentGroupId) allTargetIds.add(g.parentGroupId);
+    }
+
+    await prisma.alertGroupTarget.createMany({
+      data: [...allTargetIds].map((groupId) => ({ alertId: alert.id, groupId })),
+      skipDuplicates: true,
+    });
+
+    // Re-fetch with targets populated
+    return prisma.alert.findUniqueOrThrow({ where: { id: alert.id }, select: ALERT_SELECT });
+  }
+
+  return alert;
+}
+
+export async function getUserVisibleGroupIds(userId: string, organizationId: string): Promise<string[]> {
+  const memberships = await prisma.groupMembership.findMany({
+    where: { userId, group: { organizationId, alertsEnabled: true } },
+    select: { groupId: true },
+  });
+  return memberships.map((m) => m.groupId);
 }
 
 export async function acknowledgeAlert(alertId: string, userId: string, organizationId: string) {
