@@ -543,3 +543,28 @@ export async function getGroupKey(
 
   return reply.send({ groupKey: group.groupKey });
 }
+
+export async function updateMemberRole(
+  request: FastifyRequest<{ Params: { id: string; userId: string }; Body: { role: 'admin' | 'member' } }>,
+  reply: FastifyReply,
+) {
+  const { id: groupId, userId: targetUserId } = request.params;
+  const { role } = request.body;
+  if (!['admin', 'member'].includes(role)) throw new ValidationError('role must be admin or member');
+
+  const callerRole = await hierarchyService.getUserRole(request.userId, groupId);
+  if (callerRole !== 'ADMIN') throw new AuthorizationError('Only group admins can change member roles');
+
+  const membership = await prisma.groupMembership.findUnique({
+    where: { groupId_userId: { groupId, userId: targetUserId } },
+  });
+  if (!membership) throw new NotFoundError('Member');
+
+  const updated = await prisma.groupMembership.update({
+    where: { groupId_userId: { groupId, userId: targetUserId } },
+    data: { role: role.toUpperCase() as 'ADMIN' | 'MEMBER' },
+    include: { user: { select: { id: true, displayName: true, avatarUrl: true, lastSeenAt: true } } },
+  });
+
+  return reply.send({ membership: formatMembership(updated) });
+}

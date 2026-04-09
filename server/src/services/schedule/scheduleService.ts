@@ -4,7 +4,7 @@ import Expo from 'expo-server-sdk';
 
 const expo = new Expo();
 
-async function sendPushNotification(token: string, message: { title: string; body: string; data?: object }) {
+async function sendPushNotification(token: string, message: { title: string; body: string; data?: Record<string, unknown> }) {
   if (!Expo.isExpoPushToken(token)) return;
   await expo.sendPushNotificationsAsync([{ to: token, sound: 'default', ...message }]);
 }
@@ -373,7 +373,7 @@ export async function assignUser(params: {
     sendPushNotification(user.pushToken, {
       title: 'You have been scheduled',
       body: `You've been assigned to ${service.name} on ${service.serviceDate.toLocaleDateString()}${params.role ? ` as ${params.role}` : ''}`,
-      data: { type: 'assignment', serviceId: params.serviceId, assignmentId: assignment.id },
+      data: { type: 'assignment' as const, serviceId: params.serviceId, assignmentId: assignment.id },
     }).catch(() => null);
   }
 

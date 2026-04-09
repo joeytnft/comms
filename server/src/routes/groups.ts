@@ -23,6 +23,7 @@ export async function groupRoutes(app: FastifyInstance) {
   app.get('/:id/members', groupController.getMembers);
   app.post('/:id/members', groupController.addMember);
   app.delete('/:id/members/:userId', groupController.removeMember);
+  app.patch('/:id/members/:userId/role', groupController.updateMemberRole);
 
   // Invites
   app.post('/:id/invite', groupController.generateInvite);
