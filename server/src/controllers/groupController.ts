@@ -102,6 +102,8 @@ export async function listGroups(
     ...g,
     type: formatGroupType(g.type),
     memberCount: g._count.memberships,
+    members: (g as { memberships?: { role: string; user: object }[] }).memberships?.map(formatMembership) ?? [],
+    memberships: undefined,
     _count: undefined,
   }));
 

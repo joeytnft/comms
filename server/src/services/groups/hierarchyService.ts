@@ -59,6 +59,11 @@ export async function getGroupsForUser(userId: string, organizationId: string) {
     },
     include: {
       _count: { select: { memberships: true } },
+      memberships: {
+        include: {
+          user: { select: { id: true, displayName: true, avatarUrl: true, lastSeenAt: true } },
+        },
+      },
     },
     orderBy: [{ type: 'asc' }, { name: 'asc' }], // LEAD first, then SUB
   });

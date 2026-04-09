@@ -71,6 +71,7 @@ export function ServiceDetailScreen({ navigation, route }: Props) {
   const [newPostZone, setNewPostZone] = useState('');
   const [availability, setAvailability] = useState<Record<string, boolean>>({});
   const [myAvailable, setMyAvailable] = useState<boolean | null>(null);
+  const [filterGroupId, setFilterGroupId] = useState<string | null>(null);
 
   const isAdmin = groups.some((g) => g.myRole === 'admin');
 
@@ -226,7 +227,11 @@ export function ServiceDetailScreen({ navigation, route }: Props) {
     return acc;
   }, {});
 
-  const filteredMembers = allMembers.filter((m) =>
+  const sourceMembers = filterGroupId
+    ? (groups.find((g) => g.id === filterGroupId)?.members ?? [])
+    : allMembers;
+
+  const filteredMembers = sourceMembers.filter((m) =>
     m.displayName?.toLowerCase().includes(assignSearch.toLowerCase()) &&
     !currentService.assignments.find((a) => a.userId === m.userId)
   );
@@ -426,6 +431,24 @@ export function ServiceDetailScreen({ navigation, route }: Props) {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Assign Volunteer</Text>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.postRow}>
+              <TouchableOpacity
+                style={[styles.postChip, !filterGroupId && styles.postChipActive]}
+                onPress={() => setFilterGroupId(null)}
+              >
+                <Text style={[styles.postChipText, !filterGroupId && styles.postChipTextActive]}>All Teams</Text>
+              </TouchableOpacity>
+              {groups.map((g) => (
+                <TouchableOpacity
+                  key={g.id}
+                  style={[styles.postChip, filterGroupId === g.id && styles.postChipActive]}
+                  onPress={() => setFilterGroupId(g.id)}
+                >
+                  <Text style={[styles.postChipText, filterGroupId === g.id && styles.postChipTextActive]}>{g.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
 
             <TextInput
               style={styles.input}
