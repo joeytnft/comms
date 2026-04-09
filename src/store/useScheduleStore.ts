@@ -140,7 +140,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const nextWeek = new Date(today);
-      nextWeek.setDate(nextWeek.getDate() + 14);
+      nextWeek.setDate(nextWeek.getDate() + 90);
       const { services } = await scheduleService.listServices({
         from: today.toISOString(),
         to: nextWeek.toISOString(),

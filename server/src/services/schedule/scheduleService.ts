@@ -1,5 +1,13 @@
 import { prisma } from '../../config/database';
 import { NotFoundError, AuthorizationError, ValidationError } from '../../utils/errors';
+import Expo from 'expo-server-sdk';
+
+const expo = new Expo();
+
+async function sendPushNotification(token: string, message: { title: string; body: string; data?: object }) {
+  if (!Expo.isExpoPushToken(token)) return;
+  await expo.sendPushNotificationsAsync([{ to: token, sound: 'default', ...message }]);
+}
 
 export const ASSIGNMENT_SELECT = {
   id: true,
@@ -8,6 +16,7 @@ export const ASSIGNMENT_SELECT = {
   postId: true,
   role: true,
   notes: true,
+  status: true,
   createdAt: true,
   user: { select: { id: true, displayName: true, avatarUrl: true } },
   post: { select: { id: true, name: true, zone: true } },
@@ -342,7 +351,7 @@ export async function assignUser(params: {
   const user = await prisma.user.findUnique({ where: { id: params.targetUserId } });
   if (!user || user.organizationId !== params.organizationId) throw new ValidationError('User not in your organization');
 
-  return prisma.shiftAssignment.upsert({
+  const assignment = await prisma.shiftAssignment.upsert({
     where: { serviceId_userId: { serviceId: params.serviceId, userId: params.targetUserId } },
     create: {
       serviceId: params.serviceId,
@@ -358,6 +367,17 @@ export async function assignUser(params: {
     },
     select: ASSIGNMENT_SELECT,
   });
+
+  // Send push notification to assigned user
+  if (user.pushToken) {
+    sendPushNotification(user.pushToken, {
+      title: 'You have been scheduled',
+      body: `You've been assigned to ${service.name} on ${service.serviceDate.toLocaleDateString()}${params.role ? ` as ${params.role}` : ''}`,
+      data: { type: 'assignment', serviceId: params.serviceId, assignmentId: assignment.id },
+    }).catch(() => null);
+  }
+
+  return assignment;
 }
 
 export async function removeAssignment(assignmentId: string, organizationId: string) {

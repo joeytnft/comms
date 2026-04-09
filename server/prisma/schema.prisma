@@ -86,6 +86,7 @@ model User {
   publicKey       String?  // E2E encryption public key
   organizationId  String
   lastSeenAt      DateTime?
+  pushToken       String?  // Expo push notification token
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -101,6 +102,7 @@ model User {
   swapRequestsReceived ShiftSwapRequest[] @relation("swapRequestsReceived")
   createdServices      ServiceSchedule[]  @relation("serviceCreatedBy")
   createdTemplates     ServiceTemplate[]  @relation("templateCreatedBy")
+  availability         ServiceAvailability[]
 
   @@index([organizationId])
   @@map("users")
@@ -427,28 +429,51 @@ model ServiceSchedule {
   template     ServiceTemplate?  @relation(fields: [templateId], references: [id], onDelete: SetNull)
   createdBy    User              @relation("serviceCreatedBy", fields: [createdById], references: [id])
   assignments  ShiftAssignment[]
+  availability ServiceAvailability[]
 
   @@index([organizationId, serviceDate])
   @@map("service_schedules")
 }
 
 model ShiftAssignment {
-  id        String   @id @default(cuid())
+  id        String           @id @default(cuid())
   serviceId String
   userId    String
   postId    String?
   role      String?
   notes     String?
-  createdAt DateTime @default(now())
+  status    AssignmentStatus @default(PENDING)
+  createdAt DateTime         @default(now())
 
-  service      ServiceSchedule   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  user         User              @relation("shiftAssignments", fields: [userId], references: [id])
-  post         Post?             @relation(fields: [postId], references: [id])
+  service      ServiceSchedule    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  user         User               @relation("shiftAssignments", fields: [userId], references: [id])
+  post         Post?              @relation(fields: [postId], references: [id])
   checkIn      CheckIn?
   swapRequests ShiftSwapRequest[] @relation("fromAssignment")
 
   @@unique([serviceId, userId])
   @@map("shift_assignments")
+}
+
+model ServiceAvailability {
+  id        String   @id @default(cuid())
+  serviceId String
+  userId    String
+  available Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  service ServiceSchedule @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceId, userId])
+  @@map("service_availability")
+}
+
+enum AssignmentStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
 }
 
 model CheckIn {
