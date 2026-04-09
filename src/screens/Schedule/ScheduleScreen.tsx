@@ -110,6 +110,12 @@ export function ScheduleScreen() {
   const [slotPostId, setSlotPostId] = useState<string | undefined>();
   const [slotCount, setSlotCount] = useState('1');
 
+  // Create post modal
+  const [showCreatePost, setShowCreatePost] = useState(false);
+  const [postName, setPostName] = useState('');
+  const [postZone, setPostZone] = useState('');
+  const [postSaving, setPostSaving] = useState(false);
+
   // Create one-off service
   const [showCreateService, setShowCreateService] = useState(false);
   const [svcName, setSvcName] = useState('');
@@ -192,6 +198,18 @@ export function ScheduleScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: () => removeRoleSlot(templateId, slotId) },
     ]);
+  };
+
+  const handleCreatePost = async () => {
+    if (!postName.trim()) return;
+    setPostSaving(true);
+    try {
+      await createPost({ name: postName.trim(), zone: postZone.trim() || undefined });
+      setShowCreatePost(false);
+      setPostName(''); setPostZone('');
+    } catch (e: unknown) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to create post');
+    } finally { setPostSaving(false); }
   };
 
   const handleCreateService = async () => {
@@ -572,6 +590,26 @@ export function ScheduleScreen() {
         </View>
       </Modal>
 
+      {/* ── Create post modal ─────────────────────────────────────────────── */}
+      <Modal visible={showCreatePost} transparent animationType="slide" onRequestClose={() => setShowCreatePost(false)}>
+        <View style={styles.overlay}>
+          <View style={styles.sheet}>
+            <Text style={styles.sheetTitle}>New Post / Position</Text>
+            <TextInput style={styles.input} placeholder="Post name * (e.g. Front Door, Parking A)" placeholderTextColor={COLORS.textMuted}
+              value={postName} onChangeText={setPostName} maxLength={50} />
+            <TextInput style={styles.input} placeholder="Zone (optional, e.g. North Lot, Children's Wing)" placeholderTextColor={COLORS.textMuted}
+              value={postZone} onChangeText={setPostZone} maxLength={50} />
+            <TouchableOpacity style={[styles.primaryBtn, (!postName.trim() || postSaving) && styles.primaryBtnDisabled]}
+              onPress={handleCreatePost} disabled={!postName.trim() || postSaving}>
+              <Text style={styles.primaryBtnText}>{postSaving ? 'Creating...' : 'Create Post'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.ghostBtn} onPress={() => setShowCreatePost(false)}>
+              <Text style={styles.ghostBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* ── One-off service modal ──────────────────────────────────────────── */}
       <Modal visible={showCreateService} transparent animationType="slide" onRequestClose={() => setShowCreateService(false)}>
         <View style={styles.overlay}>
@@ -730,4 +768,18 @@ const styles = StyleSheet.create({
   primaryBtnText: { ...TYPOGRAPHY.body, color: COLORS.white, fontWeight: '700' },
   ghostBtn: { alignItems: 'center', paddingVertical: SPACING.md },
   ghostBtnText: { ...TYPOGRAPHY.body, color: COLORS.textMuted },
+
+  // Posts section
+  sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: SPACING.lg, marginBottom: SPACING.sm },
+  sectionAddBtn: { ...TYPOGRAPHY.caption, color: COLORS.accent, fontWeight: '600' },
+  postsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, marginBottom: SPACING.md },
+  postChip: {
+    flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
+    backgroundColor: COLORS.surface, borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
+    borderWidth: 1, borderColor: COLORS.gray700, ...SHADOWS.sm,
+  },
+  postChipName: { ...TYPOGRAPHY.bodySmall, color: COLORS.textPrimary, fontWeight: '600' },
+  postChipZone: { ...TYPOGRAPHY.caption, color: COLORS.textMuted },
+  postChipDelete: { ...TYPOGRAPHY.caption, color: COLORS.danger, fontWeight: '700' },
 });
