@@ -245,6 +245,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     if (Platform.OS !== 'web' && audioRecorder) {
       audioRecorder.stop().then(() => {
         const uri = audioRecorder.uri;
+        console.log('[PTT] Recording URI:', uri);
         if (!uri) return;
         // Upload native recording and notify server
         (async () => {
@@ -260,7 +261,9 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
               const { url } = await uploadRes.json();
               socket.emit('ptt:native_log', { groupId: currentGroupId, audioUrl: url, durationMs });
             }
-          } catch {}
+          } catch (err) {
+            console.error('[PTT] Failed to upload recording:', err);
+          }
         })();
       }).catch(() => null);
     } else {

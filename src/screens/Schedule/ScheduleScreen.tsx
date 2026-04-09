@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  RefreshControl, Alert, Modal, TextInput,
+  RefreshControl, Alert, Modal, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -452,6 +452,7 @@ export function ScheduleScreen() {
 
       {/* ── Create template modal ──────────────────────────────────────────── */}
       <Modal visible={showCreateTemplate} transparent animationType="slide" onRequestClose={() => setShowCreateTemplate(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <View style={styles.overlay}>
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>New Recurring Template</Text>
@@ -490,10 +491,12 @@ export function ScheduleScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ── Edit template modal ────────────────────────────────────────────── */}
       <Modal visible={!!editTemplate} transparent animationType="slide" onRequestClose={() => setEditTemplate(null)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <View style={styles.overlay}>
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>Edit Template</Text>
@@ -520,10 +523,12 @@ export function ScheduleScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ── Generate modal ─────────────────────────────────────────────────── */}
       <Modal visible={!!generateTarget} transparent animationType="slide" onRequestClose={() => setGenerateTarget(null)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <View style={styles.overlay}>
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>Generate Services</Text>
@@ -556,10 +561,12 @@ export function ScheduleScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ── Add role slot modal ────────────────────────────────────────────── */}
       <Modal visible={!!slotTarget} transparent animationType="slide" onRequestClose={() => setSlotTarget(null)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <View style={styles.overlay}>
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>Add Required Role</Text>
@@ -588,10 +595,12 @@ export function ScheduleScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ── Create post modal ─────────────────────────────────────────────── */}
       <Modal visible={showCreatePost} transparent animationType="slide" onRequestClose={() => setShowCreatePost(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <View style={styles.overlay}>
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>New Post / Position</Text>
@@ -608,10 +617,12 @@ export function ScheduleScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ── One-off service modal ──────────────────────────────────────────── */}
       <Modal visible={showCreateService} transparent animationType="slide" onRequestClose={() => setShowCreateService(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <View style={styles.overlay}>
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>Special / One-Off Service</Text>
@@ -632,6 +643,7 @@ export function ScheduleScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
