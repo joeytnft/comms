@@ -1,5 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { ValidationError } from '../utils/errors';
+import { ValidationError, AuthorizationError } from '../utils/errors';
 import * as svc from '../services/schedule/scheduleService';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
