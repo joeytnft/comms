@@ -3,7 +3,7 @@ import { Group, GroupWithMembers, GroupHierarchy, CreateGroupData, InviteMemberD
 import { groupService } from '@/services/groupService';
 
 interface GroupState {
-  groups: Group[];
+  groups: GroupWithMembers[];
   currentGroup: GroupWithMembers | null;
   hierarchy: GroupHierarchy[];
   isLoading: boolean;
