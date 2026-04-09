@@ -4,9 +4,7 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import jwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
-import staticFiles from '@fastify/static';
 import { Server } from 'socket.io';
-import path from 'path';
 import { env } from './config/env';
 import { logger } from './utils/logger';
 import { AppError } from './utils/errors';
@@ -87,12 +85,7 @@ export async function buildApp() {
     limits: { fileSize: 8 * 1024 * 1024 }, // 8MB per file
   });
 
-  await app.register(staticFiles, {
-    root: path.join(process.cwd(), 'uploads'),
-    prefix: '/files/',
-  });
-
-  // Health check
+// Health check
   app.get('/health', async () => {
     return { status: 'ok', timestamp: new Date().toISOString() };
   });
