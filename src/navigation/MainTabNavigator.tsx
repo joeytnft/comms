@@ -85,6 +85,11 @@ export function MainTabNavigator() {
           headerShown: false,
           tabBarIcon: ({ color }) => <TabIcon label="⚙" color={color} />,
         }}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            navigation.navigate('More', { screen: 'MoreMenu' });
+          },
+        })}
       />
     </Tab.Navigator>
   );

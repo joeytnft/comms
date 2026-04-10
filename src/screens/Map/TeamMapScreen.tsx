@@ -121,6 +121,7 @@ export function TeamMapScreen() {
         renderItem={renderMember}
         keyExtractor={(item) => item.userId}
         contentContainerStyle={styles.list}
+        bounces={false}
         refreshControl={
           <RefreshControl
             refreshing={isLoading}
