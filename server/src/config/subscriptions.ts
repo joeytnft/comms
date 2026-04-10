@@ -38,7 +38,7 @@ export const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
   BASIC: {
     maxLeadGroups: 2,
     maxSubGroups: -1,
-    maxMembers: -1,
+    maxMembers: 50,
     features: {
       ptt: true,
       alerts: true,
