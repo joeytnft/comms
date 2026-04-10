@@ -25,6 +25,9 @@ export async function groupRoutes(app: FastifyInstance) {
   app.delete('/:id/members/:userId', groupController.removeMember);
   app.patch('/:id/members/:userId/role', groupController.updateMemberRole);
 
+  // Campus assignment (Enterprise)
+  app.patch('/:id/campus', groupController.assignCampus);
+
   // Invites
   app.post('/:id/invite', groupController.generateInvite);
   app.delete('/:id/invite', groupController.revokeInvite);

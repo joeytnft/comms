@@ -4,6 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { useGroupStore } from '@/store/useGroupStore';
+import { useCampusStore } from '@/store/useCampusStore';
+import { useSubscriptionStore } from '@/store/useSubscriptionStore';
 import { Button, Input } from '@/components/common';
 import { GroupType } from '@/types';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
@@ -17,6 +19,9 @@ type Props = {
 
 export function CreateGroupScreen({ navigation, route }: Props) {
   const { groups, createGroup, fetchGroups, isLoading } = useGroupStore();
+  const { campuses, fetchCampuses } = useCampusStore();
+  const { subscription } = useSubscriptionStore();
+  const isEnterprise = subscription?.tier === 'ENTERPRISE';
   const defaultType = route.params?.defaultType ?? 'lead';
   const defaultParentGroupId = route.params?.defaultParentGroupId;
 
@@ -25,11 +30,13 @@ export function CreateGroupScreen({ navigation, route }: Props) {
   const [type, setType] = useState<GroupType>(defaultType);
   const [parentGroupId, setParentGroupId] = useState<string | undefined>(defaultParentGroupId);
   const [iconColor, setIconColor] = useState<string>(GROUP_COLORS[0]);
+  const [campusId, setCampusId] = useState<string | null>(null);
 
   const leadGroups = groups.filter((g) => g.type === 'lead');
 
   useEffect(() => {
     fetchGroups();
+    if (isEnterprise) fetchCampuses();
   }, []);
 
   // Reset parent when switching to LEAD type
@@ -57,6 +64,7 @@ export function CreateGroupScreen({ navigation, route }: Props) {
         description: description.trim() || undefined,
         type,
         parentGroupId: type === 'sub' ? parentGroupId : undefined,
+        campusId: isEnterprise ? campusId : undefined,
         iconColor,
       });
       navigation.goBack();
@@ -145,6 +153,34 @@ export function CreateGroupScreen({ navigation, route }: Props) {
                 ))}
               </View>
             )}
+          </View>
+        )}
+
+        {/* Campus picker (Enterprise only) */}
+        {isEnterprise && campuses.length > 0 && (
+          <View style={styles.field}>
+            <Text style={styles.label}>Campus</Text>
+            <View style={styles.campusPicker}>
+              <TouchableOpacity
+                style={[styles.campusOption, campusId === null && styles.campusOptionSelected]}
+                onPress={() => setCampusId(null)}
+              >
+                <Text style={[styles.campusOptionText, campusId === null && styles.campusOptionTextSelected]}>
+                  All Campuses
+                </Text>
+              </TouchableOpacity>
+              {campuses.map((c) => (
+                <TouchableOpacity
+                  key={c.id}
+                  style={[styles.campusOption, campusId === c.id && styles.campusOptionSelected]}
+                  onPress={() => setCampusId(c.id)}
+                >
+                  <Text style={[styles.campusOptionText, campusId === c.id && styles.campusOptionTextSelected]}>
+                    {c.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         )}
 
@@ -270,6 +306,30 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.bodySmall,
     color: COLORS.warning,
     fontStyle: 'italic',
+  },
+  campusPicker: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+  },
+  campusOption: {
+    backgroundColor: COLORS.surface,
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderWidth: 2,
+    borderColor: COLORS.gray700,
+  },
+  campusOptionSelected: {
+    borderColor: COLORS.accent,
+  },
+  campusOptionText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+  },
+  campusOptionTextSelected: {
+    color: COLORS.accent,
   },
   colorPicker: {
     flexDirection: 'row',

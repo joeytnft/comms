@@ -20,6 +20,7 @@ interface GroupState {
   generateInvite: (groupId: string) => Promise<string>;
   revokeInvite: (groupId: string) => Promise<void>;
   joinByInvite: (inviteCode: string) => Promise<void>;
+  assignGroupCampus: (groupId: string, campusId: string | null) => Promise<void>;
   clearError: () => void;
   clearCurrentGroup: () => void;
 }
@@ -206,6 +207,23 @@ export const useGroupStore = create<GroupState>((set, _get) => ({
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to join group';
       set({ error: message, isLoading: false });
+      throw error;
+    }
+  },
+
+  assignGroupCampus: async (groupId, campusId) => {
+    set({ error: null });
+    try {
+      const { group } = await groupService.assignCampus(groupId, campusId);
+      set((state) => ({
+        groups: state.groups.map((g) => (g.id === groupId ? { ...g, ...group } : g)),
+        currentGroup: state.currentGroup?.id === groupId
+          ? { ...state.currentGroup, ...group }
+          : state.currentGroup,
+      }));
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to assign campus';
+      set({ error: message });
       throw error;
     }
   },

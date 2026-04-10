@@ -14,6 +14,7 @@ interface CreateGroupBody {
   description?: string;
   type: string; // Accepts 'lead'/'sub' or 'LEAD'/'SUB' — normalized to uppercase
   parentGroupId?: string;
+  campusId?: string | null;
   iconColor?: string;
 }
 
@@ -58,6 +59,7 @@ const GROUP_SELECT = {
   type: true,
   organizationId: true,
   campusId: true,
+  campus: { select: { id: true, name: true } },
   parentGroupId: true,
   iconColor: true,
   inviteCode: true,
@@ -120,8 +122,11 @@ export async function createGroup(
   request: FastifyRequest<{ Body: CreateGroupBody }>,
   reply: FastifyReply,
 ) {
-  const { name, description, type: rawType, parentGroupId, iconColor } = request.body;
+  const { name, description, type: rawType, parentGroupId, campusId: bodyCampusId, iconColor } = request.body;
   const type = rawType.toUpperCase() as 'LEAD' | 'SUB';
+  // Explicit campusId from body takes precedence (Enterprise admins assigning a campus);
+  // fall back to the caller's own campus assignment.
+  const campusId = bodyCampusId !== undefined ? (bodyCampusId || null) : (request.campusId ?? null);
 
   await hierarchyService.validateGroupCreation(
     { name, description, type, parentGroupId, iconColor },
@@ -135,7 +140,7 @@ export async function createGroup(
       description: description?.trim() || null,
       type,
       organizationId: request.organizationId,
-      campusId: request.campusId ?? null,
+      campusId,
       parentGroupId: parentGroupId || null,
       iconColor: iconColor || null,
       createdBy: request.userId,
@@ -250,6 +255,56 @@ export async function updateGroup(
       type: formatGroupType(group.type),
       memberCount: group._count.memberships,
       _count: undefined,
+    },
+  });
+}
+
+export async function assignCampus(
+  request: FastifyRequest<{ Params: GroupIdParams; Body: { campusId: string | null } }>,
+  reply: FastifyReply,
+) {
+  await findGroupInOrg(request.params.id, request.organizationId);
+
+  const role = await hierarchyService.getUserRole(request.userId, request.params.id);
+  if (role !== 'ADMIN') {
+    throw new AuthorizationError('Only group admins can assign a campus');
+  }
+
+  const { campusId } = request.body;
+
+  // Verify campus belongs to the same org (if not null)
+  if (campusId) {
+    const campus = await prisma.campus.findFirst({
+      where: { id: campusId, organizationId: request.organizationId },
+    });
+    if (!campus) throw new NotFoundError('Campus');
+  }
+
+  const group = await prisma.group.update({
+    where: { id: request.params.id },
+    data: { campusId: campusId ?? null },
+    select: {
+      ...GROUP_SELECT,
+      memberships: {
+        include: {
+          user: {
+            select: { id: true, displayName: true, avatarUrl: true, lastSeenAt: true },
+          },
+        },
+        orderBy: { joinedAt: 'asc' },
+      },
+      _count: { select: { memberships: true } },
+    },
+  });
+
+  reply.send({
+    group: {
+      ...group,
+      type: formatGroupType(group.type),
+      memberCount: group._count.memberships,
+      members: group.memberships.map(formatMembership),
+      _count: undefined,
+      memberships: undefined,
     },
   });
 }

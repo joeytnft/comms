@@ -41,6 +41,7 @@ export const ENDPOINTS = {
     GENERATE_INVITE: (id: string) => `/groups/${id}/invite`,
     REVOKE_INVITE: (id: string) => `/groups/${id}/invite`,
     JOIN_BY_INVITE: '/groups/join',
+    ASSIGN_CAMPUS: (id: string) => `/groups/${id}/campus`,
   },
 
   // Messages

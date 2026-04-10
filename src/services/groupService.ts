@@ -62,4 +62,8 @@ export const groupService = {
   async joinByInvite(inviteCode: string): Promise<GroupDetailResponse> {
     return apiClient.post<GroupDetailResponse>(ENDPOINTS.GROUPS.JOIN_BY_INVITE, { inviteCode });
   },
+
+  async assignCampus(groupId: string, campusId: string | null): Promise<GroupDetailResponse> {
+    return apiClient.patch<GroupDetailResponse>(ENDPOINTS.GROUPS.ASSIGN_CAMPUS(groupId), { campusId });
+  },
 };

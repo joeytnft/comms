@@ -59,6 +59,7 @@ export async function getGroupsForUser(userId: string, organizationId: string) {
     },
     include: {
       _count: { select: { memberships: true } },
+      campus: { select: { id: true, name: true } },
       memberships: {
         include: {
           user: { select: { id: true, displayName: true, avatarUrl: true, lastSeenAt: true } },
