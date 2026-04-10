@@ -52,8 +52,18 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         if (mounted) setIsConnected(false);
       });
 
-      socket.on('connect_error', (error) => {
+      socket.on('connect_error', async (error) => {
         console.warn('[Socket] Connection error:', error.message);
+        // If the server rejected the token, grab the latest from storage
+        // (apiClient may have refreshed it since we connected) and retry.
+        const lowerMsg = error.message.toLowerCase();
+        if (lowerMsg.includes('token') || lowerMsg.includes('auth') || lowerMsg.includes('unauthorized')) {
+          const freshToken = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
+          if (freshToken && (socket.auth as { token: string }).token !== freshToken) {
+            socket.auth = { token: freshToken };
+            socket.connect();
+          }
+        }
       });
 
       socketRef.current = socket;

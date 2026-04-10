@@ -8,9 +8,7 @@ import { usePTTLogStore } from '@/store/usePTTLogStore';
 import { useHardwareButton } from '@/hooks/useHardwareButton';
 import { backgroundService } from '@/services/backgroundService';
 import { bluetoothPTTService } from '@/services/bluetoothPTTService';
-import { ENV } from '@/config/env';
-import { secureStorage } from '@/utils/secureStorage';
-import { ACCESS_TOKEN_KEY } from '@/config/constants';
+import { apiClient } from '@/api/client';
 
 interface PTTContextType {
   config: PTTConfig;
@@ -258,16 +256,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
               reader.onerror = reject;
               reader.readAsDataURL(blob);
             });
-            const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
-            const uploadRes = await fetch(`${ENV.apiUrl}/upload`, {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ data: base64, mimeType: 'audio/m4a' }),
-            });
-            if (uploadRes.ok) {
-              const { url } = await uploadRes.json();
-              socket.emit('ptt:native_log', { groupId: currentGroupId, audioUrl: url, durationMs });
-            }
+            const { url } = await apiClient.post<{ url: string }>('/upload', { data: base64, mimeType: 'audio/m4a' });
+            socket.emit('ptt:native_log', { groupId: currentGroupId, audioUrl: url, durationMs });
           } catch (err) {
             console.error('[PTT] Failed to upload recording:', err);
           }
