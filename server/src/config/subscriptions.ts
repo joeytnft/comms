@@ -10,6 +10,7 @@ export interface PlanLimits {
     location: boolean;
     incidents: boolean;
     multiCampus: boolean;
+    scheduling: boolean;
   };
 }
 
@@ -23,14 +24,15 @@ export interface PlanDefinition {
 export const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
   FREE: {
     maxLeadGroups: 1,
-    maxSubGroups: 5,
+    maxSubGroups: 1,
     maxMembers: 20,
     features: {
       ptt: true,
-      alerts: true,      // Enabled for trial/testing
-      location: true,    // Enabled for trial/testing
-      incidents: true,   // Enabled for trial/testing
-      multiCampus: false,
+      alerts: true,
+      location: true,
+      incidents: true,
+      multiCampus: true,
+      scheduling: false,
     },
   },
   BASIC: {
@@ -40,9 +42,10 @@ export const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
     features: {
       ptt: true,
       alerts: true,
-      location: false,
-      incidents: false,
-      multiCampus: false,
+      location: true,
+      incidents: true,
+      multiCampus: true,
+      scheduling: true,
     },
   },
   STANDARD: {
@@ -54,7 +57,8 @@ export const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
       alerts: true,
       location: true,
       incidents: true,
-      multiCampus: false,
+      multiCampus: true,
+      scheduling: true,
     },
   },
   ENTERPRISE: {
@@ -67,6 +71,7 @@ export const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
       location: true,
       incidents: true,
       multiCampus: true,
+      scheduling: true,
     },
   },
 };

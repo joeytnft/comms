@@ -11,6 +11,7 @@ export interface PlanLimits {
     location: boolean;
     incidents: boolean;
     multiCampus: boolean;
+    scheduling: boolean;
   };
 }
 
