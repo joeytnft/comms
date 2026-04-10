@@ -4,7 +4,8 @@
     "target": "ESNext",
     "module": "ESNext",
     "lib": [
-      "ES2022"
+      "ES2022",
+      "DOM"
     ],
     "jsx": "react-native",
     "moduleResolution": "bundler",
@@ -15,6 +16,7 @@
     "resolveJsonModule": true,
     "noEmit": true,
     "isolatedModules": true,
+    "ignoreDeprecations": "5.0",
     "forceConsistentCasingInFileNames": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
@@ -68,7 +70,8 @@
   ],
   "exclude": [
     "node_modules",
-    "__tests__"
+    "__tests__",
+    "server"
   ],
   "extends": "expo/tsconfig.base"
 }

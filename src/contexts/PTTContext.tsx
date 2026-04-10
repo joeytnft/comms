@@ -44,7 +44,6 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
   // Web MediaRecorder ref
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
   // Track when transmit started so durationMs is accurate
   const transmitStartedAtRef = useRef<number>(0);
 
@@ -207,7 +206,6 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         socket.emit('ptt:start', { groupId: currentGroupId, mimeType });
 
         const recorder = new MediaRecorder(stream, { mimeType });
-        audioChunksRef.current = [];
 
         recorder.ondataavailable = (e) => {
           if (e.data.size > 0 && socket) {
