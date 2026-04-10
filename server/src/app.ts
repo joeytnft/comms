@@ -21,6 +21,7 @@ import { uploadRoutes } from './routes/uploads';
 import { pttLogRoutes } from './routes/pttLogs';
 import { geofenceRoutes } from './routes/geofence';
 import { scheduleRoutes } from './routes/schedule';
+import { campusRoutes } from './routes/campuses';
 import { setupSocketHandlers } from './sockets/socketHandler';
 
 export async function buildApp() {
@@ -104,6 +105,7 @@ export async function buildApp() {
   app.register(pttLogRoutes, { prefix: '/ptt-logs' });
   app.register(geofenceRoutes, { prefix: '/geofence' });
   app.register(scheduleRoutes, { prefix: '/schedule' });
+  app.register(campusRoutes, { prefix: '/campuses' });
 
   // Socket.IO setup
   app.addHook('onReady', async () => {

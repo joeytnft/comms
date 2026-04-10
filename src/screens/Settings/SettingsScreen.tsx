@@ -10,7 +10,8 @@ import { APP_VERSION } from '@/config/constants';
 
 export function SettingsScreen() {
   const { user, organization, logout } = useAuth();
-  const { tierLabel } = useSubscriptionStore();
+  const { tierLabel, subscription } = useSubscriptionStore();
+  const isEnterprise = subscription?.tier === 'ENTERPRISE';
   const navigation = useNavigation<any>();
 
   const handleShareInvite = async () => {
@@ -116,6 +117,15 @@ export function SettingsScreen() {
             <Text style={styles.settingLabel}>Schedule & Check-In</Text>
             <Text style={styles.chevron}>{'>'}</Text>
           </Pressable>
+          {isEnterprise && (
+            <Pressable
+              style={styles.settingRow}
+              onPress={() => navigation.navigate('CampusManagement')}
+            >
+              <Text style={styles.settingLabel}>Campus Management</Text>
+              <Text style={styles.chevron}>{'>'}</Text>
+            </Pressable>
+          )}
         </View>
 
         {organization && (

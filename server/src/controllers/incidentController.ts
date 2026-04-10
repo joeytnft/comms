@@ -43,7 +43,7 @@ export async function createIncident(
   reply: FastifyReply,
 ) {
   const { title, encryptedDetails, severity, latitude, longitude } = request.body;
-  const { userId, organizationId } = request;
+  const { userId, organizationId, campusId } = request;
 
   if (!title || !encryptedDetails || !severity) {
     throw new ValidationError('title, encryptedDetails, and severity are required');
@@ -56,6 +56,7 @@ export async function createIncident(
   const incident = await prisma.incident.create({
     data: {
       organizationId,
+      campusId: campusId ?? null,
       reportedById: userId,
       title,
       encryptedDetails,
@@ -73,11 +74,13 @@ export async function listIncidents(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const { organizationId } = request;
+  const { organizationId, campusId } = request;
   const query = request.query as { cursor?: string; limit?: string; status?: string };
   const limit = Math.min(parseInt(query.limit || '20', 10), 50);
-
-  const where: Record<string, unknown> = { organizationId };
+  const where: Record<string, unknown> = {
+    organizationId,
+    ...(campusId ? { campusId } : {}),
+  };
   if (query.status) {
     where.status = query.status.toUpperCase();
   }

@@ -33,6 +33,7 @@ export { ALERT_SELECT };
 
 export async function createAlert(params: {
   organizationId: string;
+  campusId?: string | null;
   triggeredById: string;
   level: 'ATTENTION' | 'WARNING' | 'EMERGENCY';
   alertType?: string | null;
@@ -46,6 +47,7 @@ export async function createAlert(params: {
   const alert = await prisma.alert.create({
     data: {
       organizationId: params.organizationId,
+      campusId: params.campusId || null,
       triggeredById: params.triggeredById,
       level: params.level,
       alertType: params.alertType || null,

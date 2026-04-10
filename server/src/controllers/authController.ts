@@ -138,6 +138,7 @@ export async function register(
       avatarUrl: true,
       publicKey: true,
       organizationId: true,
+      campusId: true,
       createdAt: true,
       lastSeenAt: true,
     },
@@ -162,6 +163,7 @@ export async function register(
   const accessToken = request.server.jwt.sign({
     userId: user.id,
     organizationId: user.organizationId,
+    campusId: user.campusId ?? null,
   });
 
   const refreshToken = generateRefreshToken();
@@ -192,7 +194,14 @@ export async function login(
     throw new ValidationError('Email and password are required');
   }
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: {
+      id: true, email: true, displayName: true, phone: true,
+      avatarUrl: true, publicKey: true, organizationId: true,
+      campusId: true, passwordHash: true, createdAt: true, lastSeenAt: true,
+    },
+  });
   if (!user) {
     throw new AuthenticationError('Invalid email or password');
   }
@@ -212,6 +221,7 @@ export async function login(
   const accessToken = request.server.jwt.sign({
     userId: user.id,
     organizationId: user.organizationId,
+    campusId: user.campusId ?? null,
   });
 
   const refreshToken = generateRefreshToken();
@@ -232,6 +242,7 @@ export async function login(
       avatarUrl: user.avatarUrl,
       publicKey: user.publicKey,
       organizationId: user.organizationId,
+      campusId: user.campusId ?? null,
       createdAt: user.createdAt,
       lastSeenAt: user.lastSeenAt,
     },
@@ -254,7 +265,7 @@ export async function refresh(
 
   const storedToken = await prisma.refreshToken.findUnique({
     where: { token: hashToken(refreshToken) },
-    include: { user: true },
+    include: { user: { select: { id: true, organizationId: true, campusId: true } } },
   });
 
   if (!storedToken) {
@@ -273,6 +284,7 @@ export async function refresh(
   const newAccessToken = request.server.jwt.sign({
     userId: storedToken.user.id,
     organizationId: storedToken.user.organizationId,
+    campusId: storedToken.user.campusId ?? null,
   });
 
   const newRefreshToken = generateRefreshToken();

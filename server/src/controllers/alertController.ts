@@ -24,7 +24,7 @@ export async function triggerAlert(
   reply: FastifyReply,
 ) {
   const { level, alertType, message, latitude, longitude, priorityTone, photoUrl, groupIds } = request.body;
-  const { userId, organizationId } = request;
+  const { userId, organizationId, campusId } = request;
 
   if (!level || !['ATTENTION', 'WARNING', 'EMERGENCY'].includes(level)) {
     throw new ValidationError('Invalid alert level');
@@ -46,6 +46,7 @@ export async function triggerAlert(
 
   const alert = await alertService.createAlert({
     organizationId,
+    campusId: campusId ?? null,
     triggeredById: userId,
     level,
     alertType,
@@ -64,7 +65,7 @@ export async function listAlerts(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const { userId, organizationId } = request;
+  const { userId, organizationId, campusId } = request;
   const query = request.query as { cursor?: string; limit?: string; active?: string };
   const limit = Math.min(parseInt(query.limit || '20', 10), 50);
 
@@ -76,6 +77,7 @@ export async function listAlerts(
 
   const where: Record<string, unknown> = {
     organizationId,
+    ...(campusId ? { campusId } : {}),
     // Show global alerts (no targetGroups) OR alerts targeted at user's groups
     OR: [
       { targetGroups: { none: {} } },
