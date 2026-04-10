@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Modal, Alert, RefreshControl,
+  TextInput, Modal, Alert, RefreshControl, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -214,7 +214,7 @@ export function CampusManagementScreen() {
 
       {/* Create campus modal */}
       <Modal visible={showCreate} transparent animationType="slide" onRequestClose={() => setShowCreate(false)}>
-        <View style={styles.overlay}>
+        <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>New Campus</Text>
             <TextInput style={styles.input} placeholder="Campus name *" placeholderTextColor={COLORS.textMuted}
@@ -231,12 +231,12 @@ export function CampusManagementScreen() {
               <Text style={styles.ghostBtnText}>Cancel</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Edit campus modal */}
       <Modal visible={!!editTarget} transparent animationType="slide" onRequestClose={() => setEditTarget(null)}>
-        <View style={styles.overlay}>
+        <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>Edit Campus</Text>
             <TextInput style={styles.input} placeholder="Campus name *" placeholderTextColor={COLORS.textMuted}
@@ -253,7 +253,7 @@ export function CampusManagementScreen() {
               <Text style={styles.ghostBtnText}>Cancel</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Assign members modal */}

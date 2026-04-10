@@ -67,13 +67,13 @@ export const useLocationStore = create<LocationState>((set, get) => ({
     }
 
     // Get initial position immediately
-    const initial = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+    const initial = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.BestForNavigation });
     await get().updateMyLocation(initial.coords.latitude, initial.coords.longitude);
 
-    // Watch for updates every 5 seconds / 5 metres
+    // Watch for updates every 2 seconds / 2 metres
     watchSubscription = await Location.watchPositionAsync(
       {
-        accuracy: Location.Accuracy.High,
+        accuracy: Location.Accuracy.BestForNavigation,
         timeInterval: LOCATION_UPDATE_INTERVAL,
         distanceInterval: LOCATION_DISTANCE_FILTER,
       },

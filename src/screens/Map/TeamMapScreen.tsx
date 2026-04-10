@@ -31,7 +31,7 @@ export function TeamMapScreen() {
 
       refreshInterval.current = setInterval(() => {
         fetchTeamLocations();
-      }, 10_000);
+      }, 5_000);
 
       return () => {
         if (refreshInterval.current) clearInterval(refreshInterval.current);

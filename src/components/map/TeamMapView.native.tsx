@@ -11,7 +11,7 @@ interface Props {
   style?: object;
 }
 
-const DELTA = 0.01; // ~1km zoom
+const DELTA = 0.0009; // ~300 ft zoom
 
 const isOnline = (updatedAt: string) =>
   Date.now() - new Date(updatedAt).getTime() < 300_000;
@@ -28,16 +28,16 @@ export function TeamMapView({ locations, geofence, style }: Props) {
     Location.requestForegroundPermissionsAsync().then(({ status }) => {
       if (status !== 'granted') return;
 
-      // Get immediate fix
-      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
+      // Get immediate high-accuracy fix
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.BestForNavigation })
         .then((loc) => {
           setDeviceCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
         })
         .catch(() => null);
 
-      // Keep updating so the map can follow the user
+      // Live tracking — high accuracy, update every ~1s or 2m of movement
       Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.Balanced, timeInterval: 5_000, distanceInterval: 5 },
+        { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1_000, distanceInterval: 2 },
         (loc) => {
           setDeviceCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
         },
