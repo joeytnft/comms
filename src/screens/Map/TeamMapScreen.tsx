@@ -46,6 +46,7 @@ export function TeamMapScreen() {
   const { user } = useAuthStore();
   const refreshInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const [geofence, setGeofence] = useState<Geofence | null>(null);
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
 
   // Restore persisted sharing state once on mount
   useEffect(() => {
@@ -73,8 +74,9 @@ export function TeamMapScreen() {
     }, []),
   );
 
-  // Filter out the current user from map markers — showsUserLocation handles their dot natively
-  const otherLocations = teamLocations.filter((l) => l.userId !== user?.id);
+  // Filter current user out of map markers only — native showsUserLocation draws their blue dot.
+  // The member list shows everyone including self.
+  const mapLocations = teamLocations.filter((l) => l.userId !== user?.id);
 
   const renderMember = useCallback(
     ({ item }: { item: TeamMemberLocation }) => <MemberCard item={item} />,
@@ -95,7 +97,7 @@ export function TeamMapScreen() {
         </TouchableOpacity>
       </View>
 
-      <TeamMapView locations={otherLocations} geofence={geofence} activeAlerts={activeAlerts} style={styles.map} />
+      <TeamMapView locations={mapLocations} geofence={geofence} activeAlerts={activeAlerts} style={styles.map} />
 
       {geofence && (
         <View style={styles.geofenceBar}>
@@ -114,18 +116,22 @@ export function TeamMapScreen() {
       ) : null}
 
       <Text style={styles.sectionTitle}>
-        Team Locations ({otherLocations.length})
+        Team Locations ({teamLocations.length})
       </Text>
       <FlatList
-        data={otherLocations}
+        data={teamLocations}
         renderItem={renderMember}
         keyExtractor={(item) => item.userId}
         contentContainerStyle={styles.list}
         bounces={false}
         refreshControl={
           <RefreshControl
-            refreshing={isLoading}
-            onRefresh={fetchTeamLocations}
+            refreshing={isManualRefreshing}
+            onRefresh={async () => {
+              setIsManualRefreshing(true);
+              await fetchTeamLocations();
+              setIsManualRefreshing(false);
+            }}
             tintColor={COLORS.accent}
           />
         }
