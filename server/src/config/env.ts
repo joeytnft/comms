@@ -14,10 +14,10 @@ const envSchema = z.object({
   JWT_ACCESS_EXPIRY: z.string().default('15m'),
   JWT_REFRESH_EXPIRY: z.string().default('7d'),
 
-  // LiveKit
-  LIVEKIT_API_KEY: z.string(),
-  LIVEKIT_API_SECRET: z.string(),
-  LIVEKIT_URL: z.string().url(),
+  // LiveKit (optional until PTT is implemented)
+  LIVEKIT_API_KEY: z.string().optional(),
+  LIVEKIT_API_SECRET: z.string().optional(),
+  LIVEKIT_URL: z.string().url().optional(),
 
   // RevenueCat (optional — dev works without them)
   REVENUECAT_API_KEY: z.string().optional(),

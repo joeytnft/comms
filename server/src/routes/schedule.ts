@@ -1,9 +1,11 @@
 import { FastifyInstance } from 'fastify';
 import { authenticate } from '../middleware/auth';
+import { requireFeature } from '../middleware/subscription';
 import * as ctrl from '../controllers/scheduleController';
 
 export async function scheduleRoutes(app: FastifyInstance) {
   app.addHook('onRequest', authenticate);
+  app.addHook('onRequest', requireFeature('scheduling'));
 
   // Templates (recurring schedules)
   app.get('/templates', ctrl.listTemplates);
