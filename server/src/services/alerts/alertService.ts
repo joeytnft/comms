@@ -1,5 +1,6 @@
 import { prisma } from '../../config/database';
 import { NotFoundError, AuthorizationError } from '../../utils/errors';
+import { sendAlertPushNotifications } from '../notifications/pushService';
 
 const ALERT_SELECT = {
   id: true,
@@ -81,6 +82,18 @@ export async function createAlert(params: {
     // Re-fetch with targets populated
     return prisma.alert.findUniqueOrThrow({ where: { id: alert.id }, select: ALERT_SELECT });
   }
+
+  // Send push notifications to org members (fire-and-forget)
+  const triggererName = alert.triggeredBy.displayName;
+  sendAlertPushNotifications(
+    params.organizationId,
+    alert.id,
+    alert.level,
+    alert.message ?? null,
+    triggererName,
+  ).catch(() => {
+    // Push notifications are best-effort; don't block the response
+  });
 
   return alert;
 }

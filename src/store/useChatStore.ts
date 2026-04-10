@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { chatService, MessageData } from '@/services/chatService';
 import { encryptMessage, decryptMessage, getGroupKey, initGroupKey } from '@/crypto/utils';
+import { messageQueue } from '@/services/messageQueue';
 
 interface DecryptedMessage extends Omit<MessageData, 'encryptedContent'> {
   content: string;
@@ -22,6 +23,7 @@ interface ChatState {
   receiveMessage: (message: MessageData) => Promise<void>;
   setTyping: (groupId: string, userId: string, isTyping: boolean) => void;
   markRead: (groupId: string, messageIds: string[]) => Promise<void>;
+  retryQueue: () => Promise<void>;
   clearGroup: (groupId: string) => void;
 }
 
@@ -150,14 +152,57 @@ export const useChatStore = create<ChatState>((set, get) => ({
         },
       }));
     } catch {
-      // Mark optimistic message as failed
-      set((state) => ({
-        messagesByGroup: {
-          ...state.messagesByGroup,
-          [groupId]: (state.messagesByGroup[groupId] || []).filter((m) => m.id !== tempId),
-        },
-        error: 'Failed to send message',
-      }));
+      // Queue the encrypted payload for retry when connectivity returns
+      messageQueue.enqueue({
+        id: tempId,
+        groupId,
+        encryptedContent,
+        iv,
+        queuedAt: Date.now(),
+      });
+
+      // Keep optimistic message visible but marked as pending (isPending: true already set)
+      set({ error: 'Message queued — will send when reconnected' });
+    }
+  },
+
+  retryQueue: async () => {
+    const pending = messageQueue.getAll();
+    if (pending.length === 0) return;
+
+    for (const queued of pending) {
+      try {
+        const { message } = await chatService.sendMessage(
+          queued.groupId,
+          queued.encryptedContent,
+          queued.iv,
+        );
+        messageQueue.dequeue(queued.id);
+
+        // Replace optimistic message with confirmed one
+        const groupKey = await getGroupKey(queued.groupId);
+        const content = groupKey
+          ? await decryptMessage(queued.encryptedContent, queued.iv, groupKey).catch(() => '[Message]')
+          : '[Message]';
+
+        const confirmed: DecryptedMessage = {
+          ...message,
+          content,
+          encryptedContent: undefined,
+          isPending: false,
+        } as unknown as DecryptedMessage;
+
+        set((state) => ({
+          messagesByGroup: {
+            ...state.messagesByGroup,
+            [queued.groupId]: (state.messagesByGroup[queued.groupId] || []).map((m) =>
+              m.id === queued.id ? confirmed : m,
+            ),
+          },
+        }));
+      } catch {
+        // Still offline — keep in queue for next retry
+      }
     }
   },
 

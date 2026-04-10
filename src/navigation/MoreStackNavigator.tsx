@@ -8,6 +8,7 @@ import { TeamMapScreen } from '@/screens/Map/TeamMapScreen';
 import { IncidentStackNavigator } from './IncidentStackNavigator';
 import { ScheduleStackNavigator } from './ScheduleStackNavigator';
 import { CampusManagementScreen } from '@/screens/Settings/CampusManagementScreen';
+import { PinSetupScreen } from '@/screens/Auth/PinSetupScreen';
 import { COLORS } from '@/config/theme';
 
 export type MoreStackParamList = {
@@ -19,6 +20,7 @@ export type MoreStackParamList = {
   PTTConfig: undefined;
   Schedule: undefined;
   CampusManagement: undefined;
+  PinSetup: undefined;
 };
 
 const Stack = createNativeStackNavigator<MoreStackParamList>();
@@ -69,6 +71,11 @@ export function MoreStackNavigator() {
       <Stack.Screen
         name="CampusManagement"
         component={CampusManagementScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="PinSetup"
+        component={PinSetupScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

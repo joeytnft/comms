@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect } from 'react';
 import { User, LoginCredentials, RegisterData } from '@/types';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useSubscriptionStore } from '@/store/useSubscriptionStore';
+import { notificationService } from '@/services/notificationService';
 
 interface Organization {
   id: string;
@@ -31,15 +32,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loadStoredSession();
   }, []);
 
-  // Fetch subscription when user becomes authenticated
+  // Fetch subscription and register push token when user becomes authenticated
   useEffect(() => {
     if (isAuthenticated && user) {
       fetchSubscription();
+      notificationService.registerPushToken();
     }
   }, [isAuthenticated, user]);
 
   const logout = async () => {
     clearSubscription();
+    await notificationService.unregisterPushToken();
     await authLogout();
   };
 
