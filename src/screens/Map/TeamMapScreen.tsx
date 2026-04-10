@@ -1,18 +1,49 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState, memo } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocationStore } from '@/store/useLocationStore';
 import { useAlertStore } from '@/store/useAlertStore';
+import { useAuthStore } from '@/store/useAuthStore';
 import { TeamMemberLocation, Geofence } from '@/types';
 import { TeamMapView } from '@/components/map/TeamMapView';
 import { geofenceService } from '@/services/geofenceService';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 
+const MemberCard = memo(({ item }: { item: TeamMemberLocation }) => {
+  const isOnline = Date.now() - new Date(item.updatedAt).getTime() < 300_000;
+  const seconds = Math.floor((Date.now() - new Date(item.updatedAt).getTime()) / 1000);
+  let timeSince = 'Unknown';
+  if (!isNaN(seconds)) {
+    if (seconds < 60) timeSince = 'Just now';
+    else if (seconds < 3600) timeSince = `${Math.floor(seconds / 60)}m ago`;
+    else if (seconds < 86400) timeSince = `${Math.floor(seconds / 3600)}h ago`;
+    else timeSince = `${Math.floor(seconds / 86400)}d ago`;
+  }
+  return (
+    <View style={styles.memberCard}>
+      <View style={styles.memberAvatar}>
+        <Text style={styles.avatarText}>{item.displayName.charAt(0).toUpperCase()}</Text>
+      </View>
+      <View style={styles.memberInfo}>
+        <Text style={styles.memberName}>{item.displayName}</Text>
+        <Text style={styles.memberCoords}>
+          {item.latitude.toFixed(4)}, {item.longitude.toFixed(4)}
+        </Text>
+      </View>
+      <View style={styles.memberMeta}>
+        <Text style={styles.lastSeen}>{timeSince}</Text>
+        <View style={[styles.onlineDot, { backgroundColor: isOnline ? COLORS.success : COLORS.gray500 }]} />
+      </View>
+    </View>
+  );
+});
+
 export function TeamMapScreen() {
   const { teamLocations, isSharing, isLoading, error, fetchTeamLocations, setSharing, initSharing } =
     useLocationStore();
   const { activeAlerts, fetchAlerts } = useAlertStore();
+  const { user } = useAuthStore();
   const refreshInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const [geofence, setGeofence] = useState<Geofence | null>(null);
 
@@ -42,43 +73,12 @@ export function TeamMapScreen() {
     }, []),
   );
 
-  const timeSince = (dateStr: string | null): string => {
-    if (!dateStr) return 'Unknown';
-    const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-    if (seconds < 60) return 'Just now';
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    return `${Math.floor(hours / 24)}d ago`;
-  };
+  // Filter out the current user from map markers — showsUserLocation handles their dot natively
+  const otherLocations = teamLocations.filter((l) => l.userId !== user?.id);
 
-  const renderMember = ({ item }: { item: TeamMemberLocation }) => (
-    <View style={styles.memberCard}>
-      <View style={styles.memberAvatar}>
-        <Text style={styles.avatarText}>{item.displayName.charAt(0).toUpperCase()}</Text>
-      </View>
-      <View style={styles.memberInfo}>
-        <Text style={styles.memberName}>{item.displayName}</Text>
-        <Text style={styles.memberCoords}>
-          {item.latitude.toFixed(4)}, {item.longitude.toFixed(4)}
-        </Text>
-      </View>
-      <View style={styles.memberMeta}>
-        <Text style={styles.lastSeen}>{timeSince(item.updatedAt)}</Text>
-        <View
-          style={[
-            styles.onlineDot,
-            {
-              backgroundColor:
-                Date.now() - new Date(item.updatedAt).getTime() < 300_000
-                  ? COLORS.success
-                  : COLORS.gray500,
-            },
-          ]}
-        />
-      </View>
-    </View>
+  const renderMember = useCallback(
+    ({ item }: { item: TeamMemberLocation }) => <MemberCard item={item} />,
+    [],
   );
 
   return (
@@ -95,7 +95,7 @@ export function TeamMapScreen() {
         </TouchableOpacity>
       </View>
 
-      <TeamMapView locations={teamLocations} geofence={geofence} activeAlerts={activeAlerts} style={styles.map} />
+      <TeamMapView locations={otherLocations} geofence={geofence} activeAlerts={activeAlerts} style={styles.map} />
 
       {geofence && (
         <View style={styles.geofenceBar}>
@@ -114,10 +114,10 @@ export function TeamMapScreen() {
       ) : null}
 
       <Text style={styles.sectionTitle}>
-        Team Locations ({teamLocations.length})
+        Team Locations ({otherLocations.length})
       </Text>
       <FlatList
-        data={teamLocations}
+        data={otherLocations}
         renderItem={renderMember}
         keyExtractor={(item) => item.userId}
         contentContainerStyle={styles.list}

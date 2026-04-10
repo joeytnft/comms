@@ -79,7 +79,7 @@ export function DashboardScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.gridItem, { backgroundColor: COLORS.success }]}
-            onPress={() => navigation.navigate('More')}
+            onPress={() => navigation.navigate('More', { screen: 'TeamMap' })}
           >
             <Text style={styles.gridIcon}>L</Text>
             <Text style={styles.gridLabel}>Team Map</Text>
