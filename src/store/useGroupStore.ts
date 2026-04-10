@@ -24,7 +24,7 @@ interface GroupState {
   clearCurrentGroup: () => void;
 }
 
-export const useGroupStore = create<GroupState>((set, get) => ({
+export const useGroupStore = create<GroupState>((set, _get) => ({
   groups: [],
   currentGroup: null,
   hierarchy: [],

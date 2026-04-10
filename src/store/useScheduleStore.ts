@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Post, ServiceSchedule, ServiceTemplate, TemplateRoleSlot, ShiftAssignment, ShiftSwapRequest } from '@/types';
+import { Post, ServiceSchedule, ServiceTemplate, ShiftSwapRequest } from '@/types';
 import { scheduleService } from '@/services/scheduleService';
 
 interface ScheduleState {

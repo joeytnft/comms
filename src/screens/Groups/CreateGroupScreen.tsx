@@ -24,7 +24,7 @@ export function CreateGroupScreen({ navigation, route }: Props) {
   const [description, setDescription] = useState('');
   const [type, setType] = useState<GroupType>(defaultType);
   const [parentGroupId, setParentGroupId] = useState<string | undefined>(defaultParentGroupId);
-  const [iconColor, setIconColor] = useState(GROUP_COLORS[0]);
+  const [iconColor, setIconColor] = useState<string>(GROUP_COLORS[0]);
 
   const leadGroups = groups.filter((g) => g.type === 'lead');
 

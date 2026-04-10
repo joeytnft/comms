@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Alert, TriggerAlertData, AlertLevel } from '@/types';
+import { Alert, TriggerAlertData } from '@/types';
 import { alertService } from '@/services/alertService';
 
 interface AlertState {

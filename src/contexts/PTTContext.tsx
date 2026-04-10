@@ -11,7 +11,6 @@ import { bluetoothPTTService } from '@/services/bluetoothPTTService';
 import { ENV } from '@/config/env';
 import { secureStorage } from '@/utils/secureStorage';
 import { ACCESS_TOKEN_KEY } from '@/config/constants';
-import * as FileSystem from '@/utils/fileSystemStub';
 
 interface PTTContextType {
   config: PTTConfig;
@@ -155,10 +154,9 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           throw new Error('Microphone permission is required for PTT');
         }
         await AudioModule.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: true,
-          shouldDuckAndroid: true,
+          allowsRecording: true,
+          playsInSilentMode: true,
+          shouldPlayInBackground: true,
         });
       }
 
@@ -226,10 +224,9 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       socket.emit('ptt:start', { groupId: currentGroupId });
       // Native: set audio mode then record
       AudioModule.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: true,
-        shouldDuckAndroid: true,
+        allowsRecording: true,
+        playsInSilentMode: true,
+        shouldPlayInBackground: true,
       }).then(() => audioRecorder?.record()).catch(() => null);
     }
   }, [socket]);
@@ -250,7 +247,17 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         // Upload native recording and notify server
         (async () => {
           try {
-            const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+            const fileRes = await fetch(uri);
+            const blob = await fileRes.blob();
+            const base64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => {
+                const result = reader.result as string;
+                resolve(result.includes(',') ? result.split(',')[1] : result);
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
             const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
             const uploadRes = await fetch(`${ENV.apiUrl}/upload`, {
               method: 'POST',

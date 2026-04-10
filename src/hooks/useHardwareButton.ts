@@ -24,8 +24,8 @@ interface Options {
 export function useHardwareButton({ buttonMapping, enabled, onPress, onRelease }: Options) {
   const pressedRef = useRef(false);
 
-  useEffect(() => {
-    if (Platform.OS === 'web' || !enabled) return;
+  useEffect((): (() => void) | undefined => {
+    if (Platform.OS === 'web' || !enabled) return undefined;
 
     // ── BLE HID button ────────────────────────────────────────────────────────
     if (buttonMapping === 'bluetooth_hid') {
@@ -49,7 +49,7 @@ export function useHardwareButton({ buttonMapping, enabled, onPress, onRelease }
       const nativeModule = NativeModules.GuardianKeyEvents ?? null;
       if (!nativeModule) {
         // Native key-event module not present (Expo Go or not yet set up) — skip silently
-        return;
+        return undefined;
       }
       const emitter = new NativeEventEmitter(nativeModule);
       const targetKeyCode = buttonMapping === 'volume_down' ? 25 : 24; // KEYCODE_VOLUME_DOWN / UP
@@ -73,5 +73,6 @@ export function useHardwareButton({ buttonMapping, enabled, onPress, onRelease }
         upSub.remove();
       };
     }
+    return undefined;
   }, [buttonMapping, enabled, onPress, onRelease]);
 }

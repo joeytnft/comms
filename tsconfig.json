@@ -2,14 +2,13 @@
   "compilerOptions": {
     "strict": true,
     "target": "ESNext",
-    "module": "commonjs",
+    "module": "ESNext",
     "lib": [
       "ES2022"
     ],
     "jsx": "react-native",
     "moduleResolution": "bundler",
     "baseUrl": ".",
-    "ignoreDeprecations": "6.0",
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "skipLibCheck": true,

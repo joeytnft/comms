@@ -1,9 +1,9 @@
 import { apiClient } from '@/api/client';
 import { ENDPOINTS } from '@/api/endpoints';
-import { Group, GroupWithMembers, GroupHierarchy, CreateGroupData, InviteMemberData, GroupMember } from '@/types';
+import { GroupWithMembers, GroupHierarchy, CreateGroupData, InviteMemberData, GroupMember } from '@/types';
 
 interface GroupListResponse {
-  groups: (Group & { memberCount: number })[];
+  groups: GroupWithMembers[];
 }
 
 interface GroupDetailResponse {

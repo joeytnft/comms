@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
   },
   icon: {
     fontSize: 48,
-    color: COLORS.error,
+    color: COLORS.danger,
     marginBottom: SPACING.md,
     fontWeight: 'bold',
   },

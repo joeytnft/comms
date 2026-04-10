@@ -8,12 +8,11 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useScheduleStore } from '@/store/useScheduleStore';
 import { useGroupStore } from '@/store/useGroupStore';
-import { useAuth } from '@/contexts/AuthContext';
 import { ServiceSchedule, ServiceTemplate, DAYS_OF_WEEK } from '@/types';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 import { ScheduleStackParamList } from '@/navigation/ScheduleStackNavigator';
 
-type Nav = NativeStackNavigationProp<ScheduleStackParamList, 'Schedule'>;
+type Nav = NativeStackNavigationProp<ScheduleStackParamList, 'ScheduleHome'>;
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -72,7 +71,6 @@ type Tab = 'templates' | 'today' | 'upcoming';
 
 export function ScheduleScreen() {
   const navigation = useNavigation<Nav>();
-  const { user } = useAuth();
   const { groups, fetchGroups } = useGroupStore();
   const {
     templates, todayServices, upcomingServices, posts, isLoading,

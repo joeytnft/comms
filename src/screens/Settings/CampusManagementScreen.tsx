@@ -11,7 +11,7 @@ import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/th
 
 export function CampusManagementScreen() {
   const {
-    campuses, orgMembers, isLoading,
+    campuses, orgMembers,
     fetchCampuses, fetchOrgMembers,
     createCampus, updateCampus, deleteCampus,
     assignUser, removeUser,
@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm, borderRadius: BORDER_RADIUS.md,
   },
   addBtnText: { ...TYPOGRAPHY.bodySmall, color: COLORS.white, fontWeight: '600' },
-  tabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  tabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: COLORS.gray700 },
   tab: { flex: 1, paddingVertical: SPACING.sm, alignItems: 'center' },
   tabActive: { borderBottomWidth: 2, borderBottomColor: COLORS.accent },
   tabText: { ...TYPOGRAPHY.bodySmall, color: COLORS.textMuted },
@@ -313,14 +313,14 @@ const styles = StyleSheet.create({
   },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: SPACING.sm },
   cardTitleBlock: { flex: 1 },
-  cardName: { ...TYPOGRAPHY.bodyLarge, color: COLORS.textPrimary, fontWeight: '600' },
+  cardName: { ...TYPOGRAPHY.body, color: COLORS.textPrimary, fontWeight: '600' },
   cardSub: { ...TYPOGRAPHY.bodySmall, color: COLORS.textMuted, marginTop: 2 },
   cardDesc: { ...TYPOGRAPHY.bodySmall, color: COLORS.textSecondary, marginTop: 2 },
   cardStats: { alignItems: 'flex-end', gap: 2 },
   statText: { ...TYPOGRAPHY.caption, color: COLORS.textMuted },
   cardActions: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.sm },
   actionBtn: {
-    flex: 1, borderWidth: 1, borderColor: COLORS.border,
+    flex: 1, borderWidth: 1, borderColor: COLORS.gray700,
     borderRadius: BORDER_RADIUS.sm, paddingVertical: SPACING.xs, alignItems: 'center',
   },
   actionBtnDanger: { borderColor: COLORS.danger },
@@ -332,7 +332,7 @@ const styles = StyleSheet.create({
   },
   memberRowModal: {
     flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
-    paddingVertical: SPACING.sm, borderBottomWidth: 1, borderBottomColor: COLORS.border,
+    paddingVertical: SPACING.sm, borderBottomWidth: 1, borderBottomColor: COLORS.gray700,
   },
   memberAvatar: {
     width: 36, height: 36, borderRadius: 18,
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
   removeMemberText: { ...TYPOGRAPHY.bodySmall, color: COLORS.danger },
   assignPlus: { ...TYPOGRAPHY.heading2, color: COLORS.accent, paddingHorizontal: SPACING.sm },
   empty: { alignItems: 'center', paddingVertical: SPACING.xl },
-  emptyTitle: { ...TYPOGRAPHY.bodyLarge, color: COLORS.textSecondary, fontWeight: '600' },
+  emptyTitle: { ...TYPOGRAPHY.body, color: COLORS.textSecondary, fontWeight: '600' },
   emptySubtitle: { ...TYPOGRAPHY.bodySmall, color: COLORS.textMuted, marginTop: SPACING.xs, textAlign: 'center' },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   sheet: {
@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
   sheetTitle: { ...TYPOGRAPHY.heading2, color: COLORS.textPrimary, marginBottom: SPACING.xs },
   sheetSub: { ...TYPOGRAPHY.bodySmall, color: COLORS.textMuted, marginBottom: SPACING.sm },
   input: {
-    backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border,
+    backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.gray700,
     borderRadius: BORDER_RADIUS.md, padding: SPACING.md,
     color: COLORS.textPrimary, ...TYPOGRAPHY.body,
   },

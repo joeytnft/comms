@@ -17,7 +17,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
 import { useIncidentStore } from '@/store/useIncidentStore';
 import { IncidentSeverity, SEVERITY_COLORS, SEVERITY_LABELS } from '@/types';
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
+import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '@/config/theme';
 import { IncidentStackParamList } from '@/navigation/IncidentStackNavigator';
 import { ENV } from '@/config/env';
 

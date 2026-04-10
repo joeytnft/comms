@@ -54,7 +54,7 @@ export function ServiceDetailScreen({ navigation, route }: Props) {
   const {
     currentService, isLoading, posts,
     fetchService, fetchPosts, assignUser, removeAssignment,
-    checkIn, checkOut, requestSwap, respondToSwap, deleteService,
+    checkIn, checkOut, requestSwap, deleteService,
     createPost,
   } = useScheduleStore();
 
@@ -232,7 +232,7 @@ export function ServiceDetailScreen({ navigation, route }: Props) {
     : allMembers;
 
   const filteredMembers = sourceMembers.filter((m) =>
-    (m.user?.displayName ?? m.displayName ?? '').toLowerCase().includes(assignSearch.toLowerCase()) &&
+    (m.user?.displayName ?? '').toLowerCase().includes(assignSearch.toLowerCase()) &&
     !currentService.assignments.find((a) => a.userId === m.userId)
   );
 
@@ -466,9 +466,9 @@ export function ServiceDetailScreen({ navigation, route }: Props) {
                   onPress={() => handleAssign(m.userId)}
                 >
                   <View style={styles.memberAvatar}>
-                    <Text style={styles.memberAvatarText}>{(m.user?.displayName ?? m.displayName)?.charAt(0)?.toUpperCase()}</Text>
+                    <Text style={styles.memberAvatarText}>{m.user?.displayName?.charAt(0)?.toUpperCase()}</Text>
                   </View>
-                  <Text style={styles.memberName}>{m.user?.displayName ?? m.displayName}</Text>
+                  <Text style={styles.memberName}>{m.user?.displayName}</Text>
                   {availability[m.userId] === true && <Text style={{ color: COLORS.success, fontSize: 11 }}>✓ Available</Text>}
                   {availability[m.userId] === false && <Text style={{ color: COLORS.danger, fontSize: 11 }}>✗ Unavailable</Text>}
                   {availability[m.userId] === undefined && <Text style={styles.memberTap}>Tap to assign</Text>}
@@ -581,10 +581,10 @@ export function ServiceDetailScreen({ navigation, route }: Props) {
                     onPress={() => setSwapTargetId(m.userId)}
                   >
                     <View style={styles.memberAvatar}>
-                      <Text style={styles.memberAvatarText}>{m.displayName?.charAt(0)?.toUpperCase()}</Text>
+                      <Text style={styles.memberAvatarText}>{m.user?.displayName?.charAt(0)?.toUpperCase()}</Text>
                     </View>
                     <Text style={[styles.memberName, swapTargetId === m.userId && { color: COLORS.accent }]}>
-                      {m.displayName}
+                      {m.user?.displayName}
                     </Text>
                     {swapTargetId === m.userId && <Text style={{ color: COLORS.accent }}>✓</Text>}
                   </TouchableOpacity>

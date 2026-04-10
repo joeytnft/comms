@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, Pressable, Share, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, Pressable, Share, TouchableOpacity, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/contexts/AuthContext';
@@ -10,9 +10,24 @@ import { APP_VERSION } from '@/config/constants';
 
 export function SettingsScreen() {
   const { user, organization, logout } = useAuth();
-  const { tierLabel, subscription } = useSubscriptionStore();
+  const { tierLabel, subscription, canUseFeature } = useSubscriptionStore();
   const isEnterprise = subscription?.tier === 'ENTERPRISE';
   const navigation = useNavigation<any>();
+
+  const handleSchedulePress = () => {
+    if (!canUseFeature('scheduling')) {
+      Alert.alert(
+        'Paid Feature',
+        'Schedule & Check-In is available on Basic, Standard, and Enterprise plans. Upgrade to unlock it.',
+        [
+          { text: 'Not Now', style: 'cancel' },
+          { text: 'View Plans', onPress: () => navigation.navigate('Subscription') },
+        ],
+      );
+      return;
+    }
+    navigation.navigate('Schedule');
+  };
 
   const handleShareInvite = async () => {
     if (!organization?.inviteCode) return;
@@ -43,7 +58,7 @@ export function SettingsScreen() {
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         {/* Profile card */}
-        <View style={styles.profileCard}>
+        <Pressable style={styles.profileCard} onPress={() => navigation.navigate('EditProfile')}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
               {user?.displayName?.charAt(0)?.toUpperCase() || '?'}
@@ -51,19 +66,29 @@ export function SettingsScreen() {
           </View>
           <Text style={styles.name}>{user?.displayName || 'Team Member'}</Text>
           <Text style={styles.email}>{user?.email}</Text>
-        </View>
+          <Text style={styles.editHint}>Tap to edit profile</Text>
+        </Pressable>
 
         {/* Settings sections */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
-          <View style={styles.settingRow}>
+          <Pressable
+            style={styles.settingRow}
+            onPress={() => user?.email && Linking.openURL(`mailto:${user.email}`)}
+          >
             <Text style={styles.settingLabel}>Email</Text>
-            <Text style={styles.settingValue}>{user?.email}</Text>
-          </View>
-          <View style={styles.settingRow}>
+            <Text style={[styles.settingValue, styles.linkValue]}>{user?.email}</Text>
+          </Pressable>
+          <Pressable
+            style={styles.settingRow}
+            onPress={() => user?.phone && Linking.openURL(`tel:${user.phone}`)}
+            disabled={!user?.phone}
+          >
             <Text style={styles.settingLabel}>Phone</Text>
-            <Text style={styles.settingValue}>{user?.phone || 'Not set'}</Text>
-          </View>
+            <Text style={[styles.settingValue, user?.phone && styles.linkValue]}>
+              {user?.phone || 'Not set'}
+            </Text>
+          </Pressable>
         </View>
 
         <View style={styles.section}>
@@ -112,7 +137,7 @@ export function SettingsScreen() {
           </Pressable>
           <Pressable
             style={styles.settingRow}
-            onPress={() => navigation.navigate('Schedule')}
+            onPress={handleSchedulePress}
           >
             <Text style={styles.settingLabel}>Schedule & Check-In</Text>
             <Text style={styles.chevron}>{'>'}</Text>
@@ -219,6 +244,11 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: SPACING.xs,
   },
+  editHint: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+    marginTop: SPACING.sm,
+  },
   section: {
     backgroundColor: COLORS.surface,
     borderRadius: BORDER_RADIUS.md,
@@ -246,6 +276,10 @@ const styles = StyleSheet.create({
   settingValue: {
     ...TYPOGRAPHY.body,
     color: COLORS.textPrimary,
+  },
+  linkValue: {
+    color: COLORS.info,
+    textDecorationLine: 'underline',
   },
   tierRow: {
     flexDirection: 'row',

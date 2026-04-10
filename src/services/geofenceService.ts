@@ -11,7 +11,7 @@ export const GEOFENCE_TASK = 'GUARDIAN_COMM_GEOFENCE';
 
 // Register the background geofence task (must be called at module scope, outside components)
 if (Platform.OS !== 'web') {
-  TaskManager.defineTask(GEOFENCE_TASK, ({ data, error }: TaskManager.TaskManagerTaskBody) => {
+  TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: TaskManager.TaskManagerTaskBody) => {
     if (error) return;
     const { eventType, region } = data as {
       eventType: Location.GeofencingEventType;
