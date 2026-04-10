@@ -9,6 +9,8 @@ import { useHardwareButton } from '@/hooks/useHardwareButton';
 import { backgroundService } from '@/services/backgroundService';
 import { bluetoothPTTService } from '@/services/bluetoothPTTService';
 import { apiClient } from '@/api/client';
+import { File as FSFile } from 'expo-file-system';
+import { fromByteArray } from 'base64-js';
 
 interface PTTContextType {
   config: PTTConfig;
@@ -245,17 +247,10 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         // Upload native recording and notify server
         (async () => {
           try {
-            const fileRes = await fetch(uri);
-            const blob = await fileRes.blob();
-            const base64 = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => {
-                const result = reader.result as string;
-                resolve(result.includes(',') ? result.split(',')[1] : result);
-              };
-              reader.onerror = reject;
-              reader.readAsDataURL(blob);
-            });
+            const file = new FSFile(uri);
+            const buffer = await file.arrayBuffer();
+            const bytes = new Uint8Array(buffer);
+            const base64 = fromByteArray(bytes);
             const { url } = await apiClient.post<{ url: string }>('/upload', { data: base64, mimeType: 'audio/m4a' });
             socket.emit('ptt:native_log', { groupId: currentGroupId, audioUrl: url, durationMs });
           } catch (err) {
