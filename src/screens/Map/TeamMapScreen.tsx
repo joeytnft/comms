@@ -3,6 +3,7 @@ import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocationStore } from '@/store/useLocationStore';
+import { useAlertStore } from '@/store/useAlertStore';
 import { TeamMemberLocation, Geofence } from '@/types';
 import { TeamMapView } from '@/components/map/TeamMapView';
 import { geofenceService } from '@/services/geofenceService';
@@ -11,6 +12,7 @@ import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/th
 export function TeamMapScreen() {
   const { teamLocations, isSharing, isLoading, error, fetchTeamLocations, setSharing, initSharing } =
     useLocationStore();
+  const { activeAlerts, fetchAlerts } = useAlertStore();
   const refreshInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const [geofence, setGeofence] = useState<Geofence | null>(null);
 
@@ -22,6 +24,7 @@ export function TeamMapScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchTeamLocations();
+      fetchAlerts({ active: true });
 
       // Load geofence and start background monitoring
       geofenceService.fetchGeofence().then((gf) => {
@@ -92,7 +95,7 @@ export function TeamMapScreen() {
         </TouchableOpacity>
       </View>
 
-      <TeamMapView locations={teamLocations} geofence={geofence} style={styles.map} />
+      <TeamMapView locations={teamLocations} geofence={geofence} activeAlerts={activeAlerts} style={styles.map} />
 
       {geofence && (
         <View style={styles.geofenceBar}>
