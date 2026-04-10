@@ -57,6 +57,7 @@ const GROUP_SELECT = {
   description: true,
   type: true,
   organizationId: true,
+  campusId: true,
   parentGroupId: true,
   iconColor: true,
   inviteCode: true,
@@ -93,10 +94,15 @@ export async function listGroups(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const groups = await hierarchyService.getGroupsForUser(
+  let groups = await hierarchyService.getGroupsForUser(
     request.userId,
     request.organizationId,
   );
+
+  // Campus-scoped users only see their campus groups
+  if (request.campusId) {
+    groups = groups.filter((g) => !g.campusId || g.campusId === request.campusId);
+  }
 
   const formatted = groups.map((g) => ({
     ...g,
@@ -127,6 +133,7 @@ export async function createGroup(
       description: description?.trim() || null,
       type,
       organizationId: request.organizationId,
+      campusId: request.campusId ?? null,
       parentGroupId: parentGroupId || null,
       iconColor: iconColor || null,
       createdBy: request.userId,

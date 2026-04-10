@@ -37,8 +37,34 @@ model Organization {
   serviceSchedules ServiceSchedule[]
   serviceTemplates ServiceTemplate[]
   posts            Post[]
+  campuses         Campus[]
 
   @@map("organizations")
+}
+
+// ============================================================================
+// CAMPUSES (Enterprise multi-campus)
+// ============================================================================
+
+model Campus {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  address        String?
+  inviteCode     String   @unique @default(cuid())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  users        User[]
+  groups       Group[]
+  alerts       Alert[]
+  incidents    Incident[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("campuses")
 }
 
 enum SubscriptionTier {
@@ -84,11 +110,13 @@ model User {
   avatarUrl       String?
   publicKey       String?  // E2E encryption public key
   organizationId  String
+  campusId        String?
   lastSeenAt      DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   organization    Organization      @relation(fields: [organizationId], references: [id])
+  campus          Campus?           @relation(fields: [campusId], references: [id])
   memberships     GroupMembership[]
   sentMessages    Message[]         @relation("sender")
   triggeredAlerts Alert[]           @relation("triggeredBy")
@@ -144,6 +172,7 @@ model Group {
   description     String?
   type            GroupType
   organizationId  String
+  campusId        String?
   parentGroupId   String?   // Points to lead group (for sub-groups)
   iconColor       String?
   inviteCode      String?   @unique  // Shareable code for self-join
@@ -154,6 +183,7 @@ model Group {
   updatedAt       DateTime  @updatedAt
 
   organization    Organization      @relation(fields: [organizationId], references: [id])
+  campus          Campus?           @relation(fields: [campusId], references: [id])
   parentGroup     Group?            @relation("GroupHierarchy", fields: [parentGroupId], references: [id])
   subGroups       Group[]           @relation("GroupHierarchy")
   memberships     GroupMembership[]
@@ -237,6 +267,7 @@ model ReadReceipt {
 model Alert {
   id              String     @id @default(cuid())
   organizationId  String
+  campusId        String?
   triggeredById   String
   level           AlertLevel
   alertType       String?    // e.g. MEDICAL, SUSPICIOUS_PERSON, LOCKDOWN, etc.
@@ -250,6 +281,7 @@ model Alert {
   createdAt       DateTime   @default(now())
 
   organization    Organization          @relation(fields: [organizationId], references: [id])
+  campus          Campus?               @relation(fields: [campusId], references: [id])
   triggeredBy     User                  @relation("triggeredBy", fields: [triggeredById], references: [id])
   acknowledgments AlertAcknowledgment[]
   targetGroups    AlertGroupTarget[]    // Empty = global (all groups in org)
@@ -295,6 +327,7 @@ model AlertAcknowledgment {
 model Incident {
   id               String          @id @default(cuid())
   organizationId   String
+  campusId         String?
   reportedById     String
   title            String
   encryptedDetails String          // E2E encrypted
@@ -307,6 +340,7 @@ model Incident {
   resolvedAt       DateTime?
 
   organization Organization    @relation(fields: [organizationId], references: [id])
+  campus       Campus?         @relation(fields: [campusId], references: [id])
   reportedBy   User            @relation("reportedBy", fields: [reportedById], references: [id])
   photos       IncidentPhoto[]
 

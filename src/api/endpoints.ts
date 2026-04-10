@@ -99,6 +99,19 @@ export const ENDPOINTS = {
     RESPOND_SWAP: (id: string) => `/schedule/swap-requests/${id}/respond`,
   },
 
+  // Campuses (Enterprise only)
+  CAMPUSES: {
+    LIST: '/campuses',
+    CREATE: '/campuses',
+    GET: (id: string) => `/campuses/${id}`,
+    UPDATE: (id: string) => `/campuses/${id}`,
+    DELETE: (id: string) => `/campuses/${id}`,
+    MEMBERS: (id: string) => `/campuses/${id}/members`,
+    ASSIGN_USER: (id: string) => `/campuses/${id}/members`,
+    REMOVE_USER: (id: string, userId: string) => `/campuses/${id}/members/${userId}`,
+    ORG_MEMBERS: '/campuses/org-members',
+  },
+
   // Subscription
   SUBSCRIPTION: {
     GET: '/subscription',
