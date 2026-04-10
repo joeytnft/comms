@@ -246,6 +246,15 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         (async () => {
           try {
             const file = new FSFile(uri);
+            // stop() resolves before the OS finishes writing — wait up to 3s
+            const deadline = Date.now() + 3000;
+            while (!file.exists && Date.now() < deadline) {
+              await new Promise((r) => setTimeout(r, 100));
+            }
+            if (!file.exists) {
+              console.error('[PTT] Recording file never appeared:', uri);
+              return;
+            }
             const buffer = await file.arrayBuffer();
             const bytes = new Uint8Array(buffer);
             const base64 = fromByteArray(bytes);
