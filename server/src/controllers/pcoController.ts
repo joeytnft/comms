@@ -11,7 +11,7 @@ import {
   syncServiceTypes,
   syncUpcomingPlans,
 } from '../services/pco/pcoService';
-import { NotFoundError, ValidationError, AuthorizationError } from '../utils/errors';
+import { ValidationError } from '../utils/errors';
 
 const PCO_SCOPES = 'people services';
 const VERIFIER_TTL = 600; // 10 min
