@@ -12,6 +12,7 @@ export function SettingsScreen() {
   const { user, organization, logout } = useAuth();
   const { tierLabel, subscription, canUseFeature } = useSubscriptionStore();
   const isEnterprise = subscription?.tier === 'ENTERPRISE';
+  const isOrgAdmin = user?.role === 'owner' || user?.role === 'admin';
   const navigation = useNavigation<any>();
 
   const handleSchedulePress = () => {
@@ -148,6 +149,15 @@ export function SettingsScreen() {
               onPress={() => navigation.navigate('CampusManagement')}
             >
               <Text style={styles.settingLabel}>Campus Management</Text>
+              <Text style={styles.chevron}>{'>'}</Text>
+            </Pressable>
+          )}
+          {isOrgAdmin && (
+            <Pressable
+              style={styles.settingRow}
+              onPress={() => navigation.navigate('Members')}
+            >
+              <Text style={styles.settingLabel}>Manage Members</Text>
               <Text style={styles.chevron}>{'>'}</Text>
             </Pressable>
           )}

@@ -16,7 +16,9 @@ export const ENDPOINTS = {
     ME: '/users/me',
     UPDATE_PROFILE: '/users/me',
     UPDATE_PUBLIC_KEY: '/users/me/public-key',
+    LIST: '/users',
     GET_USER: (id: string) => `/users/${id}`,
+    ADMIN_UPDATE: (id: string) => `/users/${id}`,
   },
 
   // Organizations

@@ -9,6 +9,7 @@ import { IncidentStackNavigator } from './IncidentStackNavigator';
 import { ScheduleStackNavigator } from './ScheduleStackNavigator';
 import { CampusManagementScreen } from '@/screens/Settings/CampusManagementScreen';
 import { EditProfileScreen } from '@/screens/Settings/EditProfileScreen';
+import { MembersScreen } from '@/screens/Settings/MembersScreen';
 import { COLORS } from '@/config/theme';
 
 export type MoreStackParamList = {
@@ -21,6 +22,7 @@ export type MoreStackParamList = {
   PTTConfig: undefined;
   Schedule: undefined;
   CampusManagement: undefined;
+  Members: undefined;
 };
 
 const Stack = createNativeStackNavigator<MoreStackParamList>();
@@ -76,6 +78,11 @@ export function MoreStackNavigator() {
       <Stack.Screen
         name="CampusManagement"
         component={CampusManagementScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="Members"
+        component={MembersScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

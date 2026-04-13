@@ -86,8 +86,13 @@ export function MainTabNavigator() {
           tabBarIcon: ({ color }) => <TabIcon label="⚙" color={color} />,
         }}
         listeners={({ navigation }) => ({
-          tabPress: () => {
-            navigation.navigate('More', { screen: 'MoreMenu' });
+          tabPress: (e) => {
+            e.preventDefault();
+            // Always reset the More stack back to MoreMenu
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'More', state: { routes: [{ name: 'MoreMenu' }] } }],
+            });
           },
         })}
       />

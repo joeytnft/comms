@@ -114,6 +114,7 @@ model User {
   campusId        String?
   lastSeenAt      DateTime?
   pushToken       String?  // Expo push notification token
+  isOrgAdmin      Boolean  @default(false)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

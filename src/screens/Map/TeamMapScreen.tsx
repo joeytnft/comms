@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState, memo } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocationStore } from '@/store/useLocationStore';
@@ -54,6 +54,9 @@ export function TeamMapScreen() {
   const refreshInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const [geofence, setGeofence] = useState<Geofence | null>(null);
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+  const [mapExpanded, setMapExpanded] = useState(false);
+  const mapHeight = useRef(new Animated.Value(280)).current;
+  const lastTapRef = useRef(0);
 
   // Restore persisted sharing state once on mount
   useEffect(() => {
@@ -86,6 +89,21 @@ export function TeamMapScreen() {
   // The member list shows everyone including self.
   const mapLocations = teamLocations.filter((l) => l.userId !== user?.id);
 
+  const handleMapTap = useCallback(() => {
+    const now = Date.now();
+    if (now - lastTapRef.current < 300) {
+      // Double tap
+      const expanded = !mapExpanded;
+      setMapExpanded(expanded);
+      Animated.spring(mapHeight, {
+        toValue: expanded ? 520 : 280,
+        useNativeDriver: false,
+        bounciness: 4,
+      }).start();
+    }
+    lastTapRef.current = now;
+  }, [mapExpanded, mapHeight]);
+
   const renderMember = useCallback(
     ({ item }: { item: TeamMemberLocation }) => <MemberCard item={item} />,
     [],
@@ -108,7 +126,14 @@ export function TeamMapScreen() {
         </View>
       </View>
 
-      <TeamMapView locations={mapLocations} geofence={geofence} activeAlerts={activeAlerts} style={styles.map} />
+      <TouchableOpacity activeOpacity={1} onPress={handleMapTap}>
+        <Animated.View style={[styles.map, { height: mapHeight }]}>
+          <TeamMapView locations={mapLocations} geofence={geofence} activeAlerts={activeAlerts} style={styles.mapInner} />
+          <View style={styles.mapHint}>
+            <Text style={styles.mapHintText}>{mapExpanded ? '▲ Double-tap to shrink' : '▼ Double-tap to expand'}</Text>
+          </View>
+        </Animated.View>
+      </TouchableOpacity>
 
       {geofence && (
         <View style={styles.geofenceBar}>
@@ -184,9 +209,27 @@ const styles = StyleSheet.create({
   sharingTextActive: { color: COLORS.white },
   map: {
     marginHorizontal: SPACING.lg,
-    height: 220,
     marginBottom: SPACING.lg,
+    borderRadius: BORDER_RADIUS.lg,
+    overflow: 'hidden',
     ...SHADOWS.sm,
+  },
+  mapInner: {
+    flex: 1,
+  },
+  mapHint: {
+    position: 'absolute',
+    bottom: 6,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  mapHintText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.white,
+    fontSize: 10,
   },
   sectionTitle: {
     ...TYPOGRAPHY.heading3,
