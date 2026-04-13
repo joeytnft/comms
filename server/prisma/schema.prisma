@@ -568,8 +568,49 @@ model PcoConnection {
   lastSyncAt     DateTime?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  people       PcoPerson[]
+  plans        PcoPlan[]
 
   @@map("pco_connections")
+}
+
+model PcoPerson {
+  id             String   @id @default(cuid())
+  organizationId String
+  pcoId          String   // PCO's person ID
+  name           String
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String?
+  avatarUrl      String?
+  status         String   @default("active")
+  syncedAt       DateTime @default(now()) @updatedAt
+
+  connection PcoConnection @relation(fields: [organizationId], references: [organizationId], onDelete: Cascade)
+
+  @@unique([organizationId, pcoId])
+  @@index([organizationId])
+  @@map("pco_people")
+}
+
+model PcoPlan {
+  id              String   @id @default(cuid())
+  organizationId  String
+  pcoId           String
+  serviceTypeId   String
+  serviceTypeName String
+  title           String?
+  seriesTitle     String?
+  sortDate        DateTime?
+  totalLength     Int      @default(0) // seconds
+  syncedAt        DateTime @default(now()) @updatedAt
+
+  connection PcoConnection @relation(fields: [organizationId], references: [organizationId], onDelete: Cascade)
+
+  @@unique([organizationId, pcoId])
+  @@index([organizationId, sortDate])
+  @@map("pco_plans")
 }
 
 model Geofence {

@@ -11,6 +11,8 @@ interface PcoState {
   error: string | null;
 
   fetchStatus: () => Promise<void>;
+  fetchPeople: () => Promise<void>;
+  fetchPlans: () => Promise<void>;
   disconnect: () => Promise<void>;
   syncPeople: () => Promise<void>;
   syncServices: () => Promise<void>;
@@ -33,6 +35,24 @@ export const usePcoStore = create<PcoState>((set) => ({
       set({ status, isLoading: false });
     } catch (e: unknown) {
       set({ error: e instanceof Error ? e.message : 'Failed to fetch status', isLoading: false });
+    }
+  },
+
+  fetchPeople: async () => {
+    try {
+      const people = await pcoClientService.getPeople();
+      set({ people });
+    } catch (e: unknown) {
+      set({ error: e instanceof Error ? e.message : 'Failed to load PCO people' });
+    }
+  },
+
+  fetchPlans: async () => {
+    try {
+      const plans = await pcoClientService.getPlans();
+      set({ plans });
+    } catch (e: unknown) {
+      set({ error: e instanceof Error ? e.message : 'Failed to load PCO plans' });
     }
   },
 

@@ -2,12 +2,14 @@ import React, { useCallback, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   RefreshControl, Alert, Modal, TextInput, KeyboardAvoidingView, Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useScheduleStore } from '@/store/useScheduleStore';
 import { useGroupStore } from '@/store/useGroupStore';
+import { usePcoStore } from '@/store/usePcoStore';
 import { ServiceSchedule, ServiceTemplate, DAYS_OF_WEEK } from '@/types';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 import { ScheduleStackParamList } from '@/navigation/ScheduleStackNavigator';
@@ -78,6 +80,8 @@ export function ScheduleScreen() {
     createTemplate, updateTemplate, deleteTemplate, generateFromTemplate,
     addRoleSlot, removeRoleSlot, createService, createPost, deletePost,
   } = useScheduleStore();
+  const { status: pcoStatus, plans: pcoPlans, isSyncing: pcoSyncing, fetchPlans, fetchStatus: fetchPcoStatus, syncServices } = usePcoStore();
+  const pcoConnected = pcoStatus?.connected ?? false;
 
   const [tab, setTab] = useState<Tab>('today');
 
@@ -125,6 +129,9 @@ export function ScheduleScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      fetchPcoStatus().then(() => {
+        if (usePcoStore.getState().status?.connected) fetchPlans();
+      });
       fetchGroups();
       fetchTemplates();
       fetchTodayServices();
@@ -330,6 +337,77 @@ export function ScheduleScreen() {
     acc[key].push(svc);
     return acc;
   }, {});
+
+  // ── PCO view: replaces the custom schedule when connected ──────────────────
+  if (pcoConnected) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayPlans = pcoPlans.filter((p) => p.sortDate && new Date(p.sortDate) >= today && new Date(p.sortDate) < new Date(today.getTime() + 86400000));
+    const upcomingPlans = pcoPlans.filter((p) => p.sortDate && new Date(p.sortDate) > new Date(today.getTime() + 86400000));
+
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Schedule</Text>
+          <TouchableOpacity
+            style={[styles.headerBtn, pcoSyncing && { opacity: 0.5 }]}
+            onPress={() => syncServices().then(fetchPlans)}
+            disabled={pcoSyncing}
+          >
+            {pcoSyncing
+              ? <ActivityIndicator size="small" color={COLORS.accent} />
+              : <Text style={styles.headerBtnText}>Sync PCO</Text>
+            }
+          </TouchableOpacity>
+        </View>
+        <View style={styles.pcoBanner}>
+          <Text style={styles.pcoBannerText}>Powered by Planning Center · {pcoStatus?.pcoOrgName}</Text>
+        </View>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          refreshControl={<RefreshControl refreshing={pcoSyncing} onRefresh={() => syncServices().then(fetchPlans)} tintColor={COLORS.accent} />}
+        >
+          {todayPlans.length > 0 && (
+            <>
+              <Text style={styles.sectionLabel}>Today</Text>
+              {todayPlans.map((p) => (
+                <View key={p.id} style={styles.pcoPlanCard}>
+                  <View style={styles.pcoPlanLeft}>
+                    <Text style={styles.pcoPlanType}>{p.serviceTypeName}</Text>
+                    <Text style={styles.pcoPlanTitle}>{p.title ?? p.seriesTitle ?? 'Service'}</Text>
+                    {p.sortDate && <Text style={styles.pcoPlanDate}>{new Date(p.sortDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>}
+                  </View>
+                  {p.totalLength > 0 && <Text style={styles.pcoPlanDur}>{Math.round(p.totalLength / 60)} min</Text>}
+                </View>
+              ))}
+            </>
+          )}
+          {upcomingPlans.length > 0 && (
+            <>
+              <Text style={styles.sectionLabel}>Upcoming</Text>
+              {upcomingPlans.map((p) => (
+                <View key={p.id} style={styles.pcoPlanCard}>
+                  <View style={styles.pcoPlanLeft}>
+                    <Text style={styles.pcoPlanType}>{p.serviceTypeName}</Text>
+                    <Text style={styles.pcoPlanTitle}>{p.title ?? p.seriesTitle ?? 'Service'}</Text>
+                    {p.sortDate && <Text style={styles.pcoPlanDate}>{new Date(p.sortDate).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</Text>}
+                  </View>
+                  {p.totalLength > 0 && <Text style={styles.pcoPlanDur}>{Math.round(p.totalLength / 60)} min</Text>}
+                </View>
+              ))}
+            </>
+          )}
+          {pcoPlans.length === 0 && !pcoSyncing && (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>No plans synced yet</Text>
+              <Text style={styles.emptySubtitle}>Tap "Sync PCO" to pull your upcoming services from Planning Center</Text>
+            </View>
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+  // ── End PCO view ────────────────────────────────────────────────────────────
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -792,4 +870,40 @@ const styles = StyleSheet.create({
   postChipName: { ...TYPOGRAPHY.bodySmall, color: COLORS.textPrimary, fontWeight: '600' },
   postChipZone: { ...TYPOGRAPHY.caption, color: COLORS.textMuted },
   postChipDelete: { ...TYPOGRAPHY.caption, color: COLORS.danger, fontWeight: '700' },
+
+  // PCO schedule view
+  pcoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e8410e18',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.xs,
+  },
+  pcoBannerText: { ...TYPOGRAPHY.caption, color: '#e8410e', fontWeight: '600' },
+  sectionLabel: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: SPACING.sm,
+    marginTop: SPACING.md,
+  },
+  pcoPlanCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.surface,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    ...SHADOWS.sm,
+  },
+  pcoPlanLeft: { flex: 1 },
+  pcoPlanType: { ...TYPOGRAPHY.caption, color: '#e8410e', fontWeight: '600', marginBottom: 2 },
+  pcoPlanTitle: { ...TYPOGRAPHY.body, color: COLORS.textPrimary, fontWeight: '600' },
+  pcoPlanDate: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, marginTop: 2 },
+  pcoPlanDur: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, marginLeft: SPACING.md },
+  emptyState: { alignItems: 'center', paddingTop: SPACING.xxl },
+  emptyTitle: { ...TYPOGRAPHY.heading3, color: COLORS.textPrimary, marginBottom: SPACING.sm },
+  emptySubtitle: { ...TYPOGRAPHY.body, color: COLORS.textMuted, textAlign: 'center', lineHeight: 22 },
 });

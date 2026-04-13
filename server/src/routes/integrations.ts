@@ -14,6 +14,8 @@ export async function integrationRoutes(app: FastifyInstance) {
     authedApp.post('/pco/connect', pcoController.initiateConnect);
     authedApp.delete('/pco/disconnect', pcoController.disconnect);
     authedApp.post('/pco/sync/people', pcoController.syncPeopleHandler);
+    authedApp.get('/pco/people', pcoController.getPeopleHandler);
     authedApp.post('/pco/sync/services', pcoController.syncServicesHandler);
+    authedApp.get('/pco/plans', pcoController.getPlansHandler);
   });
 }

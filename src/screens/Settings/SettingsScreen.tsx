@@ -13,7 +13,7 @@ export function SettingsScreen() {
   const { tierLabel, subscription, canUseFeature } = useSubscriptionStore();
   const isEnterprise = subscription?.tier === 'ENTERPRISE';
   const isOrgAdmin = user?.role === 'owner' || user?.role === 'admin';
-  const hasPcoAddon = canUseFeature('planningCenter');
+  const hasPcoAddon = isOrgAdmin; // Visible to all org owners/admins; connection optional
   const navigation = useNavigation<any>();
 
   const handleSchedulePress = () => {

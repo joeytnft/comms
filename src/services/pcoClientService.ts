@@ -51,10 +51,20 @@ export const pcoClientService = {
     return apiClient.post<{ synced: number; people: PcoPerson[] }>('/integrations/pco/sync/people', {});
   },
 
+  async getPeople(): Promise<PcoPerson[]> {
+    const { people } = await apiClient.get<{ people: PcoPerson[] }>('/integrations/pco/people');
+    return people;
+  },
+
   async syncServices(): Promise<{ serviceTypes: PcoServiceType[]; plans: PcoServicePlan[] }> {
     return apiClient.post<{ serviceTypes: PcoServiceType[]; plans: PcoServicePlan[] }>(
       '/integrations/pco/sync/services',
       {},
     );
+  },
+
+  async getPlans(): Promise<PcoServicePlan[]> {
+    const { plans } = await apiClient.get<{ plans: PcoServicePlan[] }>('/integrations/pco/plans');
+    return plans;
   },
 };

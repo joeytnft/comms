@@ -148,12 +148,51 @@ export async function disconnect(request: FastifyRequest, reply: FastifyReply) {
 export async function syncPeopleHandler(request: FastifyRequest, reply: FastifyReply) {
   const people = await syncPeople(request.organizationId);
 
+  // Upsert all people into pco_people
+  await Promise.all(
+    people.map((p) =>
+      prisma.pcoPerson.upsert({
+        where: { organizationId_pcoId: { organizationId: request.organizationId, pcoId: p.id } },
+        create: {
+          organizationId: request.organizationId,
+          pcoId: p.id,
+          name: p.name,
+          firstName: p.firstName,
+          lastName: p.lastName,
+          email: p.email ?? null,
+          phone: p.phone ?? null,
+          avatarUrl: p.avatarUrl ?? null,
+          status: p.status,
+        },
+        update: {
+          name: p.name,
+          firstName: p.firstName,
+          lastName: p.lastName,
+          email: p.email ?? null,
+          phone: p.phone ?? null,
+          avatarUrl: p.avatarUrl ?? null,
+          status: p.status,
+        },
+      }),
+    ),
+  );
+
   await prisma.pcoConnection.update({
     where: { organizationId: request.organizationId },
     data: { lastSyncAt: new Date() },
   });
 
   reply.send({ synced: people.length, people });
+}
+
+// ─── Get Synced People ────────────────────────────────────────────────────────
+
+export async function getPeopleHandler(request: FastifyRequest, reply: FastifyReply) {
+  const people = await prisma.pcoPerson.findMany({
+    where: { organizationId: request.organizationId, status: 'active' },
+    orderBy: { lastName: 'asc' },
+  });
+  reply.send({ people });
 }
 
 // ─── Sync Services ────────────────────────────────────────────────────────────
@@ -163,9 +202,35 @@ export async function syncServicesHandler(request: FastifyRequest, reply: Fastif
 
   const allPlans = [];
   for (const st of serviceTypes) {
-    const plans = await syncUpcomingPlans(request.organizationId, st.id, st.name, 10);
+    const plans = await syncUpcomingPlans(request.organizationId, st.id, st.name, 20);
     allPlans.push(...plans);
   }
+
+  // Upsert all plans into pco_plans
+  await Promise.all(
+    allPlans.map((p) =>
+      prisma.pcoPlan.upsert({
+        where: { organizationId_pcoId: { organizationId: request.organizationId, pcoId: p.id } },
+        create: {
+          organizationId: request.organizationId,
+          pcoId: p.id,
+          serviceTypeId: p.serviceTypeId,
+          serviceTypeName: p.serviceTypeName,
+          title: p.title ?? null,
+          seriesTitle: p.seriesTitle ?? null,
+          sortDate: p.sortDate ? new Date(p.sortDate) : null,
+          totalLength: p.totalLength,
+        },
+        update: {
+          serviceTypeName: p.serviceTypeName,
+          title: p.title ?? null,
+          seriesTitle: p.seriesTitle ?? null,
+          sortDate: p.sortDate ? new Date(p.sortDate) : null,
+          totalLength: p.totalLength,
+        },
+      }),
+    ),
+  );
 
   await prisma.pcoConnection.update({
     where: { organizationId: request.organizationId },
@@ -173,4 +238,17 @@ export async function syncServicesHandler(request: FastifyRequest, reply: Fastif
   });
 
   reply.send({ serviceTypes, plans: allPlans });
+}
+
+// ─── Get Synced Plans ─────────────────────────────────────────────────────────
+
+export async function getPlansHandler(request: FastifyRequest, reply: FastifyReply) {
+  const plans = await prisma.pcoPlan.findMany({
+    where: {
+      organizationId: request.organizationId,
+      sortDate: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }, // from 1 week ago
+    },
+    orderBy: { sortDate: 'asc' },
+  });
+  reply.send({ plans });
 }

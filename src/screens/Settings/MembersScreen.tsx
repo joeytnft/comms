@@ -3,6 +3,7 @@ import {
   View,
   Text,
   FlatList,
+  SectionList,
   TouchableOpacity,
   StyleSheet,
   Modal,
@@ -15,12 +16,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useMembersStore } from '@/store/useMembersStore';
 import { useAuthStore } from '@/store/useAuthStore';
+import { usePcoStore } from '@/store/usePcoStore';
 import { OrgMember } from '@/types/user';
+import { PcoPerson } from '@/services/pcoClientService';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 
 export function MembersScreen() {
   const { members, isLoading, error, fetchMembers, updateMember } = useMembersStore();
   const { user } = useAuthStore();
+  const { status: pcoStatus, people: pcoPeople, fetchPeople } = usePcoStore();
   const navigation = useNavigation();
 
   const [editTarget, setEditTarget] = useState<OrgMember | null>(null);
@@ -32,7 +36,8 @@ export function MembersScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchMembers();
-    }, []),
+      if (pcoStatus?.connected) fetchPeople();
+    }, [pcoStatus?.connected]),
   );
 
   const openEdit = (member: OrgMember) => {
@@ -127,16 +132,55 @@ export function MembersScreen() {
         </View>
       )}
 
-      <FlatList
-        data={members}
-        renderItem={renderMember}
-        keyExtractor={(item) => item.id}
+      <SectionList
+        sections={[
+          {
+            key: 'app',
+            title: `App Members (${members.length})`,
+            data: members,
+            type: 'member' as const,
+          },
+          ...(pcoStatus?.connected && pcoPeople.length > 0
+            ? [{
+                key: 'pco',
+                title: `PCO Directory (${pcoPeople.length})`,
+                data: pcoPeople as unknown as OrgMember[],
+                type: 'pco' as const,
+              }]
+            : []),
+        ]}
+        keyExtractor={(item, index) => (item as OrgMember).id ?? String(index)}
+        renderSectionHeader={({ section }) => (
+          <Text style={styles.sectionHeader}>{section.title}</Text>
+        )}
+        renderItem={({ item, section }) => {
+          if ((section as { type: string }).type === 'pco') {
+            const p = item as unknown as PcoPerson;
+            return (
+              <View style={styles.memberCard}>
+                <View style={[styles.memberAvatar, styles.pcoAvatar]}>
+                  <Text style={styles.avatarText}>{p.name.charAt(0).toUpperCase()}</Text>
+                </View>
+                <View style={styles.memberInfo}>
+                  <Text style={styles.memberName}>{p.name}</Text>
+                  {p.email && <Text style={styles.memberEmail}>{p.email}</Text>}
+                  {p.phone && <Text style={styles.memberEmail}>{p.phone}</Text>}
+                </View>
+                <View style={styles.pcoBadge}>
+                  <Text style={styles.pcoBadgeText}>PCO</Text>
+                </View>
+              </View>
+            );
+          }
+          return renderMember({ item: item as OrgMember });
+        }}
         contentContainerStyle={styles.list}
         refreshControl={
-          <RefreshControl refreshing={isLoading} onRefresh={fetchMembers} tintColor={COLORS.accent} />
-        }
-        ListHeaderComponent={
-          <Text style={styles.countLabel}>{members.length} member{members.length !== 1 ? 's' : ''}</Text>
+          <RefreshControl
+            refreshing={isLoading}
+            onRefresh={() => { fetchMembers(); if (pcoStatus?.connected) fetchPeople(); }}
+            tintColor={COLORS.accent}
+          />
         }
         ListEmptyComponent={
           !isLoading ? (
@@ -279,6 +323,24 @@ const styles = StyleSheet.create({
   chevron: { ...TYPOGRAPHY.body, color: COLORS.textMuted },
   emptyContainer: { alignItems: 'center', paddingTop: SPACING.xxl },
   emptyText: { ...TYPOGRAPHY.body, color: COLORS.textMuted },
+  sectionHeader: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.xs,
+    backgroundColor: COLORS.background,
+  },
+  pcoAvatar: { backgroundColor: '#e8410e' },
+  pcoBadge: {
+    backgroundColor: '#e8410e22',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 3,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  pcoBadgeText: { ...TYPOGRAPHY.caption, color: '#e8410e', fontWeight: '700' },
   // Modal
   modalContainer: { flex: 1, backgroundColor: COLORS.background },
   modalHeader: {
