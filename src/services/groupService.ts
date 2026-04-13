@@ -19,8 +19,9 @@ interface MemberResponse {
 }
 
 export const groupService = {
-  async listGroups(): Promise<GroupListResponse> {
-    return apiClient.get<GroupListResponse>(ENDPOINTS.GROUPS.LIST);
+  async listGroups(campusId?: string | null): Promise<GroupListResponse> {
+    const params = campusId ? { campusId } : undefined;
+    return apiClient.get<GroupListResponse>(ENDPOINTS.GROUPS.LIST, params);
   },
 
   async createGroup(data: CreateGroupData): Promise<GroupDetailResponse> {

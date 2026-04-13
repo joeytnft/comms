@@ -16,11 +16,12 @@ export const alertService = {
     return apiClient.post<AlertResponse>(ENDPOINTS.ALERTS.TRIGGER, data);
   },
 
-  async listAlerts(params?: { cursor?: string; limit?: number; active?: boolean }): Promise<AlertListResponse> {
+  async listAlerts(params?: { cursor?: string; limit?: number; active?: boolean; campusId?: string | null }): Promise<AlertListResponse> {
     const query = new URLSearchParams();
     if (params?.cursor) query.set('cursor', params.cursor);
     if (params?.limit) query.set('limit', String(params.limit));
     if (params?.active !== undefined) query.set('active', String(params.active));
+    if (params?.campusId) query.set('campusId', params.campusId);
     const qs = query.toString();
     return apiClient.get<AlertListResponse>(`${ENDPOINTS.ALERTS.LIST}${qs ? `?${qs}` : ''}`);
   },

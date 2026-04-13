@@ -6,6 +6,8 @@ export interface User {
   avatarUrl?: string;
   publicKey: string;
   organizationId: string;
+  campusId?: string | null;
+  role?: OrganizationRole;
   createdAt: string;
   lastSeenAt?: string;
 }

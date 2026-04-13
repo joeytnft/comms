@@ -65,9 +65,13 @@ export async function listAlerts(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const { userId, organizationId, campusId } = request;
-  const query = request.query as { cursor?: string; limit?: string; active?: string };
+  const { userId, organizationId, campusId: jwtCampusId } = request;
+  const query = request.query as { cursor?: string; limit?: string; active?: string; campusId?: string };
   const limit = Math.min(parseInt(query.limit || '20', 10), 50);
+
+  // Campus-assigned users are scoped to their campus via JWT.
+  // Org-level users can pass ?campusId= to view a specific campus.
+  const campusId = jwtCampusId ?? (query.campusId || null);
 
   // Get the groups the user is a member of (with alerts enabled)
   const userGroupIds = await alertService.getUserVisibleGroupIds(userId, organizationId);

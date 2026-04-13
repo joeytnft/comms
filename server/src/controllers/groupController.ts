@@ -96,14 +96,19 @@ export async function listGroups(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
+  const query = request.query as { campusId?: string };
+  // Campus-assigned users are always scoped to their campus.
+  // Org-level users can pass ?campusId= to view a specific campus's groups.
+  const effectiveCampusId = request.campusId ?? (query.campusId || null);
+
   let groups = await hierarchyService.getGroupsForUser(
     request.userId,
     request.organizationId,
   );
 
-  // Campus-scoped users only see their campus groups
-  if (request.campusId) {
-    groups = groups.filter((g) => !g.campusId || g.campusId === request.campusId);
+  // Filter groups by campus if a campus scope is active
+  if (effectiveCampusId) {
+    groups = groups.filter((g) => !g.campusId || g.campusId === effectiveCampusId);
   }
 
   const formatted = groups.map((g) => ({

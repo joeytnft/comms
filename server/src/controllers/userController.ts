@@ -20,6 +20,7 @@ const USER_SELECT = {
   avatarUrl: true,
   publicKey: true,
   organizationId: true,
+  campusId: true,
   createdAt: true,
   lastSeenAt: true,
 } as const;
@@ -37,10 +38,12 @@ export async function getMe(request: FastifyRequest, reply: FastifyReply) {
   // Include the org invite code so members can share it from Settings
   const org = await prisma.organization.findUnique({
     where: { id: request.organizationId },
-    select: { id: true, name: true, inviteCode: true },
+    select: { id: true, name: true, inviteCode: true, createdBy: true },
   });
 
-  reply.send({ user, organization: org });
+  const role = org?.createdBy === user.id ? 'owner' : 'member';
+
+  reply.send({ user: { ...user, role }, organization: org ? { id: org.id, name: org.name, inviteCode: org.inviteCode } : null });
 }
 
 export async function updateMe(

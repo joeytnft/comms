@@ -5,6 +5,10 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useLocationStore } from '@/store/useLocationStore';
 import { useAlertStore } from '@/store/useAlertStore';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useCampusViewStore } from '@/store/useCampusViewStore';
+import { useCampusStore } from '@/store/useCampusStore';
+import { useSubscriptionStore } from '@/store/useSubscriptionStore';
+import { CampusSwitcher } from '@/components/common/CampusSwitcher';
 import { TeamMemberLocation, Geofence } from '@/types';
 import { TeamMapView } from '@/components/map/TeamMapView';
 import { geofenceService } from '@/services/geofenceService';
@@ -44,6 +48,9 @@ export function TeamMapScreen() {
     useLocationStore();
   const { activeAlerts, fetchAlerts } = useAlertStore();
   const { user } = useAuthStore();
+  const { activeCampusId } = useCampusViewStore();
+  const { fetchCampuses } = useCampusStore();
+  const { subscription } = useSubscriptionStore();
   const refreshInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const [geofence, setGeofence] = useState<Geofence | null>(null);
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
@@ -55,7 +62,8 @@ export function TeamMapScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      fetchTeamLocations();
+      if (subscription?.tier === 'ENTERPRISE') fetchCampuses();
+      fetchTeamLocations(activeCampusId);
       fetchAlerts({ active: true });
 
       // Load geofence and start background monitoring
@@ -65,7 +73,7 @@ export function TeamMapScreen() {
       });
 
       refreshInterval.current = setInterval(() => {
-        fetchTeamLocations();
+        fetchTeamLocations(activeCampusId);
       }, 5_000);
 
       return () => {
@@ -87,7 +95,9 @@ export function TeamMapScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>Team Map</Text>
-        <TouchableOpacity
+        <View style={styles.headerRight}>
+          <CampusSwitcher />
+          <TouchableOpacity
           style={[styles.sharingToggle, isSharing && styles.sharingActive]}
           onPress={() => setSharing(!isSharing)}
         >
@@ -95,6 +105,7 @@ export function TeamMapScreen() {
             {isSharing ? 'Sharing ON' : 'Sharing OFF'}
           </Text>
         </TouchableOpacity>
+        </View>
       </View>
 
       <TeamMapView locations={mapLocations} geofence={geofence} activeAlerts={activeAlerts} style={styles.map} />
@@ -154,6 +165,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
   },
   title: { ...TYPOGRAPHY.heading1, color: COLORS.textPrimary },
   sharingToggle: {

@@ -4,8 +4,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useGroupStore } from '@/store/useGroupStore';
+import { useCampusViewStore } from '@/store/useCampusViewStore';
+import { useCampusStore } from '@/store/useCampusStore';
+import { useSubscriptionStore } from '@/store/useSubscriptionStore';
 import { GroupCard } from '@/components/groups/GroupCard';
 import { LoadingOverlay } from '@/components/common';
+import { CampusSwitcher } from '@/components/common/CampusSwitcher';
 import { Group } from '@/types';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '@/config/theme';
 import { GroupStackParamList } from '@/navigation/GroupStackNavigator';
@@ -16,14 +20,18 @@ type Props = {
 
 export function GroupListScreen({ navigation }: Props) {
   const { groups, isLoading, error, fetchGroups, joinByInvite } = useGroupStore();
+  const { activeCampusId } = useCampusViewStore();
+  const { fetchCampuses } = useCampusStore();
+  const { subscription } = useSubscriptionStore();
   const [showJoinForm, setShowJoinForm] = useState(false);
   const [inviteCode, setInviteCode] = useState('');
   const [isJoining, setIsJoining] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
-      fetchGroups();
-    }, []),
+      if (subscription?.tier === 'ENTERPRISE') fetchCampuses();
+      fetchGroups(activeCampusId);
+    }, [activeCampusId]),
   );
 
   const handleGroupPress = (group: Group) => {
@@ -60,6 +68,7 @@ export function GroupListScreen({ navigation }: Props) {
       <View style={styles.header}>
         <Text style={styles.title}>Channels</Text>
         <View style={styles.headerActions}>
+          <CampusSwitcher />
           <TouchableOpacity
             style={styles.joinButton}
             onPress={() => setShowJoinForm(!showJoinForm)}

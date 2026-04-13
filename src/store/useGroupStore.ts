@@ -9,7 +9,7 @@ interface GroupState {
   isLoading: boolean;
   error: string | null;
 
-  fetchGroups: () => Promise<void>;
+  fetchGroups: (campusId?: string | null) => Promise<void>;
   fetchGroup: (id: string) => Promise<void>;
   fetchHierarchy: () => Promise<void>;
   createGroup: (data: CreateGroupData) => Promise<Group>;
@@ -32,10 +32,10 @@ export const useGroupStore = create<GroupState>((set, _get) => ({
   isLoading: false,
   error: null,
 
-  fetchGroups: async () => {
+  fetchGroups: async (campusId?: string | null) => {
     set({ isLoading: true, error: null });
     try {
-      const { groups } = await groupService.listGroups();
+      const { groups } = await groupService.listGroups(campusId);
       set({ groups, isLoading: false });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to load groups';
