@@ -11,6 +11,7 @@ export interface PlanLimits {
     incidents: boolean;
     multiCampus: boolean;
     scheduling: boolean;
+    planningCenter: boolean; // add-on — overridden per-org by pcoIntegrationEnabled
   };
 }
 
@@ -33,6 +34,7 @@ export const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
       incidents: true,
       multiCampus: false,
       scheduling: false,
+      planningCenter: false,
     },
   },
   BASIC: {
@@ -46,6 +48,7 @@ export const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
       incidents: true,
       multiCampus: false,
       scheduling: true,
+      planningCenter: false,
     },
   },
   STANDARD: {
@@ -59,6 +62,7 @@ export const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
       incidents: true,
       multiCampus: false,
       scheduling: true,
+      planningCenter: false,
     },
   },
   ENTERPRISE: {
@@ -72,6 +76,7 @@ export const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
       incidents: true,
       multiCampus: true,
       scheduling: true,
+      planningCenter: false,
     },
   },
 };

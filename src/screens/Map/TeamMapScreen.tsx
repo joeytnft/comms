@@ -63,27 +63,36 @@ export function TeamMapScreen() {
     initSharing();
   }, []);
 
+  // One-time setup on focus: geofence, campuses, alerts
   useFocusEffect(
     useCallback(() => {
       if (subscription?.tier === 'ENTERPRISE') fetchCampuses();
-      fetchTeamLocations(activeCampusId);
       fetchAlerts({ active: true });
 
-      // Load geofence and start background monitoring
       geofenceService.fetchGeofence().then((gf) => {
         setGeofence(gf);
         if (gf) geofenceService.startGeofencing(gf).catch(() => null);
       });
-
-      refreshInterval.current = setInterval(() => {
-        fetchTeamLocations(activeCampusId);
-      }, 5_000);
 
       return () => {
         if (refreshInterval.current) clearInterval(refreshInterval.current);
       };
     }, []),
   );
+
+  // Re-fetch and restart poll whenever the selected campus changes (or on first focus)
+  useEffect(() => {
+    fetchTeamLocations(activeCampusId);
+
+    if (refreshInterval.current) clearInterval(refreshInterval.current);
+    refreshInterval.current = setInterval(() => {
+      fetchTeamLocations(activeCampusId);
+    }, 5_000);
+
+    return () => {
+      if (refreshInterval.current) clearInterval(refreshInterval.current);
+    };
+  }, [activeCampusId]);
 
   // Filter current user out of map markers only — native showsUserLocation draws their blue dot.
   // The member list shows everyone including self.

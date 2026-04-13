@@ -26,6 +26,11 @@ const envSchema = z.object({
   // CORS (comma-separated origins for production)
   CORS_ORIGINS: z.string().optional(),
 
+  // Planning Center OAuth
+  PCO_CLIENT_ID: z.string().optional(),
+  PCO_CLIENT_SECRET: z.string().optional(),
+  PCO_REDIRECT_URI: z.string().url().optional().default('https://gathersafeapp.com/integrations/pco/callback'),
+
   // Server
   PORT: z.coerce.number().default(3001),
   HOST: z.string().default('0.0.0.0'),

@@ -29,6 +29,8 @@ model Organization {
   trialEndsAt          DateTime?
   rcCustomerId         String?            @unique // RevenueCat customer ID
 
+  pcoIntegrationEnabled Boolean @default(false)
+
   users            User[]
   groups           Group[]
   alerts           Alert[]
@@ -39,6 +41,7 @@ model Organization {
   serviceTemplates ServiceTemplate[]
   posts            Post[]
   campuses         Campus[]
+  pcoConnection    PcoConnection?
 
   @@map("organizations")
 }
@@ -546,6 +549,28 @@ enum SwapStatus {
 // ============================================================================
 // GEOFENCING
 // ============================================================================
+
+// ============================================================================
+// PLANNING CENTER INTEGRATION
+// ============================================================================
+
+model PcoConnection {
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  accessToken    String
+  refreshToken   String
+  tokenExpiresAt DateTime
+  scope          String   @default("people services")
+  pcoOrgId       String?
+  pcoOrgName     String?
+  connectedById  String
+  connectedAt    DateTime @default(now())
+  lastSyncAt     DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("pco_connections")
+}
 
 model Geofence {
   id             String   @id @default(cuid())

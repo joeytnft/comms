@@ -13,6 +13,7 @@ export function SettingsScreen() {
   const { tierLabel, subscription, canUseFeature } = useSubscriptionStore();
   const isEnterprise = subscription?.tier === 'ENTERPRISE';
   const isOrgAdmin = user?.role === 'owner' || user?.role === 'admin';
+  const hasPcoAddon = canUseFeature('planningCenter');
   const navigation = useNavigation<any>();
 
   const handleSchedulePress = () => {
@@ -158,6 +159,15 @@ export function SettingsScreen() {
               onPress={() => navigation.navigate('Members')}
             >
               <Text style={styles.settingLabel}>Manage Members</Text>
+              <Text style={styles.chevron}>{'>'}</Text>
+            </Pressable>
+          )}
+          {hasPcoAddon && (
+            <Pressable
+              style={styles.settingRow}
+              onPress={() => navigation.navigate('PlanningCenter')}
+            >
+              <Text style={styles.settingLabel}>Planning Center</Text>
               <Text style={styles.chevron}>{'>'}</Text>
             </Pressable>
           )}

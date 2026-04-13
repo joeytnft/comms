@@ -17,10 +17,10 @@ export function CampusSwitcher() {
   const { activeCampusId, activeCampusName, setActiveCampus } = useCampusViewStore();
   const [open, setOpen] = useState(false);
 
-  // Only visible to org owners with no campus assignment on Enterprise
+  // Visible to org-level users (owner or admin) with no campus assignment on Enterprise
   const isEnterprise = subscription?.tier === 'ENTERPRISE';
-  const isOrgOwner = user?.role === 'owner' && !user?.campusId;
-  if (!isEnterprise || !isOrgOwner || campuses.length === 0) return null;
+  const isOrgLevel = (user?.role === 'owner' || user?.role === 'admin') && !user?.campusId;
+  if (!isEnterprise || !isOrgLevel || campuses.length === 0) return null;
 
   const label = activeCampusName ?? 'All Campuses';
 
