@@ -9,8 +9,7 @@ import { useHardwareButton } from '@/hooks/useHardwareButton';
 import { backgroundService } from '@/services/backgroundService';
 import { bluetoothPTTService } from '@/services/bluetoothPTTService';
 import { apiClient } from '@/api/client';
-import { File as FSFile } from 'expo-file-system';
-import { fromByteArray } from 'base64-js';
+import { getInfoAsync, readAsStringAsync } from 'expo-file-system';
 
 interface PTTContextType {
   config: PTTConfig;
@@ -245,19 +244,19 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         // Upload native recording and notify server
         (async () => {
           try {
-            const file = new FSFile(uri);
-            // stop() resolves before the OS finishes writing — wait up to 3s
-            const deadline = Date.now() + 3000;
-            while (!file.exists && Date.now() < deadline) {
-              await new Promise((r) => setTimeout(r, 100));
+            // stop() resolves before the OS finishes writing — poll until file appears (up to 5s)
+            const deadline = Date.now() + 5000;
+            let fileExists = false;
+            while (Date.now() < deadline) {
+              const info = await getInfoAsync(uri);
+              if (info.exists) { fileExists = true; break; }
+              await new Promise((r) => setTimeout(r, 150));
             }
-            if (!file.exists) {
+            if (!fileExists) {
               console.error('[PTT] Recording file never appeared:', uri);
               return;
             }
-            const buffer = await file.arrayBuffer();
-            const bytes = new Uint8Array(buffer);
-            const base64 = fromByteArray(bytes);
+            const base64 = await readAsStringAsync(uri, { encoding: 'base64' });
             const { url } = await apiClient.post<{ url: string }>('/upload', { data: base64, mimeType: 'audio/m4a' });
             socket.emit('ptt:native_log', { groupId: currentGroupId, audioUrl: url, durationMs });
           } catch (err) {
