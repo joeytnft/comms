@@ -9,7 +9,7 @@ import { useHardwareButton } from '@/hooks/useHardwareButton';
 import { backgroundService } from '@/services/backgroundService';
 import { bluetoothPTTService } from '@/services/bluetoothPTTService';
 import { apiClient } from '@/api/client';
-import { File as FSFile } from 'expo-file-system/next';
+import { readAsStringAsync, EncodingType } from 'expo-file-system/legacy';
 
 interface PTTContextType {
   config: PTTConfig;
@@ -249,7 +249,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
             let base64: string | null = null;
             while (Date.now() < deadline) {
               try {
-                base64 = await new FSFile(uri).base64();
+                base64 = await readAsStringAsync(uri, { encoding: EncodingType.Base64 });
                 break;
               } catch {
                 await new Promise((r) => setTimeout(r, 150));
