@@ -28,8 +28,8 @@ export function Hero() {
 
         {/* Subtext */}
         <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-400">
-          Encrypted PTT voice, panic alerts, real-time location, and Planning Center integration —
-          all in one app designed from the ground up for how church security teams actually operate.
+          Encrypted PTT voice, panic alerts, real-time location, and Planning Center integration.
+          One app designed from the ground up for how church security teams actually operate.
         </p>
 
         {/* Stats */}
@@ -48,10 +48,10 @@ export function Hero() {
 
         {/* CTAs */}
         <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-          <a href="#pricing" className="btn-primary">
+          <a href="/pricing" className="btn-primary">
             Start 14-Day Free Trial
           </a>
-          <a href="#why" className="btn-secondary flex items-center gap-2">
+          <a href="/why" className="btn-secondary flex items-center gap-2">
             See How We&apos;re Different
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />

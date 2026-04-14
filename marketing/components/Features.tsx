@@ -4,7 +4,7 @@ const FEATURES = [
     icon: 'lock',
     title: 'End-to-End Encrypted Messaging',
     description:
-      'Built on the Signal Protocol — the gold standard for secure messaging. Every message is encrypted on your device before transmission. Your texts, images, and incident reports are unreadable to anyone except your team.',
+      'Built on the Signal Protocol, the gold standard for secure messaging. Every message is encrypted on your device before transmission. Your texts, images, and incident reports are unreadable to anyone except your team.',
   },
   {
     color: 'green',
@@ -16,28 +16,28 @@ const FEATURES = [
   {
     color: 'blue',
     icon: 'alert',
-    title: 'Panic Alerts & Alert Levels',
+    title: 'Panic Alerts and Alert Levels',
     description:
-      'One tap broadcasts an emergency alert — with your GPS coordinates — to every team member simultaneously, even if the app is closed. Three alert levels (Attention, Warning, Emergency) with acknowledgment tracking so leadership knows who responded.',
+      'One tap broadcasts an emergency alert with your GPS coordinates to every team member simultaneously, even if the app is closed. Three alert levels (Attention, Warning, Emergency) with acknowledgment tracking so leadership knows who responded.',
   },
   {
     color: 'green',
     icon: 'map',
     title: 'Real-Time Team Location',
     description:
-      'Live map shows every team member\'s position during services and events. Opt-in location sharing with geofence check-in that prompts volunteers automatically when they arrive at the building — no more "is anyone in the parking lot yet?" messages.',
+      'Live map shows every team member\'s position during services and events. Opt-in location sharing with geofence check-in prompts volunteers automatically when they arrive at the building. No more "is anyone in the parking lot yet?" messages.',
   },
   {
     color: 'blue',
     icon: 'hierarchy',
     title: 'Hierarchical Group Structure',
     description:
-      'Create a lead security group that receives all messages from all sub-teams. Parking, interior, children\'s wing, medical — each team operates privately while your security director sees and speaks to every team simultaneously from one screen.',
+      'Create a lead security group that receives all messages from all sub-teams. Parking, interior, children\'s wing, and medical each operate privately while your security director sees and speaks to every team simultaneously from one screen.',
   },
   {
     color: 'green',
     icon: 'report',
-    title: 'Incident Logging & Response Plans',
+    title: 'Incident Logging and Response Plans',
     description:
       'Encrypted incident reports with photos, GPS coordinates, and timestamps create a permanent, auditable record. Pre-configure response plans and broadcast them to your entire team with a single tap when a situation escalates.',
   },
@@ -46,7 +46,7 @@ const FEATURES = [
     icon: 'pco',
     title: 'Planning Center Integration',
     description:
-      'Available as an $8/mo add-on. Connect your Planning Center account and your service roster syncs automatically. Volunteer schedules, team assignments, and upcoming service plans flow directly into GatherSafe — no spreadsheets, no double-entry, no day-of scramble.',
+      'Available as an $8/mo add-on. Connect your Planning Center account and your service roster syncs automatically. Volunteer schedules, team assignments, and upcoming service plans flow directly into GatherSafe. No spreadsheets, no double-entry, no day-of scramble.',
     addon: true,
   },
   {
@@ -54,7 +54,7 @@ const FEATURES = [
     icon: 'bluetooth',
     title: 'Bluetooth PTT Accessories',
     description:
-      'Pair any BLE push-to-talk button — Retevis, Baofeng BT-PTT, and similar HID accessories. Clip it to your belt or earpiece and operate completely hands-free, just like a two-way radio — without the expensive hardware or monthly licensing fees.',
+      'Pair any BLE push-to-talk button including Retevis, Baofeng BT-PTT, and similar HID accessories. Clip it to your belt or earpiece and operate completely hands-free, just like a two-way radio, without the expensive hardware or monthly licensing fees.',
   },
 ] as const;
 
@@ -65,7 +65,7 @@ export function Features() {
         <div className="mx-auto max-w-2xl text-center">
           <p className="section-label">Full Feature Set</p>
           <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
-            Everything your security team needs — nothing they don&apos;t
+            Everything your security team needs, nothing they don&apos;t
           </h2>
           <p className="mt-4 text-slate-400">
             Every feature was chosen because real church security teams asked for it.

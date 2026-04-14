@@ -1,22 +1,24 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { Nav } from '@/components/Nav';
+import { Footer } from '@/components/Footer';
 
 export const metadata: Metadata = {
-  title: 'GatherSafe — Secure Communication for Church Security Teams',
+  title: 'GatherSafe: Secure Communication for Church Security Teams',
   description:
-    'Encrypted messaging, push-to-talk voice, panic alerts, and real-time location sharing — built for faith-based security teams.',
+    'Encrypted messaging, push-to-talk voice, panic alerts, and real-time location sharing built for faith-based security teams.',
   metadataBase: new URL('https://gathersafeapp.com'),
   openGraph: {
-    title: 'GatherSafe — Secure Communication for Church Security Teams',
+    title: 'GatherSafe: Secure Communication for Church Security Teams',
     description:
-      'Encrypted messaging, push-to-talk voice, panic alerts, and real-time location sharing — built for faith-based security teams.',
+      'Encrypted messaging, push-to-talk voice, panic alerts, and real-time location sharing built for faith-based security teams.',
     url: 'https://gathersafeapp.com',
     siteName: 'GatherSafe',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'GatherSafe — Secure Communication for Church Security Teams',
+    title: 'GatherSafe: Secure Communication for Church Security Teams',
     description: 'PTT voice, encrypted messaging, panic alerts, and location sharing for church security teams.',
   },
   icons: {
@@ -27,7 +29,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-navy-950 text-white antialiased">{children}</body>
+      <body className="bg-navy-950 text-white antialiased">
+        <Nav />
+        {children}
+        <Footer />
+      </body>
     </html>
   );
 }

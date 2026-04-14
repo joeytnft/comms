@@ -19,12 +19,12 @@ export function CTA() {
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-lg text-slate-400">
             Join security teams across the country who chose purpose-built tools over generic
-            apps. Start your free trial today — no credit card, no commitment.
+            apps. Start your free trial today with no credit card and no commitment.
           </p>
 
           <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
             <a
-              href="#pricing"
+              href="/pricing"
               className="btn-primary"
             >
               Start 14-Day Free Trial

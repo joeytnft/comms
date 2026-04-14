@@ -4,7 +4,7 @@ const STEPS = [
     color: 'blue',
     title: 'Create your organization',
     description:
-      'Sign up, name your church organization, and generate an invite code. Share the code with your security team — they download the app and join in seconds. No IT setup, no configuration files.',
+      'Sign up, name your church organization, and generate an invite code. Share the code with your security team. They download the app and join in seconds. No IT setup, no configuration files.',
   },
   {
     number: '02',
@@ -18,7 +18,7 @@ const STEPS = [
     color: 'blue',
     title: 'Communicate securely, every service',
     description:
-      'Your lead team coordinates across all sub-teams from a single screen. Sub-teams stay focused on their area. Everyone has PTT, encrypted messaging, location, and a panic button — all from one app.',
+      'Your lead team coordinates across all sub-teams from a single screen. Sub-teams stay focused on their area. Everyone has PTT, encrypted messaging, location, and a panic button, all in one app.',
   },
 ];
 

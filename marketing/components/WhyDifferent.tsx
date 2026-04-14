@@ -4,28 +4,28 @@ const DIFFERENTIATORS = [
     icon: 'church',
     title: 'Built for Churches, Not Adapted for Them',
     description:
-      'Generic PTT apps like Zello were built for warehouses and construction sites. GatherSafe was designed around the realities of protecting a congregation — pre-service setup, multi-team coordination during a live service, and the chain-of-command structure faith communities actually use.',
+      'Generic PTT apps like Zello were built for warehouses and construction sites. GatherSafe was designed around the realities of protecting a congregation: pre-service setup, multi-team coordination during a live service, and the chain-of-command structure faith communities actually use.',
   },
   {
     color: 'green',
     icon: 'lock',
     title: 'Zero-Knowledge Encryption',
     description:
-      'We use the Signal Protocol — the same standard that protects journalists and activists worldwide. Your messages are encrypted on your device before they ever leave it. Our server routes encrypted blobs and cannot read a single word. No other church security app can say that.',
+      'We use the Signal Protocol, the same standard that protects journalists and activists worldwide. Your messages are encrypted on your device before they ever leave it. Our server routes encrypted blobs and cannot read a single word. No other church security app can say that.',
   },
   {
     color: 'blue',
     icon: 'pco',
     title: 'Planning Center Integration',
     description:
-      'For $8/mo added to any plan, connect your Planning Center account and your service roster syncs automatically. Volunteer schedules, team assignments, and upcoming service plans flow directly into GatherSafe — no spreadsheets, no double-entry, no day-of scramble to figure out who\'s covering which door.',
+      'For $8/mo added to any plan, connect your Planning Center account and your service roster syncs automatically. Volunteer schedules, team assignments, and upcoming service plans flow directly into GatherSafe. No spreadsheets, no double-entry, no day-of scramble to figure out who\'s covering which door.',
   },
   {
     color: 'green',
     icon: 'radio',
-    title: 'Real PTT — Not a Workaround',
+    title: 'Real PTT, Not a Workaround',
     description:
-      'Most apps require you to unlock your phone and tap through menus to talk. GatherSafe runs a persistent background service so PTT works from your lock screen, with Bluetooth PTT accessories, and with physical volume buttons — exactly like a real radio. Apple and Android both supported.',
+      'Most apps require you to unlock your phone and tap through menus to talk. GatherSafe runs a persistent background service so PTT works from your lock screen, with Bluetooth PTT accessories, and with physical volume buttons, exactly like a real radio. Apple and Android both supported.',
   },
   {
     color: 'blue',
@@ -53,7 +53,7 @@ export function WhyDifferent() {
             Not just another PTT app
           </h2>
           <p className="mt-4 text-lg text-slate-400">
-            Every security app claims to be the best. Here&apos;s what actually makes us different — and why it matters for your congregation.
+            Every security app claims to be the best. Here is what makes us different and why it matters for your congregation.
           </p>
         </div>
 
