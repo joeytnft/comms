@@ -63,16 +63,11 @@ export function TeamMapScreen() {
     initSharing();
   }, []);
 
-  // One-time setup on focus: geofence, campuses, alerts
+  // One-time setup on focus: campuses, alerts
   useFocusEffect(
     useCallback(() => {
       if (subscription?.tier === 'ENTERPRISE') fetchCampuses();
       fetchAlerts({ active: true });
-
-      geofenceService.fetchGeofence().then((gf) => {
-        setGeofence(gf);
-        if (gf) geofenceService.startGeofencing(gf).catch(() => null);
-      });
 
       return () => {
         if (refreshInterval.current) clearInterval(refreshInterval.current);
@@ -80,7 +75,7 @@ export function TeamMapScreen() {
     }, []),
   );
 
-  // Re-fetch and restart poll whenever the selected campus changes (or on first focus)
+  // Re-fetch locations and geofence whenever the selected campus changes (or on first focus)
   useEffect(() => {
     fetchTeamLocations(activeCampusId);
 
@@ -88,6 +83,18 @@ export function TeamMapScreen() {
     refreshInterval.current = setInterval(() => {
       fetchTeamLocations(activeCampusId);
     }, 5_000);
+
+    // Fetch geofence for the active campus (no campus = no geofence)
+    if (activeCampusId) {
+      geofenceService.fetchGeofence(activeCampusId).then((gf) => {
+        setGeofence(gf);
+        if (gf) geofenceService.startGeofencing(gf).catch(() => null);
+        else geofenceService.stopGeofencing().catch(() => null);
+      });
+    } else {
+      setGeofence(null);
+      geofenceService.stopGeofencing().catch(() => null);
+    }
 
     return () => {
       if (refreshInterval.current) clearInterval(refreshInterval.current);

@@ -36,7 +36,7 @@ model Organization {
   alerts           Alert[]
   incidents        Incident[]
   billingEvents    BillingEvent[]
-  geofence         Geofence?
+  geofences        Geofence[]
   serviceSchedules ServiceSchedule[]
   serviceTemplates ServiceTemplate[]
   posts            Post[]
@@ -65,6 +65,7 @@ model Campus {
   groups       Group[]
   alerts       Alert[]
   incidents    Incident[]
+  geofence     Geofence?
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -615,7 +616,8 @@ model PcoPlan {
 
 model Geofence {
   id             String   @id @default(cuid())
-  organizationId String   @unique
+  organizationId String
+  campusId       String   @unique
   name           String
   latitude       Float
   longitude      Float
@@ -624,6 +626,8 @@ model Geofence {
   updatedAt      DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id])
+  campus       Campus       @relation(fields: [campusId], references: [id])
 
+  @@index([organizationId])
   @@map("geofences")
 }

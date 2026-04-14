@@ -19,7 +19,6 @@ if (Platform.OS !== 'web') {
     };
 
     if (eventType === Location.GeofencingEventType.Enter) {
-      // Send a local notification prompting the user to log in and enable tracking
       Notifications.scheduleNotificationAsync({
         content: {
           title: 'You\'ve arrived at ' + (region.identifier || 'church'),
@@ -27,17 +26,17 @@ if (Platform.OS !== 'web') {
           sound: true,
           data: { action: 'checkin' },
         },
-        trigger: null, // immediate
+        trigger: null,
       }).catch(() => null);
     }
   });
 }
 
 export const geofenceService = {
-  async fetchGeofence(): Promise<Geofence | null> {
+  async fetchGeofence(campusId: string): Promise<Geofence | null> {
     try {
       const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
-      const res = await fetch(`${ENV.apiUrl}/geofence`, {
+      const res = await fetch(`${ENV.apiUrl}/geofence?campusId=${encodeURIComponent(campusId)}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return null;
@@ -48,7 +47,13 @@ export const geofenceService = {
     }
   },
 
-  async saveGeofence(data: { name: string; latitude: number; longitude: number; radius: number }): Promise<Geofence | null> {
+  async saveGeofence(data: {
+    campusId: string;
+    name: string;
+    latitude: number;
+    longitude: number;
+    radius: number;
+  }): Promise<Geofence | null> {
     try {
       const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
       const res = await fetch(`${ENV.apiUrl}/geofence`, {
@@ -64,10 +69,10 @@ export const geofenceService = {
     }
   },
 
-  async deleteGeofence(): Promise<void> {
+  async deleteGeofence(campusId: string): Promise<void> {
     try {
       const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
-      await fetch(`${ENV.apiUrl}/geofence`, {
+      await fetch(`${ENV.apiUrl}/geofence?campusId=${encodeURIComponent(campusId)}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });

@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCampusStore } from '@/store/useCampusStore';
 import { Campus, OrgMemberWithCampus } from '@/types/campus';
+import { geofenceService } from '@/services/geofenceService';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 
 export function CampusManagementScreen() {
@@ -35,6 +36,14 @@ export function CampusManagementScreen() {
 
   // Assign modal
   const [assignCampus, setAssignCampus] = useState<Campus | null>(null);
+
+  // Geofence modal
+  const [geofenceCampus, setGeofenceCampus] = useState<Campus | null>(null);
+  const [gfName, setGfName] = useState('');
+  const [gfLat, setGfLat] = useState('');
+  const [gfLng, setGfLng] = useState('');
+  const [gfRadius, setGfRadius] = useState('');
+  const [gfSaving, setGfSaving] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -103,6 +112,56 @@ export function CampusManagementScreen() {
     }
   };
 
+  const openGeofenceModal = async (campus: Campus) => {
+    setGeofenceCampus(campus);
+    // Pre-fill if existing geofence
+    const existing = await geofenceService.fetchGeofence(campus.id);
+    if (existing) {
+      setGfName(existing.name);
+      setGfLat(String(existing.latitude));
+      setGfLng(String(existing.longitude));
+      setGfRadius(String(existing.radius));
+    } else {
+      setGfName(campus.name);
+      setGfLat('');
+      setGfLng('');
+      setGfRadius('200');
+    }
+  };
+
+  const handleSaveGeofence = async () => {
+    if (!geofenceCampus) return;
+    const lat = parseFloat(gfLat);
+    const lng = parseFloat(gfLng);
+    const radius = parseFloat(gfRadius);
+    if (isNaN(lat) || isNaN(lng) || isNaN(radius) || radius <= 0) {
+      Alert.alert('Invalid', 'Please enter valid latitude, longitude, and radius (metres).');
+      return;
+    }
+    setGfSaving(true);
+    try {
+      await geofenceService.saveGeofence({ campusId: geofenceCampus.id, name: gfName || geofenceCampus.name, latitude: lat, longitude: lng, radius });
+      setGeofenceCampus(null);
+    } catch {
+      Alert.alert('Error', 'Failed to save geofence.');
+    } finally {
+      setGfSaving(false);
+    }
+  };
+
+  const handleDeleteGeofence = async () => {
+    if (!geofenceCampus) return;
+    Alert.alert('Remove Geofence', `Remove geofence from "${geofenceCampus.name}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove', style: 'destructive', onPress: async () => {
+          await geofenceService.deleteGeofence(geofenceCampus.id);
+          setGeofenceCampus(null);
+        },
+      },
+    ]);
+  };
+
   const handleRemove = (member: OrgMemberWithCampus) => {
     if (!member.campusId) return;
     Alert.alert('Remove from Campus', `Remove ${member.displayName} from their campus?`, [
@@ -167,7 +226,10 @@ export function CampusManagementScreen() {
                 </View>
                 <View style={styles.cardActions}>
                   <TouchableOpacity style={styles.actionBtn} onPress={() => setAssignCampus(campus)}>
-                    <Text style={styles.actionBtnText}>Assign Members</Text>
+                    <Text style={styles.actionBtnText}>Members</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => openGeofenceModal(campus)}>
+                    <Text style={styles.actionBtnText}>Geofence</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.actionBtn} onPress={() => {
                     setEditTarget(campus);
@@ -250,6 +312,37 @@ export function CampusManagementScreen() {
               <Text style={styles.primaryBtnText}>Save Changes</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.ghostBtn} onPress={() => setEditTarget(null)}>
+              <Text style={styles.ghostBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Geofence modal */}
+      <Modal visible={!!geofenceCampus} transparent animationType="slide" onRequestClose={() => setGeofenceCampus(null)}>
+        <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={styles.sheet}>
+            <Text style={styles.sheetTitle}>Geofence — {geofenceCampus?.name}</Text>
+            <Text style={styles.sheetSub}>Set the check-in boundary for this campus. Members get a notification when they arrive.</Text>
+            <TextInput style={styles.input} placeholder="Label (e.g. Main Campus)" placeholderTextColor={COLORS.textMuted}
+              value={gfName} onChangeText={setGfName} maxLength={60} />
+            <TextInput style={styles.input} placeholder="Latitude (e.g. 37.7749)" placeholderTextColor={COLORS.textMuted}
+              value={gfLat} onChangeText={setGfLat} keyboardType="decimal-pad" />
+            <TextInput style={styles.input} placeholder="Longitude (e.g. -122.4194)" placeholderTextColor={COLORS.textMuted}
+              value={gfLng} onChangeText={setGfLng} keyboardType="decimal-pad" />
+            <TextInput style={styles.input} placeholder="Radius in metres (e.g. 200)" placeholderTextColor={COLORS.textMuted}
+              value={gfRadius} onChangeText={setGfRadius} keyboardType="numeric" />
+            <TouchableOpacity
+              style={[styles.primaryBtn, (!gfLat || !gfLng || !gfRadius || gfSaving) && styles.primaryBtnDisabled]}
+              onPress={handleSaveGeofence}
+              disabled={!gfLat || !gfLng || !gfRadius || gfSaving}
+            >
+              <Text style={styles.primaryBtnText}>{gfSaving ? 'Saving...' : 'Save Geofence'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.ghostBtn} onPress={handleDeleteGeofence}>
+              <Text style={[styles.ghostBtnText, { color: COLORS.danger }]}>Remove Geofence</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.ghostBtn} onPress={() => setGeofenceCampus(null)}>
               <Text style={styles.ghostBtnText}>Cancel</Text>
             </TouchableOpacity>
           </View>
