@@ -17,14 +17,14 @@ const testOrg = {
 };
 
 const adminUser = {
-  email: 'ptt-admin@guardiancomm.app',
+  email: 'ptt-admin@gathersafeapp.com',
   password: 'securepassword123',
   displayName: 'PTT Admin',
   organizationCode: 'PTT-TEST-CODE',
 };
 
 const memberUser = {
-  email: 'ptt-member@guardiancomm.app',
+  email: 'ptt-member@gathersafeapp.com',
   password: 'securepassword123',
   displayName: 'PTT Member',
   organizationCode: 'PTT-TEST-CODE',
@@ -158,7 +158,7 @@ describe('GET /ptt/:groupId/token', () => {
       method: 'POST',
       url: '/auth/register',
       payload: {
-        email: 'ptt-other@guardiancomm.app',
+        email: 'ptt-other@gathersafeapp.com',
         password: 'securepassword123',
         displayName: 'Other User',
         organizationCode: 'PTT-OTHER-CODE',
@@ -176,7 +176,7 @@ describe('GET /ptt/:groupId/token', () => {
 
     // Clean up
     await prisma.refreshToken.deleteMany({ where: { userId: otherRes.json().user.id } });
-    await prisma.user.deleteMany({ where: { email: 'ptt-other@guardiancomm.app' } });
+    await prisma.user.deleteMany({ where: { email: 'ptt-other@gathersafeapp.com' } });
     await prisma.organization.deleteMany({ where: { id: otherOrg.id } });
   });
 
@@ -228,7 +228,7 @@ describe('GET /ptt/:groupId/participants', () => {
       method: 'POST',
       url: '/auth/register',
       payload: {
-        email: 'ptt-temp@guardiancomm.app',
+        email: 'ptt-temp@gathersafeapp.com',
         password: 'securepassword123',
         displayName: 'Temp User',
         organizationCode: 'PTT-TEST-CODE',
@@ -251,7 +251,7 @@ describe('GET /ptt/:groupId/participants', () => {
 
     // Clean up
     await prisma.refreshToken.deleteMany({ where: { userId: tempRes.json().user.id } });
-    await prisma.user.deleteMany({ where: { email: 'ptt-temp@guardiancomm.app' } });
+    await prisma.user.deleteMany({ where: { email: 'ptt-temp@gathersafeapp.com' } });
   });
 });
 

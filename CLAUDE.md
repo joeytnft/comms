@@ -1,8 +1,8 @@
-# CLAUDE.md — Guardian Comm: Church Security Communication App
+# CLAUDE.md — GatherSafe: Church Security Communication App
 
 ## Project Overview
 
-**Guardian Comm** is an encrypted, real-time communication app built for church security teams. It runs on iOS and Android, providing encrypted text messaging, push-to-talk (PTT) voice, hierarchical group management, panic alerts, location sharing, and incident logging.
+**GatherSafe** is an encrypted, real-time communication app built for church security teams. It runs on iOS and Android, providing encrypted text messaging, push-to-talk (PTT) voice, hierarchical group management, panic alerts, location sharing, and incident logging.
 
 ## Tech Stack
 
@@ -48,7 +48,7 @@
 ## Directory Structure
 
 ```
-guardian-comm/
+gathersafe/
 ├── CLAUDE.md                    # THIS FILE — master instructions
 ├── README.md                    # Public-facing readme
 ├── package.json                 # Root workspace config
@@ -375,7 +375,7 @@ guardian-comm/
 - **Voice:** LiveKit uses SRTP by default. Additional application-layer encryption can be added via LiveKit's E2EE feature using insertable streams.
 
 ### Push-to-Talk Background Operation
-- **Android:** Use a foreground service with a persistent notification ("Guardian Comm active"). Register a MediaSession to capture hardware button events.
+- **Android:** Use a foreground service with a persistent notification ("GatherSafe active"). Register a MediaSession to capture hardware button events.
 - **iOS:** Register for VoIP push notifications via PushKit. Use CallKit for audio session management. For iOS 16+, investigate the PTT framework. Note: Apple may require justification during app review.
 - **Bluetooth PTT buttons:** Use react-native-ble-plx to discover and bond with HID PTT accessories. Map their key events to the PTT action.
 
@@ -418,7 +418,7 @@ LIVEKIT_URL=ws://localhost:7880
 
 ### Server (.env)
 ```
-DATABASE_URL=postgresql://guardian:password@localhost:5432/guardian_comm
+DATABASE_URL=postgresql://guardian:password@localhost:5432/gathersafe
 REDIS_URL=redis://localhost:6379
 JWT_SECRET=your-jwt-secret-change-in-production
 JWT_REFRESH_SECRET=your-refresh-secret-change-in-production
@@ -469,5 +469,5 @@ eas build --platform ios
 eas build --platform android
 
 # Build server Docker image
-cd server && docker build -t guardian-comm-server .
+cd server && docker build -t gathersafe-server .
 ```

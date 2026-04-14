@@ -1,4 +1,4 @@
-# Guardian Comm — Code Review & Improvement Recommendations
+# GatherSafe — Code Review & Improvement Recommendations
 
 **Date:** 2026-04-06
 **Scope:** Full codebase review (server + mobile app)
@@ -42,7 +42,7 @@ Both HTTP CORS (`origin: true`) and Socket.IO CORS (`origin: '*'`) accept all or
 
 **Fix:** Set `origin` to your actual domain(s). Use environment-based configuration:
 ```typescript
-origin: env.NODE_ENV === 'production' ? ['https://app.guardiancomm.app'] : true
+origin: env.NODE_ENV === 'production' ? ['https://app.gathersafeapp.com'] : true
 ```
 
 ### 4. No Input Sanitization on Socket Events (HIGH)

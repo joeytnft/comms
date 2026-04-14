@@ -16,14 +16,14 @@ const testOrg = {
 };
 
 const adminUser = {
-  email: 'loc-admin@guardiancomm.app',
+  email: 'loc-admin@gathersafeapp.com',
   password: 'securepassword123',
   displayName: 'Loc Admin',
   organizationCode: 'LOC-TEST-CODE',
 };
 
 const memberUser = {
-  email: 'loc-member@guardiancomm.app',
+  email: 'loc-member@gathersafeapp.com',
   password: 'securepassword123',
   displayName: 'Loc Member',
   organizationCode: 'LOC-TEST-CODE',
@@ -216,7 +216,7 @@ describe('GET /location/team — Team Locations', () => {
       method: 'POST',
       url: '/auth/register',
       payload: {
-        email: 'loc-other@guardiancomm.app',
+        email: 'loc-other@gathersafeapp.com',
         password: 'securepassword123',
         displayName: 'Other User',
         organizationCode: 'LOC-OTHER-CODE',
@@ -247,7 +247,7 @@ describe('GET /location/team — Team Locations', () => {
     // Cleanup
     await prisma.userLocation.deleteMany({ where: { userId: otherRes.json().user.id } });
     await prisma.refreshToken.deleteMany({ where: { userId: otherRes.json().user.id } });
-    await prisma.user.deleteMany({ where: { email: 'loc-other@guardiancomm.app' } });
+    await prisma.user.deleteMany({ where: { email: 'loc-other@gathersafeapp.com' } });
     await prisma.organization.deleteMany({ where: { id: otherOrg.id } });
   });
 });

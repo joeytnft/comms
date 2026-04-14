@@ -22,9 +22,9 @@ const DEV_CONFIG: EnvConfig = {
 };
 
 const PROD_CONFIG: EnvConfig = {
-  apiUrl: process.env.EXPO_PUBLIC_API_URL || 'https://api.guardiancomm.app',
-  socketUrl: process.env.EXPO_PUBLIC_SOCKET_URL || 'wss://api.guardiancomm.app',
-  livekitUrl: process.env.EXPO_PUBLIC_LIVEKIT_URL || 'wss://livekit.guardiancomm.app',
+  apiUrl: process.env.EXPO_PUBLIC_API_URL || 'https://api.gathersafeapp.com',
+  socketUrl: process.env.EXPO_PUBLIC_SOCKET_URL || 'wss://api.gathersafeapp.com',
+  livekitUrl: process.env.EXPO_PUBLIC_LIVEKIT_URL || 'wss://livekit.gathersafeapp.com',
   isDev: false,
 };
 

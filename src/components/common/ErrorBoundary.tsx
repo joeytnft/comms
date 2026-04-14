@@ -37,7 +37,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <Text style={styles.icon}>!</Text>
           <Text style={styles.title}>Something went wrong</Text>
           <Text style={styles.message}>
-            Guardian Comm encountered an unexpected error. Your data is safe.
+            GatherSafe encountered an unexpected error. Your data is safe.
           </Text>
           <TouchableOpacity style={styles.button} onPress={this.handleRestart}>
             <Text style={styles.buttonText}>Try Again</Text>

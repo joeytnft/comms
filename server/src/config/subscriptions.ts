@@ -82,7 +82,7 @@ export const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
 };
 
 export const PLANS: PlanDefinition[] = [
-  { tier: 'FREE', name: 'Free', priceMonthly: 0, limits: PLAN_LIMITS.FREE },
+  { tier: 'FREE', name: 'Free', priceMonthly: 800, limits: PLAN_LIMITS.FREE },
   { tier: 'BASIC', name: 'Basic', priceMonthly: 2000, limits: PLAN_LIMITS.BASIC },
   { tier: 'STANDARD', name: 'Standard', priceMonthly: 4000, limits: PLAN_LIMITS.STANDARD },
   { tier: 'ENTERPRISE', name: 'Enterprise', priceMonthly: 6000, limits: PLAN_LIMITS.ENTERPRISE },

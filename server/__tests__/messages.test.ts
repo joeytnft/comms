@@ -17,14 +17,14 @@ const testOrg = {
 };
 
 const testUser = {
-  email: 'msg-test@guardiancomm.app',
+  email: 'msg-test@gathersafeapp.com',
   password: 'securepassword123',
   displayName: 'Msg Tester',
   organizationCode: 'MSG-TEST-CODE',
 };
 
 const secondUser = {
-  email: 'msg-member@guardiancomm.app',
+  email: 'msg-member@gathersafeapp.com',
   password: 'securepassword123',
   displayName: 'Second Tester',
   organizationCode: 'MSG-TEST-CODE',
@@ -319,7 +319,7 @@ describe('Access control', () => {
       method: 'POST',
       url: '/auth/register',
       payload: {
-        email: 'other-msg@guardiancomm.app',
+        email: 'other-msg@gathersafeapp.com',
         password: 'securepassword123',
         displayName: 'Other User',
         organizationCode: 'OTHER-MSG-CODE',
@@ -330,7 +330,7 @@ describe('Access control', () => {
 
   afterAll(async () => {
     await prisma.refreshToken.deleteMany({});
-    await prisma.user.deleteMany({ where: { email: 'other-msg@guardiancomm.app' } });
+    await prisma.user.deleteMany({ where: { email: 'other-msg@gathersafeapp.com' } });
     await prisma.organization.deleteMany({ where: { inviteCode: 'OTHER-MSG-CODE' } });
   });
 

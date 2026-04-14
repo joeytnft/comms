@@ -38,9 +38,9 @@ export function LoginScreen({ navigation }: { navigation: any }) {
         {/* Logo / Branding */}
         <View style={styles.header}>
           <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>GC</Text>
+            <Text style={styles.logoText}>GS</Text>
           </View>
-          <Text style={styles.title}>Guardian Comm</Text>
+          <Text style={styles.title}>GatherSafe</Text>
           <Text style={styles.subtitle}>Secure Team Communication</Text>
         </View>
 

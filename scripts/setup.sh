@@ -1,11 +1,11 @@
 #!/bin/bash
-# Guardian Comm — Initial Setup Script
+# GatherSafe — Initial Setup Script
 # Run this after cloning the repo
 
 set -e
 
 echo "========================================="
-echo "  Guardian Comm — Project Setup"
+echo "  GatherSafe — Project Setup"
 echo "========================================="
 echo ""
 
@@ -64,7 +64,7 @@ echo ""
 echo "Waiting for PostgreSQL to be ready..."
 sleep 3
 for i in {1..10}; do
-  if $COMPOSE_CMD exec -T postgres pg_isready -U guardian -d guardian_comm > /dev/null 2>&1; then
+  if $COMPOSE_CMD exec -T postgres pg_isready -U guardian -d gathersafe > /dev/null 2>&1; then
     echo "  PostgreSQL is ready ✓"
     break
   fi
