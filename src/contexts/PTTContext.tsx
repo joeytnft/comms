@@ -244,19 +244,21 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         // Upload native recording and notify server
         (async () => {
           try {
-            // stop() resolves before the OS finishes writing — poll until file appears (up to 5s)
+            // stop() resolves before the OS finishes writing — retry reading until file is ready (up to 5s)
             const deadline = Date.now() + 5000;
-            let fileExists = false;
+            let base64: string | null = null;
             while (Date.now() < deadline) {
-              const file = new FSFile(uri);
-              if (file.exists) { fileExists = true; break; }
-              await new Promise((r) => setTimeout(r, 150));
+              try {
+                base64 = await new FSFile(uri).base64();
+                break;
+              } catch {
+                await new Promise((r) => setTimeout(r, 150));
+              }
             }
-            if (!fileExists) {
+            if (!base64) {
               console.error('[PTT] Recording file never appeared:', uri);
               return;
             }
-            const base64 = await new FSFile(uri).base64();
             const { url } = await apiClient.post<{ url: string }>('/upload', { data: base64, mimeType: 'audio/m4a' });
             socket.emit('ptt:native_log', { groupId: currentGroupId, audioUrl: url, durationMs });
           } catch (err) {
