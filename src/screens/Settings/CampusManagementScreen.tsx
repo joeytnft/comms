@@ -1,10 +1,11 @@
 import React, { useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Modal, Alert, RefreshControl, KeyboardAvoidingView, Platform,
+  TextInput, Modal, Alert, RefreshControl, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import * as Location from 'expo-location';
 import { useCampusStore } from '@/store/useCampusStore';
 import { Campus, OrgMemberWithCampus } from '@/types/campus';
 import { geofenceService } from '@/services/geofenceService';
@@ -44,6 +45,7 @@ export function CampusManagementScreen() {
   const [gfLng, setGfLng] = useState('');
   const [gfRadius, setGfRadius] = useState('');
   const [gfSaving, setGfSaving] = useState(false);
+  const [gfLocating, setGfLocating] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -126,6 +128,24 @@ export function CampusManagementScreen() {
       setGfLat('');
       setGfLng('');
       setGfRadius('200');
+    }
+  };
+
+  const handleUseCurrentLocation = async () => {
+    setGfLocating(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission denied', 'Location permission is required to use your current position.');
+        return;
+      }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      setGfLat(loc.coords.latitude.toFixed(6));
+      setGfLng(loc.coords.longitude.toFixed(6));
+    } catch {
+      Alert.alert('Error', 'Could not get your current location.');
+    } finally {
+      setGfLocating(false);
     }
   };
 
@@ -326,6 +346,11 @@ export function CampusManagementScreen() {
             <Text style={styles.sheetSub}>Set the check-in boundary for this campus. Members get a notification when they arrive.</Text>
             <TextInput style={styles.input} placeholder="Label (e.g. Main Campus)" placeholderTextColor={COLORS.textMuted}
               value={gfName} onChangeText={setGfName} maxLength={60} />
+            <TouchableOpacity style={styles.locationBtn} onPress={handleUseCurrentLocation} disabled={gfLocating}>
+              {gfLocating
+                ? <ActivityIndicator size="small" color={COLORS.accent} />
+                : <Text style={styles.locationBtnText}>Use My Current Location</Text>}
+            </TouchableOpacity>
             <TextInput style={styles.input} placeholder="Latitude (e.g. 37.7749)" placeholderTextColor={COLORS.textMuted}
               value={gfLat} onChangeText={setGfLat} keyboardType="decimal-pad" />
             <TextInput style={styles.input} placeholder="Longitude (e.g. -122.4194)" placeholderTextColor={COLORS.textMuted}
@@ -461,4 +486,14 @@ const styles = StyleSheet.create({
   primaryBtnText: { ...TYPOGRAPHY.body, color: COLORS.white, fontWeight: '700' },
   ghostBtn: { paddingVertical: SPACING.sm, alignItems: 'center' },
   ghostBtnText: { ...TYPOGRAPHY.body, color: COLORS.textMuted },
+  locationBtn: {
+    borderWidth: 1,
+    borderColor: COLORS.accent,
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: SPACING.sm,
+    alignItems: 'center',
+    minHeight: 40,
+    justifyContent: 'center',
+  },
+  locationBtnText: { ...TYPOGRAPHY.bodySmall, color: COLORS.accent, fontWeight: '600' },
 });
