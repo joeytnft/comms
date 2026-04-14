@@ -46,7 +46,8 @@ const FEATURES = [
     icon: 'pco',
     title: 'Planning Center Integration',
     description:
-      'Connect your Planning Center account and volunteer rosters, service schedules, and team assignments sync directly into GatherSafe. Check-in volunteers, see who\'s rostered for each service, and ensure every position is staffed — without leaving the app.',
+      'Available as an $8/mo add-on. Connect your Planning Center account and your service roster syncs automatically. Volunteer schedules, team assignments, and upcoming service plans flow directly into GatherSafe — no spreadsheets, no double-entry, no day-of scramble.',
+    addon: true,
   },
   {
     color: 'green',
@@ -54,13 +55,6 @@ const FEATURES = [
     title: 'Bluetooth PTT Accessories',
     description:
       'Pair any BLE push-to-talk button — Retevis, Baofeng BT-PTT, and similar HID accessories. Clip it to your belt or earpiece and operate completely hands-free, just like a two-way radio — without the expensive hardware or monthly licensing fees.',
-  },
-  {
-    color: 'blue',
-    icon: 'drill',
-    title: 'Training & Drill Mode',
-    description:
-      'Run realistic security drills without triggering real alerts. Drill mode lets your team practice panic responses, evacuation routes, and communication protocols using the exact same interface they\'ll use in a real event.',
   },
 ] as const;
 
@@ -89,12 +83,19 @@ export function Features() {
                   : 'border-emerald-500/10 bg-emerald-600/5 hover:border-emerald-500/20 hover:bg-emerald-600/8'
               }`}
             >
-              <div
-                className={`mb-4 inline-flex h-10 w-10 items-center justify-center rounded-xl ${
-                  f.color === 'blue' ? 'bg-blue-500/15' : 'bg-emerald-500/15'
-                }`}
-              >
-                <FeatureIcon name={f.icon} color={f.color} />
+              <div className="mb-4 flex items-start justify-between gap-2">
+                <div
+                  className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${
+                    f.color === 'blue' ? 'bg-blue-500/15' : 'bg-emerald-500/15'
+                  }`}
+                >
+                  <FeatureIcon name={f.icon} color={f.color} />
+                </div>
+                {'addon' in f && f.addon && (
+                  <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-400">
+                    Add-on
+                  </span>
+                )}
               </div>
               <h3 className="mb-2 font-semibold text-white">{f.title}</h3>
               <p className="text-sm leading-relaxed text-slate-400">{f.description}</p>
@@ -172,13 +173,6 @@ function FeatureIcon({ name, color }: { name: string; color: string }) {
       return (
         <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75}>
           <polyline strokeLinecap="round" strokeLinejoin="round" points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5" />
-        </svg>
-      );
-    case 'drill':
-      return (
-        <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
         </svg>
       );
     default:

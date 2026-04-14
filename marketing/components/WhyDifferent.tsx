@@ -18,7 +18,7 @@ const DIFFERENTIATORS = [
     icon: 'pco',
     title: 'Planning Center Integration',
     description:
-      'Connect your Planning Center account and your service roster syncs automatically. Volunteer schedules, team assignments, and upcoming service plans flow directly into GatherSafe — no spreadsheets, no double-entry, no day-of scramble to figure out who\'s covering which door.',
+      'For $8/mo added to any plan, connect your Planning Center account and your service roster syncs automatically. Volunteer schedules, team assignments, and upcoming service plans flow directly into GatherSafe — no spreadsheets, no double-entry, no day-of scramble to figure out who\'s covering which door.',
   },
   {
     color: 'green',

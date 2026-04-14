@@ -35,15 +35,13 @@ const PLANS = [
   {
     name: 'Standard',
     price: 40,
-    description: 'Unlimited scale with Planning Center sync.',
+    description: 'Unlimited scale for larger security teams.',
     color: 'green',
     highlighted: true,
     features: [
       '5 lead groups + unlimited sub-groups',
       'Unlimited members',
       'Everything in Basic',
-      'Planning Center integration',
-      'Training & drill mode',
       'Priority support',
     ],
     cta: 'Start Free Trial',
@@ -138,7 +136,30 @@ export function Pricing() {
           ))}
         </div>
 
-        <p className="mt-8 text-center text-sm text-slate-600">
+        {/* Add-on */}
+        <div className="mt-8 flex items-center gap-5 rounded-2xl border border-emerald-500/20 bg-emerald-600/5 p-5">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-500/15">
+            <svg className="h-5 w-5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75}>
+              <rect x="3" y="4" width="18" height="16" rx="2" />
+              <path strokeLinecap="round" d="M3 9h18M8 4v5M16 4v5" />
+              <path strokeLinecap="round" d="M7 14h3M7 17h5" />
+              <circle cx="17" cy="15.5" r="2.5" />
+              <path strokeLinecap="round" d="M19 17.5l1.5 1.5" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <span className="font-semibold text-white">Planning Center Integration</span>
+              <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-400">Add-on</span>
+              <span className="text-sm font-bold text-white">+$8/mo</span>
+            </div>
+            <p className="mt-1 text-sm text-slate-400">
+              Available on any plan. Sync your Planning Center roster, volunteer schedules, and service plans directly into GatherSafe. No double-entry, no spreadsheets.
+            </p>
+          </div>
+        </div>
+
+        <p className="mt-6 text-center text-sm text-slate-600">
           All prices in USD · Billed monthly · Cancel anytime
         </p>
       </div>
