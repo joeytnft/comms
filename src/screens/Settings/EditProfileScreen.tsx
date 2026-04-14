@@ -8,9 +8,11 @@ import {
   ScrollView,
   ActivityIndicator,
   TouchableOpacity,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '@/store/useAuthStore';
 import { apiClient } from '@/api/client';
 import { ENDPOINTS } from '@/api/endpoints';
@@ -23,11 +25,52 @@ export function EditProfileScreen() {
 
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
   const [phone, setPhone] = useState(user?.phone ?? '');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.avatarUrl ?? null);
+  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const hasChanges =
     displayName.trim() !== (user?.displayName ?? '') ||
-    phone.trim() !== (user?.phone ?? '');
+    phone.trim() !== (user?.phone ?? '') ||
+    avatarUrl !== (user?.avatarUrl ?? null);
+
+  const handlePickPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Allow photo library access to set a profile picture.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+      base64: true,
+    });
+
+    if (result.canceled || !result.assets[0]) return;
+
+    const asset = result.assets[0];
+    if (!asset.base64) {
+      Alert.alert('Error', 'Could not read image data.');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const mimeType = asset.mimeType ?? 'image/jpeg';
+      const { url } = await apiClient.post<{ url: string }>(ENDPOINTS.UPLOAD, {
+        data: asset.base64,
+        mimeType,
+      });
+      setAvatarUrl(url);
+    } catch {
+      Alert.alert('Upload failed', 'Could not upload your photo. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!displayName.trim()) {
@@ -41,6 +84,7 @@ export function EditProfileScreen() {
         {
           displayName: displayName.trim(),
           phone: phone.trim() || null,
+          avatarUrl,
         },
       );
       setUser(updated);
@@ -62,8 +106,8 @@ export function EditProfileScreen() {
         <Text style={styles.headerTitle}>Edit Profile</Text>
         <TouchableOpacity
           onPress={handleSave}
-          style={[styles.saveBtn, (!hasChanges || saving) && styles.saveBtnDisabled]}
-          disabled={!hasChanges || saving}
+          style={[styles.saveBtn, (!hasChanges || saving || uploading) && styles.saveBtnDisabled]}
+          disabled={!hasChanges || saving || uploading}
         >
           {saving ? (
             <ActivityIndicator size="small" color={COLORS.white} />
@@ -75,11 +119,23 @@ export function EditProfileScreen() {
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.avatarSection}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {displayName.charAt(0)?.toUpperCase() || '?'}
-            </Text>
-          </View>
+          <TouchableOpacity style={styles.avatarWrapper} onPress={handlePickPhoto} disabled={uploading}>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarText}>
+                  {displayName.charAt(0)?.toUpperCase() || '?'}
+                </Text>
+              </View>
+            )}
+            <View style={styles.avatarOverlay}>
+              {uploading
+                ? <ActivityIndicator size="small" color={COLORS.white} />
+                : <Text style={styles.avatarOverlayText}>Edit</Text>}
+            </View>
+          </TouchableOpacity>
+          <Text style={styles.avatarHint}>Tap to change photo</Text>
         </View>
 
         <View style={styles.section}>
@@ -123,6 +179,8 @@ export function EditProfileScreen() {
     </SafeAreaView>
   );
 }
+
+const AVATAR_SIZE = 90;
 
 const styles = StyleSheet.create({
   container: {
@@ -173,10 +231,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: SPACING.lg,
   },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  avatarWrapper: {
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
+    overflow: 'hidden',
+    ...SHADOWS.sm,
+  },
+  avatarImage: {
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
+  },
+  avatarPlaceholder: {
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
     backgroundColor: COLORS.accent,
     justifyContent: 'center',
     alignItems: 'center',
@@ -184,6 +254,26 @@ const styles = StyleSheet.create({
   avatarText: {
     ...TYPOGRAPHY.heading1,
     color: COLORS.white,
+  },
+  avatarOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 28,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarOverlayText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.white,
+    fontWeight: '600',
+  },
+  avatarHint: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+    marginTop: SPACING.xs,
   },
   section: {
     backgroundColor: COLORS.surface,
