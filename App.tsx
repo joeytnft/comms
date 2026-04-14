@@ -1,5 +1,8 @@
 import { polyfillWebCrypto } from 'expo-standard-web-crypto';
 polyfillWebCrypto();
+// Register LiveKit globals (WebRTC polyfills) before anything else
+import { registerGlobals } from '@livekit/react-native';
+registerGlobals();
 // Register background tasks before any component renders
 import '@/services/geofenceService';
 import React from 'react';
