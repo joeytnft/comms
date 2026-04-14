@@ -22,7 +22,6 @@ export function Footer() {
           <div className="flex flex-wrap gap-x-12 gap-y-6 text-sm">
             <div className="flex flex-col gap-2">
               <span className="font-semibold text-slate-400">Product</span>
-              <a href="/why" className="text-slate-500 transition-colors hover:text-slate-300">Why GatherSafe</a>
               <a href="/features" className="text-slate-500 transition-colors hover:text-slate-300">Features</a>
               <a href="/how-it-works" className="text-slate-500 transition-colors hover:text-slate-300">How It Works</a>
               <a href="/pricing" className="text-slate-500 transition-colors hover:text-slate-300">Pricing</a>

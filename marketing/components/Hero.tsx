@@ -51,8 +51,8 @@ export function Hero() {
           <a href="/pricing" className="btn-primary">
             Start 14-Day Free Trial
           </a>
-          <a href="/why" className="btn-secondary flex items-center gap-2">
-            See How We&apos;re Different
+          <a href="/features" className="btn-secondary flex items-center gap-2">
+            See All Features
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
