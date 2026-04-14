@@ -1,5 +1,3 @@
-import { polyfillWebCrypto } from 'expo-standard-web-crypto';
-polyfillWebCrypto();
 // Register LiveKit globals (WebRTC polyfills) before anything else
 import { registerGlobals } from '@livekit/react-native';
 registerGlobals();
