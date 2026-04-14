@@ -15,7 +15,7 @@ import { ValidationError } from '../utils/errors';
 
 const PCO_SCOPES = 'people services';
 const VERIFIER_TTL = 600; // 10 min
-const APP_DEEP_LINK = 'guardiancomm://integrations/pco';
+const APP_DEEP_LINK = 'gathersafe://integrations/pco';
 
 // ─── Initiate OAuth ────────────────────────────────────────────────────────────
 

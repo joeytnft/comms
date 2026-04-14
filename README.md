@@ -1,8 +1,8 @@
-# Guardian Comm
+# GatherSafe
 
 **Encrypted real-time communication for church security teams.**
 
-Guardian Comm provides church security teams with encrypted text messaging, push-to-talk voice, hierarchical group management, panic alerts, location sharing, and incident logging — all in one cross-platform mobile app.
+GatherSafe provides church security teams with encrypted text messaging, push-to-talk voice, hierarchical group management, panic alerts, location sharing, and incident logging — all in one cross-platform mobile app.
 
 ## Features
 
@@ -38,8 +38,8 @@ Guardian Comm provides church security teams with encrypted text messaging, push
 ### Setup
 
 ```bash
-git clone https://github.com/your-org/guardian-comm.git
-cd guardian-comm
+git clone https://github.com/your-org/gathersafe.git
+cd gathersafe
 chmod +x scripts/setup.sh
 ./scripts/setup.sh
 ```
@@ -59,7 +59,7 @@ Scan the QR code with Expo Go, or press `i` for iOS simulator / `a` for Android 
 ## Project Structure
 
 ```
-guardian-comm/
+gathersafe/
 ├── src/           # React Native mobile app
 ├── server/        # Fastify backend API
 ├── docs/          # Architecture & implementation docs

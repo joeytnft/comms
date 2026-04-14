@@ -14,7 +14,7 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
 
-export const BACKGROUND_PTT_TASK = 'GUARDIAN_COMM_PTT_BG';
+export const BACKGROUND_PTT_TASK = 'GATHERSAFE_PTT_BG';
 
 // Register the background task (module scope — required by expo-task-manager)
 if (Platform.OS !== 'web') {
@@ -45,7 +45,7 @@ export const backgroundService = {
     await Notifications.scheduleNotificationAsync({
       identifier: 'ptt-foreground',
       content: {
-        title: 'Guardian Comm — PTT Active',
+        title: 'GatherSafe — PTT Active',
         body: `Listening on ${groupName}. Press the PTT button to talk.`,
         sticky: true,
         autoDismiss: false,

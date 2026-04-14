@@ -7,7 +7,7 @@ import { secureStorage } from '@/utils/secureStorage';
 import { ACCESS_TOKEN_KEY } from '@/config/constants';
 import { Geofence } from '@/types';
 
-export const GEOFENCE_TASK = 'GUARDIAN_COMM_GEOFENCE';
+export const GEOFENCE_TASK = 'GATHERSAFE_GEOFENCE';
 
 // Register the background geofence task (must be called at module scope, outside components)
 if (Platform.OS !== 'web') {
@@ -23,7 +23,7 @@ if (Platform.OS !== 'web') {
       Notifications.scheduleNotificationAsync({
         content: {
           title: 'You\'ve arrived at ' + (region.identifier || 'church'),
-          body: 'Open Guardian Comm to check in and enable location tracking for your team.',
+          body: 'Open GatherSafe to check in and enable location tracking for your team.',
           sound: true,
           data: { action: 'checkin' },
         },

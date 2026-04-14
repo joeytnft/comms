@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "Guardian Comm",
-    "slug": "guardian-comm",
+    "name": "GatherSafe",
+    "slug": "gathersafe",
     "version": "0.1.0",
     "orientation": "portrait",
-    "scheme": "guardiancomm",
+    "scheme": "gathersafe",
     "userInterfaceStyle": "automatic",
     "splash": {
       "resizeMode": "contain",
@@ -15,12 +15,12 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.guardiancomm.app",
+      "bundleIdentifier": "com.gathersafeapp.app",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Guardian Comm needs your location to share with your security team.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Guardian Comm needs background location to keep your team informed of your position.",
-        "NSMicrophoneUsageDescription": "Guardian Comm needs microphone access for push-to-talk communication.",
-        "NSCameraUsageDescription": "Guardian Comm needs camera access for incident reports.",
+        "NSLocationWhenInUseUsageDescription": "GatherSafe needs your location to share with your security team.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "GatherSafe needs background location to keep your team informed of your position.",
+        "NSMicrophoneUsageDescription": "GatherSafe needs microphone access for push-to-talk communication.",
+        "NSCameraUsageDescription": "GatherSafe needs camera access for incident reports.",
         "UIBackgroundModes": [
           "audio",
           "voip",
@@ -31,7 +31,7 @@
       }
     },
     "android": {
-      "package": "com.guardiancomm.app",
+      "package": "com.gathersafeapp.app",
       "permissions": [
         "RECORD_AUDIO",
         "CAMERA",
@@ -68,7 +68,7 @@
             "peripheral",
             "central"
           ],
-          "bluetoothAlwaysPermission": "Allow Guardian Comm to connect to Bluetooth PTT accessories."
+          "bluetoothAlwaysPermission": "Allow GatherSafe to connect to Bluetooth PTT accessories."
         }
       ]
     ],

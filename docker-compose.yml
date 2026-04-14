@@ -1,4 +1,4 @@
-# Guardian Comm — Local Development Infrastructure
+# GatherSafe — Local Development Infrastructure
 # Run: docker-compose up -d
 
 version: '3.8'
@@ -11,13 +11,13 @@ services:
     environment:
       POSTGRES_USER: guardian
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: guardian_comm
+      POSTGRES_DB: gathersafe
     ports:
       - '5433:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U guardian -d guardian_comm']
+      test: ['CMD-SHELL', 'pg_isready -U guardian -d gathersafe']
       interval: 10s
       timeout: 5s
       retries: 5

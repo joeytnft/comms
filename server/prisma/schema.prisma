@@ -1,4 +1,4 @@
-// Guardian Comm — Database Schema
+// GatherSafe — Database Schema
 // Run: npx prisma migrate dev --name init
 
 generator client {

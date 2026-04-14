@@ -14,7 +14,7 @@ const testOrg = {
 };
 
 const testUser = {
-  email: 'groups-test@guardiancomm.app',
+  email: 'groups-test@gathersafeapp.com',
   password: 'securepassword123',
   displayName: 'Groups Tester',
   organizationCode: 'GROUPS-TEST-CODE',
@@ -26,7 +26,7 @@ async function createSecondUser() {
     method: 'POST',
     url: '/auth/register',
     payload: {
-      email: 'groups-member@guardiancomm.app',
+      email: 'groups-member@gathersafeapp.com',
       password: 'securepassword123',
       displayName: 'Second User',
       organizationCode: 'GROUPS-TEST-CODE',
@@ -45,7 +45,7 @@ beforeAll(async () => {
   await prisma.refreshToken.deleteMany({});
   await prisma.user.deleteMany({
     where: {
-      email: { in: [testUser.email, 'groups-member@guardiancomm.app'] },
+      email: { in: [testUser.email, 'groups-member@gathersafeapp.com'] },
     },
   });
   await prisma.organization.deleteMany({ where: { inviteCode: testOrg.inviteCode } });
@@ -71,7 +71,7 @@ afterAll(async () => {
   await prisma.refreshToken.deleteMany({});
   await prisma.user.deleteMany({
     where: {
-      email: { in: [testUser.email, 'groups-member@guardiancomm.app'] },
+      email: { in: [testUser.email, 'groups-member@gathersafeapp.com'] },
     },
   });
   await prisma.organization.deleteMany({ where: { inviteCode: testOrg.inviteCode } });
@@ -248,7 +248,7 @@ describe('Members', () => {
       method: 'POST',
       url: `/groups/${leadGroupId}/members`,
       headers: { authorization: `Bearer ${accessToken}` },
-      payload: { email: 'groups-member@guardiancomm.app' },
+      payload: { email: 'groups-member@gathersafeapp.com' },
     });
 
     expect(response.statusCode).toBe(201);

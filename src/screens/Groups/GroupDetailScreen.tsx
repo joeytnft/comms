@@ -98,7 +98,7 @@ export function GroupDetailScreen({ navigation, route }: Props) {
     try {
       const code = await generateInvite(groupId);
       await Share.share({
-        message: `Join my channel on Guardian Comm! Use invite code: ${code}`,
+        message: `Join my channel on GatherSafe! Use invite code: ${code}`,
       });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to generate invite code';
@@ -112,7 +112,7 @@ export function GroupDetailScreen({ navigation, route }: Props) {
     if (!currentGroup?.inviteCode) return;
     try {
       await Share.share({
-        message: `Join my channel on Guardian Comm! Use invite code: ${currentGroup.inviteCode}`,
+        message: `Join my channel on GatherSafe! Use invite code: ${currentGroup.inviteCode}`,
       });
     } catch {
       // User cancelled share

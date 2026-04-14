@@ -12,7 +12,7 @@ const testOrg = {
 };
 
 const testUser = {
-  email: 'test@guardiancomm.app',
+  email: 'test@gathersafeapp.com',
   password: 'securepassword123',
   displayName: 'Test User',
   phone: '555-0100',

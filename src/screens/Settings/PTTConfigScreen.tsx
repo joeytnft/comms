@@ -237,8 +237,8 @@ export function PTTConfigScreen({ navigation }: Props) {
           <Text style={styles.infoTitle}>Background Operation</Text>
           <Text style={styles.infoBody}>
             {Platform.OS === 'android'
-              ? 'Guardian Comm runs a foreground notification while PTT is active, keeping the channel open when the app is backgrounded. The button will continue to work from your lock screen or while using other apps.'
-              : 'On iOS, Guardian Comm uses a VoIP audio session to stay connected in the background. The PTT button remains active as long as you do not force-quit the app.'}
+              ? 'GatherSafe runs a foreground notification while PTT is active, keeping the channel open when the app is backgrounded. The button will continue to work from your lock screen or while using other apps.'
+              : 'On iOS, GatherSafe uses a VoIP audio session to stay connected in the background. The PTT button remains active as long as you do not force-quit the app.'}
           </Text>
         </View>
 

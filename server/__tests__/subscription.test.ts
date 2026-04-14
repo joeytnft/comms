@@ -13,7 +13,7 @@ const testOrg = {
 };
 
 const testUser = {
-  email: 'sub-test@guardiancomm.app',
+  email: 'sub-test@gathersafeapp.com',
   password: 'securepassword123',
   displayName: 'Sub Tester',
   organizationCode: 'SUB-TEST-CODE',
@@ -29,7 +29,7 @@ beforeAll(async () => {
   await prisma.group.deleteMany({});
   await prisma.refreshToken.deleteMany({});
   await prisma.user.deleteMany({
-    where: { email: { in: [testUser.email, 'sub-limit@guardiancomm.app'] } },
+    where: { email: { in: [testUser.email, 'sub-limit@gathersafeapp.com'] } },
   });
   await prisma.organization.deleteMany({ where: { inviteCode: testOrg.inviteCode } });
 
@@ -52,7 +52,7 @@ afterAll(async () => {
   await prisma.group.deleteMany({});
   await prisma.refreshToken.deleteMany({});
   await prisma.user.deleteMany({
-    where: { email: { in: [testUser.email, 'sub-limit@guardiancomm.app'] } },
+    where: { email: { in: [testUser.email, 'sub-limit@gathersafeapp.com'] } },
   });
   await prisma.organization.deleteMany({ where: { inviteCode: testOrg.inviteCode } });
   await prisma.$disconnect();
@@ -114,7 +114,7 @@ describe('GET /subscription/plans', () => {
 
     const { plans } = response.json();
     const prices = plans.map((p: any) => p.priceMonthly);
-    expect(prices).toEqual([0, 2000, 4000, 6000]); // $0, $20, $40, $60
+    expect(prices).toEqual([800, 2000, 4000, 6000]); // $8, $20, $40, $60
   });
 
   it('should have correct lead group limits', async () => {

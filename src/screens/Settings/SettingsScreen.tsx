@@ -35,7 +35,7 @@ export function SettingsScreen() {
     if (!organization?.inviteCode) return;
     try {
       await Share.share({
-        message: `Join ${organization.name} on Guardian Comm!\n\nDownload the app and use this invite code when registering:\n\n${organization.inviteCode}`,
+        message: `Join ${organization.name} on GatherSafe!\n\nDownload the app and use this invite code when registering:\n\n${organization.inviteCode}`,
       });
     } catch {
       // User cancelled
