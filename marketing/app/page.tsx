@@ -1,5 +1,6 @@
 import { Nav } from '@/components/Nav';
 import { Hero } from '@/components/Hero';
+import { WhyDifferent } from '@/components/WhyDifferent';
 import { Features } from '@/components/Features';
 import { HowItWorks } from '@/components/HowItWorks';
 import { Pricing } from '@/components/Pricing';
@@ -12,6 +13,7 @@ export default function HomePage() {
       <Nav />
       <main>
         <Hero />
+        <WhyDifferent />
         <Features />
         <HowItWorks />
         <Pricing />

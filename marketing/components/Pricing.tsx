@@ -2,62 +2,67 @@ const PLANS = [
   {
     name: 'Starter',
     price: 8,
-    description: 'Perfect for small security teams getting started.',
-    features: [
-      '1 lead group',
-      '5 sub-groups',
-      'Up to 20 members',
-      'Encrypted messaging',
-      'Push-to-talk voice',
-      'Panic alerts',
-      'Location sharing',
-      'Incident logging',
-    ],
-    cta: 'Get Started',
+    description: 'Everything a small team needs to get protected.',
+    color: 'default',
     highlighted: false,
+    features: [
+      '1 lead group + 5 sub-groups',
+      'Up to 20 members',
+      'End-to-end encrypted messaging',
+      'Push-to-talk voice (PTT)',
+      'Panic alerts with GPS',
+      'Real-time location sharing',
+      'Incident logging',
+      'iOS & Android apps',
+    ],
+    cta: 'Start Free Trial',
   },
   {
     name: 'Basic',
     price: 20,
-    description: 'For growing teams that need more flexibility.',
+    description: 'More groups and members as your team grows.',
+    color: 'blue',
+    highlighted: false,
     features: [
-      '2 lead groups',
-      'Unlimited sub-groups',
+      '2 lead groups + unlimited sub-groups',
       'Up to 50 members',
       'Everything in Starter',
-      'Schedule & check-in',
+      'Service scheduling & check-in',
+      'Response plan broadcasting',
     ],
-    cta: 'Get Started',
-    highlighted: false,
+    cta: 'Start Free Trial',
   },
   {
     name: 'Standard',
     price: 40,
-    description: 'For established teams with unlimited members.',
+    description: 'Unlimited scale with Planning Center sync.',
+    color: 'green',
+    highlighted: true,
     features: [
-      '5 lead groups',
-      'Unlimited sub-groups',
+      '5 lead groups + unlimited sub-groups',
       'Unlimited members',
       'Everything in Basic',
+      'Planning Center integration',
+      'Training & drill mode',
       'Priority support',
     ],
-    cta: 'Get Started',
-    highlighted: true,
+    cta: 'Start Free Trial',
   },
   {
     name: 'Enterprise',
     price: 60,
-    description: 'For multi-campus organizations and large ministries.',
+    description: 'Multi-campus organizations and large ministries.',
+    color: 'default',
+    highlighted: false,
     features: [
       'Unlimited lead groups',
-      'Unlimited sub-groups',
       'Unlimited members',
       'Everything in Standard',
       'Multi-campus support',
       'Dedicated onboarding',
+      'Custom integrations',
     ],
     cta: 'Contact Us',
-    highlighted: false,
   },
 ];
 
@@ -66,12 +71,14 @@ export function Pricing() {
     <section id="pricing" className="py-24 sm:py-32">
       <div className="mx-auto max-w-6xl px-6">
         <div className="mx-auto max-w-2xl text-center">
-          <p className="text-sm font-semibold uppercase tracking-widest text-blue-400">Pricing</p>
+          <p className="section-label">Pricing</p>
           <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
             Simple, transparent pricing
           </h2>
           <p className="mt-4 text-slate-400">
-            All plans include a 14-day free trial. No credit card required to start.
+            Every plan includes a{' '}
+            <span className="font-semibold text-white">14-day free trial</span>.
+            No credit card required. Cancel anytime.
           </p>
         </div>
 
@@ -81,40 +88,48 @@ export function Pricing() {
               key={plan.name}
               className={`relative flex flex-col rounded-2xl border p-6 ${
                 plan.highlighted
-                  ? 'border-blue-500 bg-blue-600/10 ring-1 ring-blue-500/50'
+                  ? 'border-emerald-500/50 bg-emerald-600/8 ring-1 ring-emerald-500/30'
+                  : plan.color === 'blue'
+                  ? 'border-blue-500/15 bg-blue-600/5'
                   : 'border-white/5 bg-navy-900'
               }`}
             >
               {plan.highlighted && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-blue-500 px-3 py-0.5 text-xs font-semibold text-white">
+                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-emerald-500 to-blue-500 px-4 py-0.5 text-xs font-bold text-white shadow-lg">
                   Most Popular
                 </div>
               )}
 
-              <div className="mb-4">
+              <div className="mb-5">
                 <h3 className="font-semibold text-white">{plan.name}</h3>
                 <div className="mt-2 flex items-baseline gap-1">
                   <span className="text-3xl font-bold text-white">${plan.price}</span>
-                  <span className="text-sm text-slate-400">/month</span>
+                  <span className="text-sm text-slate-500">/month</span>
                 </div>
                 <p className="mt-2 text-sm text-slate-400">{plan.description}</p>
               </div>
 
-              <ul className="mb-6 flex flex-col gap-2.5 text-sm text-slate-300">
+              <ul className="mb-6 flex flex-col gap-2.5 text-sm">
                 {plan.features.map((f) => (
-                  <li key={f} className="flex items-start gap-2">
-                    <CheckIcon className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-400" />
+                  <li key={f} className="flex items-start gap-2 text-slate-300">
+                    <CheckIcon
+                      className={`mt-0.5 h-4 w-4 flex-shrink-0 ${
+                        plan.highlighted ? 'text-emerald-400' : 'text-emerald-500'
+                      }`}
+                    />
                     {f}
                   </li>
                 ))}
               </ul>
 
               <a
-                href="mailto:hello@gathersafeapp.com"
+                href={plan.cta === 'Contact Us' ? 'mailto:hello@gathersafeapp.com' : '#'}
                 className={`mt-auto block rounded-xl py-2.5 text-center text-sm font-semibold transition-all ${
                   plan.highlighted
-                    ? 'bg-brand text-white shadow-lg shadow-blue-500/20 hover:bg-blue-500'
-                    : 'border border-white/10 text-white hover:border-white/20 hover:bg-white/5'
+                    ? 'bg-gradient-to-r from-blue-600 to-emerald-500 text-white shadow-lg shadow-emerald-500/20 hover:opacity-90'
+                    : plan.color === 'blue'
+                    ? 'bg-blue-600/20 text-blue-300 hover:bg-blue-600/30 hover:text-white'
+                    : 'border border-white/10 text-slate-300 hover:border-white/20 hover:text-white'
                 }`}
               >
                 {plan.cta}
@@ -123,8 +138,8 @@ export function Pricing() {
           ))}
         </div>
 
-        <p className="mt-10 text-center text-sm text-slate-500">
-          All prices in USD. Billed monthly. Cancel anytime.
+        <p className="mt-8 text-center text-sm text-slate-600">
+          All prices in USD · Billed monthly · Cancel anytime
         </p>
       </div>
     </section>
