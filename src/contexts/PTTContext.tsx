@@ -9,7 +9,7 @@ import { useHardwareButton } from '@/hooks/useHardwareButton';
 import { backgroundService } from '@/services/backgroundService';
 import { bluetoothPTTService } from '@/services/bluetoothPTTService';
 import { apiClient } from '@/api/client';
-import { getInfoAsync, readAsStringAsync } from 'expo-file-system';
+import { File as FSFile } from 'expo-file-system/next';
 
 interface PTTContextType {
   config: PTTConfig;
@@ -248,15 +248,15 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
             const deadline = Date.now() + 5000;
             let fileExists = false;
             while (Date.now() < deadline) {
-              const info = await getInfoAsync(uri);
-              if (info.exists) { fileExists = true; break; }
+              const file = new FSFile(uri);
+              if (file.exists) { fileExists = true; break; }
               await new Promise((r) => setTimeout(r, 150));
             }
             if (!fileExists) {
               console.error('[PTT] Recording file never appeared:', uri);
               return;
             }
-            const base64 = await readAsStringAsync(uri, { encoding: 'base64' });
+            const base64 = await new FSFile(uri).base64();
             const { url } = await apiClient.post<{ url: string }>('/upload', { data: base64, mimeType: 'audio/m4a' });
             socket.emit('ptt:native_log', { groupId: currentGroupId, audioUrl: url, durationMs });
           } catch (err) {
