@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, Pressable, Share, TouchableOpacity, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, Pressable, Share, TouchableOpacity, Linking, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/contexts/AuthContext';
@@ -61,11 +61,15 @@ export function SettingsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         {/* Profile card */}
         <Pressable style={styles.profileCard} onPress={() => navigation.navigate('EditProfile')}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {user?.displayName?.charAt(0)?.toUpperCase() || '?'}
-            </Text>
-          </View>
+          {user?.avatarUrl ? (
+            <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+          ) : (
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {user?.displayName?.charAt(0)?.toUpperCase() || '?'}
+              </Text>
+            </View>
+          )}
           <Text style={styles.name}>{user?.displayName || 'Team Member'}</Text>
           <Text style={styles.email}>{user?.email}</Text>
           <Text style={styles.editHint}>Tap to edit profile</Text>
@@ -249,6 +253,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accent,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+  avatarImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     marginBottom: SPACING.md,
   },
   avatarText: {
