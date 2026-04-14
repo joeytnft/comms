@@ -20,3 +20,12 @@ redis.on('connect', () => {
 redis.on('error', (err: Error) => {
   logger.error({ err: err.message }, '[Redis] Error');
 });
+
+// Prevent unhandled Redis errors from crashing the process
+process.on('unhandledRejection', (reason) => {
+  if (reason instanceof Error && reason.message.includes('Redis')) {
+    logger.warn({ err: reason.message }, '[Redis] Unhandled rejection suppressed');
+    return;
+  }
+  logger.error({ err: reason }, 'Unhandled rejection');
+});
