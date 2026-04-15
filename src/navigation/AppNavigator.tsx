@@ -3,11 +3,12 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAppLock } from '@/contexts/AppLockContext';
 import { COLORS } from '@/config/theme';
 
-// Screens — these will be implemented in their respective phase
 import { LoginScreen } from '@/screens/Auth/LoginScreen';
 import { RegisterScreen } from '@/screens/Auth/RegisterScreen';
+import { PinEntryScreen } from '@/screens/Auth/PinEntryScreen';
 import { MainTabNavigator } from './MainTabNavigator';
 
 export type RootStackParamList = {
@@ -20,6 +21,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export function AppNavigator() {
   const { isAuthenticated, isLoading } = useAuth();
+  const { isLocked, unlock } = useAppLock();
 
   if (isLoading) {
     return (
@@ -27,6 +29,11 @@ export function AppNavigator() {
         <ActivityIndicator size="large" color={COLORS.accent} />
       </View>
     );
+  }
+
+  // Show PIN entry screen over the top of everything when locked
+  if (isAuthenticated && isLocked) {
+    return <PinEntryScreen onUnlock={unlock} />;
   }
 
   return (

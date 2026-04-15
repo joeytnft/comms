@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated } from 'react-native';
 import { COLORS, TYPOGRAPHY, SHADOWS } from '@/config/theme';
 import { PTTState } from '@/types';
+import { pttBeeps } from '@/utils/pttBeeps';
 
 interface PTTButtonProps {
   state: PTTState;
@@ -59,6 +60,7 @@ export function PTTButton({
     );
     pulseRef.current.start();
 
+    pttBeeps.onTransmitStart();
     onPressIn();
   };
 
@@ -73,6 +75,7 @@ export function PTTButton({
     pulseRef.current?.stop();
     pulseAnim.setValue(1);
 
+    pttBeeps.onTransmitStop();
     onPressOut();
   };
 

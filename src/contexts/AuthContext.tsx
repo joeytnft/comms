@@ -3,8 +3,7 @@ import { Platform } from 'react-native';
 import { User, LoginCredentials, RegisterData } from '@/types';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useSubscriptionStore } from '@/store/useSubscriptionStore';
-import { scheduleService } from '@/services/scheduleService';
-import * as Notifications from 'expo-notifications';
+import { notificationService } from '@/services/notificationService';
 
 interface Organization {
   id: string;
@@ -34,24 +33,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loadStoredSession();
   }, []);
 
-  // Fetch subscription and register push token when authenticated
+  // Fetch subscription and register push token when user becomes authenticated
   useEffect(() => {
     if (isAuthenticated && user) {
       fetchSubscription();
-      if (Platform.OS !== 'web') {
-        Notifications.requestPermissionsAsync().then(({ status }) => {
-          if (status === 'granted') {
-            Notifications.getExpoPushTokenAsync().then(({ data: token }) => {
-              scheduleService.registerPushToken(token).catch(() => null);
-            }).catch(() => null);
-          }
-        }).catch(() => null);
-      }
+      notificationService.registerPushToken();
     }
   }, [isAuthenticated, user]);
 
   const logout = async () => {
     clearSubscription();
+    await notificationService.unregisterPushToken();
     await authLogout();
   };
 

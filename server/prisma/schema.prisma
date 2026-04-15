@@ -41,7 +41,7 @@ model Organization {
   serviceTemplates ServiceTemplate[]
   posts            Post[]
   campuses         Campus[]
-  pcoConnection    PcoConnection?
+  responsePlans    ResponsePlan[]
 
   @@map("organizations")
 }
@@ -114,6 +114,7 @@ model User {
   phone           String?
   avatarUrl       String?
   publicKey       String?  // E2E encryption public key
+  expoPushToken   String?  // Expo push notification token
   organizationId  String
   campusId        String?
   lastSeenAt      DateTime?
@@ -545,6 +546,38 @@ enum SwapStatus {
   PENDING
   ACCEPTED
   DECLINED
+}
+
+// ============================================================================
+// INCIDENT RESPONSE PLANS
+// ============================================================================
+
+model ResponsePlan {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization         @relation(fields: [organizationId], references: [id])
+  steps        ResponsePlanStep[]
+
+  @@index([organizationId])
+  @@map("response_plans")
+}
+
+model ResponsePlanStep {
+  id          String  @id @default(cuid())
+  planId      String
+  order       Int
+  action      String  // Description of the action
+  assignedTo  String? // Role or position name (free text)
+
+  plan ResponsePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@map("response_plan_steps")
 }
 
 // ============================================================================

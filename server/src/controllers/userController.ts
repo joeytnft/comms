@@ -12,10 +12,8 @@ interface UpdatePublicKeyBody {
   publicKey: string;
 }
 
-interface AdminUpdateBody {
-  displayName?: string;
-  phone?: string;
-  isOrgAdmin?: boolean;
+interface UpdatePushTokenBody {
+  expoPushToken: string | null;
 }
 
 const USER_SELECT = {
@@ -92,6 +90,20 @@ export async function updatePublicKey(
   await prisma.user.update({
     where: { id: request.userId },
     data: { publicKey },
+  });
+
+  reply.status(204).send();
+}
+
+export async function updatePushToken(
+  request: FastifyRequest<{ Body: UpdatePushTokenBody }>,
+  reply: FastifyReply,
+) {
+  const { expoPushToken } = request.body;
+
+  await prisma.user.update({
+    where: { id: request.userId },
+    data: { expoPushToken: expoPushToken || null },
   });
 
   reply.status(204).send();

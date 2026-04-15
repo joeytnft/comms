@@ -1,0 +1,76 @@
+import Expo, { ExpoPushMessage, ExpoPushToken } from 'expo-server-sdk';
+import { prisma } from '../../config/database';
+import { logger } from '../../utils/logger';
+
+const expo = new Expo();
+
+export async function sendAlertPushNotifications(
+  organizationId: string,
+  alertId: string,
+  level: string,
+  message: string | null,
+  triggeredByName: string,
+): Promise<void> {
+  // Fetch all push tokens for active org members
+  const users = await prisma.user.findMany({
+    where: { organizationId, expoPushToken: { not: null } },
+    select: { expoPushToken: true },
+  });
+
+  const tokens = users
+    .map((u) => u.expoPushToken!)
+    .filter((t) => Expo.isExpoPushToken(t));
+
+  if (tokens.length === 0) return;
+
+  const levelEmoji = level === 'EMERGENCY' ? '🚨' : level === 'WARNING' ? '⚠️' : 'ℹ️';
+  const title = `${levelEmoji} ${level} Alert`;
+  const body = message
+    ? `${triggeredByName}: ${message}`
+    : `Alert triggered by ${triggeredByName}`;
+
+  const messages: ExpoPushMessage[] = tokens.map((token) => ({
+    to: token as ExpoPushToken,
+    sound: level === 'EMERGENCY' ? 'default' : undefined,
+    title,
+    body,
+    priority: level === 'EMERGENCY' ? 'high' : 'normal',
+    data: { alertId, level, type: 'alert' },
+    channelId: 'alerts',
+  }));
+
+  const chunks = expo.chunkPushNotifications(messages);
+  for (const chunk of chunks) {
+    try {
+      await expo.sendPushNotificationsAsync(chunk);
+    } catch (err) {
+      logger.error({ err }, '[Push] Failed to send alert notifications chunk');
+    }
+  }
+
+  logger.info(`[Push] Sent alert notifications to ${tokens.length} devices`);
+}
+
+export async function sendMessagePushNotification(
+  recipientToken: string,
+  senderName: string,
+  groupName: string,
+  messageId: string,
+  groupId: string,
+): Promise<void> {
+  if (!Expo.isExpoPushToken(recipientToken)) return;
+
+  try {
+    await expo.sendPushNotificationsAsync([{
+      to: recipientToken as ExpoPushToken,
+      sound: 'default',
+      title: groupName,
+      body: `${senderName} sent a message`,
+      priority: 'normal',
+      data: { messageId, groupId, type: 'message' },
+      channelId: 'messages',
+    }]);
+  } catch (err) {
+    logger.error({ err }, '[Push] Failed to send message notification');
+  }
+}

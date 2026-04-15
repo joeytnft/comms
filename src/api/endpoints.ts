@@ -16,7 +16,7 @@ export const ENDPOINTS = {
     ME: '/users/me',
     UPDATE_PROFILE: '/users/me',
     UPDATE_PUBLIC_KEY: '/users/me/public-key',
-    LIST: '/users',
+    UPDATE_PUSH_TOKEN: '/users/me/push-token',
     GET_USER: (id: string) => `/users/${id}`,
     ADMIN_UPDATE: (id: string) => `/users/${id}`,
   },
@@ -125,5 +125,13 @@ export const ENDPOINTS = {
   LOCATION: {
     UPDATE: '/location',
     TEAM: '/location/team',
+  },
+
+  // Response Plans
+  RESPONSE_PLANS: {
+    LIST: '/response-plans',
+    CREATE: '/response-plans',
+    UPDATE: (id: string) => `/response-plans/${id}`,
+    DELETE: (id: string) => `/response-plans/${id}`,
   },
 } as const;

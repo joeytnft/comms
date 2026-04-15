@@ -11,6 +11,7 @@ import { StyleSheet } from 'react-native';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { SocketProvider } from '@/contexts/SocketContext';
 import { PTTProvider } from '@/contexts/PTTContext';
+import { AppLockProvider } from '@/contexts/AppLockContext';
 import { AppNavigator } from '@/navigation/AppNavigator';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
@@ -20,12 +21,14 @@ export default function App() {
       <ErrorBoundary>
         <SafeAreaProvider>
           <AuthProvider>
-            <SocketProvider>
-              <PTTProvider>
-                <StatusBar style="light" />
-                <AppNavigator />
-              </PTTProvider>
-            </SocketProvider>
+            <AppLockProvider>
+              <SocketProvider>
+                <PTTProvider>
+                  <StatusBar style="light" />
+                  <AppNavigator />
+                </PTTProvider>
+              </SocketProvider>
+            </AppLockProvider>
           </AuthProvider>
         </SafeAreaProvider>
       </ErrorBoundary>

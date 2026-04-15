@@ -8,9 +8,7 @@ import { TeamMapScreen } from '@/screens/Map/TeamMapScreen';
 import { IncidentStackNavigator } from './IncidentStackNavigator';
 import { ScheduleStackNavigator } from './ScheduleStackNavigator';
 import { CampusManagementScreen } from '@/screens/Settings/CampusManagementScreen';
-import { EditProfileScreen } from '@/screens/Settings/EditProfileScreen';
-import { MembersScreen } from '@/screens/Settings/MembersScreen';
-import { PlanningCenterScreen } from '@/screens/Settings/PlanningCenterScreen';
+import { PinSetupScreen } from '@/screens/Auth/PinSetupScreen';
 import { COLORS } from '@/config/theme';
 
 export type MoreStackParamList = {
@@ -23,8 +21,7 @@ export type MoreStackParamList = {
   PTTConfig: undefined;
   Schedule: undefined;
   CampusManagement: undefined;
-  Members: undefined;
-  PlanningCenter: undefined;
+  PinSetup: undefined;
 };
 
 const Stack = createNativeStackNavigator<MoreStackParamList>();
@@ -83,13 +80,8 @@ export function MoreStackNavigator() {
         options={{ headerShown: false }}
       />
       <Stack.Screen
-        name="Members"
-        component={MembersScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="PlanningCenter"
-        component={PlanningCenterScreen}
+        name="PinSetup"
+        component={PinSetupScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

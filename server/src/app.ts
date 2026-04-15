@@ -22,7 +22,7 @@ import { pttLogRoutes } from './routes/pttLogs';
 import { geofenceRoutes } from './routes/geofence';
 import { scheduleRoutes } from './routes/schedule';
 import { campusRoutes } from './routes/campuses';
-import { integrationRoutes } from './routes/integrations';
+import { responsePlanRoutes } from './routes/responsePlans';
 import { setupSocketHandlers } from './sockets/socketHandler';
 
 export async function buildApp() {
@@ -107,7 +107,7 @@ export async function buildApp() {
   app.register(geofenceRoutes, { prefix: '/geofence' });
   app.register(scheduleRoutes, { prefix: '/schedule' });
   app.register(campusRoutes, { prefix: '/campuses' });
-  app.register(integrationRoutes, { prefix: '/integrations' });
+  app.register(responsePlanRoutes, { prefix: '/response-plans' });
 
   // Socket.IO setup
   app.addHook('onReady', async () => {

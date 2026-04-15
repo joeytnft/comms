@@ -101,6 +101,12 @@ export function IncidentListScreen({ navigation }: Props) {
       <View style={styles.header}>
         <Text style={styles.title}>Incidents</Text>
         <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('ResponsePlans')}
+            style={styles.historyToggle}
+          >
+            <Text style={styles.historyToggleText}>Plans</Text>
+          </TouchableOpacity>
           <TouchableOpacity onPress={handleToggleHistory} style={styles.historyToggle}>
             <Text style={styles.historyToggleText}>
               {showHistory ? 'Active Only' : 'History'}

@@ -4,13 +4,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscriptionStore } from '@/store/useSubscriptionStore';
+import { useAppLock } from '@/contexts/AppLockContext';
 import { Button } from '@/components/common';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 import { APP_VERSION } from '@/config/constants';
 
 export function SettingsScreen() {
   const { user, organization, logout } = useAuth();
-  const { tierLabel, subscription, canUseFeature } = useSubscriptionStore();
+  const { tierLabel, subscription } = useSubscriptionStore();
+  const { isPinEnabled, refreshPinStatus } = useAppLock();
   const isEnterprise = subscription?.tier === 'ENTERPRISE';
   const isOrgAdmin = user?.role === 'owner' || user?.role === 'admin';
   const hasPcoAddon = isOrgAdmin; // Visible to all org owners/admins; connection optional
@@ -198,6 +200,25 @@ export function SettingsScreen() {
             </Text>
           </View>
         )}
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Security</Text>
+          <Pressable
+            style={styles.settingRow}
+            onPress={async () => {
+              await navigation.navigate('PinSetup');
+              refreshPinStatus();
+            }}
+          >
+            <Text style={styles.settingLabel}>App Lock (PIN)</Text>
+            <View style={styles.tierRow}>
+              <Text style={[styles.tierBadge, { color: isPinEnabled ? COLORS.success : COLORS.textMuted }]}>
+                {isPinEnabled ? 'Enabled' : 'Disabled'}
+              </Text>
+              <Text style={styles.chevron}>{'>'}</Text>
+            </View>
+          </Pressable>
+        </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>App</Text>
