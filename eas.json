@@ -20,11 +20,6 @@
     "preview": {
       "distribution": "internal",
       "channel": "preview",
-      "env": {
-        "EXPO_PUBLIC_API_URL": "https://YOUR_RAILWAY_URL.railway.app",
-        "EXPO_PUBLIC_SOCKET_URL": "wss://YOUR_RAILWAY_URL.railway.app",
-        "EXPO_PUBLIC_LIVEKIT_URL": "wss://YOUR_PROJECT.livekit.cloud"
-      },
       "ios": {
         "buildConfiguration": "Release"
       },
@@ -37,11 +32,6 @@
     "production": {
       "autoIncrement": true,
       "channel": "production",
-      "env": {
-        "EXPO_PUBLIC_API_URL": "https://YOUR_RAILWAY_URL.railway.app",
-        "EXPO_PUBLIC_SOCKET_URL": "wss://YOUR_RAILWAY_URL.railway.app",
-        "EXPO_PUBLIC_LIVEKIT_URL": "wss://YOUR_PROJECT.livekit.cloud"
-      },
       "ios": {
         "buildConfiguration": "Release"
       },
