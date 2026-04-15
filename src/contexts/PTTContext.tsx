@@ -10,8 +10,8 @@ import { backgroundService } from '@/services/backgroundService';
 import { bluetoothPTTService } from '@/services/bluetoothPTTService';
 
 // LiveKit (native only — tree-shaken on web)
-let Room: typeof import('@livekit/react-native').Room | null = null;
-let RoomEvent: typeof import('@livekit/react-native').RoomEvent | null = null;
+let Room: typeof import('livekit-client').Room | null = null;
+let RoomEvent: typeof import('livekit-client').RoomEvent | null = null;
 let AudioSession: typeof import('@livekit/react-native').AudioSession | null = null;
 if (Platform.OS !== 'web') {
   const lk = require('@livekit/react-native');
@@ -43,7 +43,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   const store = usePTTStore();
 
   // LiveKit room instance (native)
-  const roomRef = useRef<InstanceType<typeof import('@livekit/react-native').Room> | null>(null);
+  const roomRef = useRef<InstanceType<typeof import('livekit-client').Room> | null>(null);
 
   // Web MediaRecorder ref
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);

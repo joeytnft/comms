@@ -750,7 +750,6 @@ const styles = StyleSheet.create({
   tabTextActive: { color: COLORS.white },
 
   content: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xxl },
-  sectionLabel: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, letterSpacing: 1, marginBottom: SPACING.sm },
   dateLabel: { ...TYPOGRAPHY.bodySmall, color: COLORS.textSecondary, fontWeight: '600', marginTop: SPACING.md, marginBottom: SPACING.xs },
   emptyCard: { backgroundColor: COLORS.surface, borderRadius: BORDER_RADIUS.md, padding: SPACING.lg, alignItems: 'center', ...SHADOWS.sm },
   emptyText: { ...TYPOGRAPHY.body, color: COLORS.textMuted },

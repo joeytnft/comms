@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Location from 'expo-location';
 import { geofenceService } from '@/services/geofenceService';
+import { useAuthStore } from '@/store/useAuthStore';
 import { Geofence } from '@/types';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 import { MoreStackParamList } from '@/navigation/MoreStackNavigator';
@@ -22,6 +23,8 @@ type Props = {
 };
 
 export function GeofenceScreen({ navigation }: Props) {
+  const { user } = useAuthStore();
+  const campusId = user?.campusId ?? '';
   const [geofence, setGeofence] = useState<Geofence | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -33,7 +36,7 @@ export function GeofenceScreen({ navigation }: Props) {
   const [locating, setLocating] = useState(false);
 
   useEffect(() => {
-    geofenceService.fetchGeofence().then((gf) => {
+    geofenceService.fetchGeofence(campusId).then((gf) => {
       setGeofence(gf);
       if (gf) {
         setName(gf.name);
@@ -68,7 +71,7 @@ export function GeofenceScreen({ navigation }: Props) {
     }
 
     setIsSaving(true);
-    const saved = await geofenceService.saveGeofence({ name: name.trim(), latitude: lat, longitude: lng, radius: rad });
+    const saved = await geofenceService.saveGeofence({ campusId, name: name.trim(), latitude: lat, longitude: lng, radius: rad });
     setIsSaving(false);
 
     if (saved) {
@@ -104,7 +107,7 @@ export function GeofenceScreen({ navigation }: Props) {
         text: 'Remove',
         style: 'destructive',
         onPress: async () => {
-          await geofenceService.deleteGeofence();
+          await geofenceService.deleteGeofence(campusId);
           await geofenceService.stopGeofencing();
           setGeofence(null);
           setName('');

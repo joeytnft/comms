@@ -9,7 +9,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { pinLock } from '@/utils/pinLock';
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '@/config/theme';
+import { COLORS, TYPOGRAPHY, SPACING } from '@/config/theme';
 
 const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'];
 

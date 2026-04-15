@@ -9,6 +9,7 @@ import { IncidentStackNavigator } from './IncidentStackNavigator';
 import { ScheduleStackNavigator } from './ScheduleStackNavigator';
 import { CampusManagementScreen } from '@/screens/Settings/CampusManagementScreen';
 import { PinSetupScreen } from '@/screens/Auth/PinSetupScreen';
+import { EditProfileScreen } from '@/screens/Settings/EditProfileScreen';
 import { COLORS } from '@/config/theme';
 
 export type MoreStackParamList = {

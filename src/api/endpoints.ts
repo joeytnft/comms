@@ -14,6 +14,7 @@ export const ENDPOINTS = {
   // Users
   USERS: {
     ME: '/users/me',
+    LIST: '/campuses/org-members',
     UPDATE_PROFILE: '/users/me',
     UPDATE_PUBLIC_KEY: '/users/me/public-key',
     UPDATE_PUSH_TOKEN: '/users/me/push-token',

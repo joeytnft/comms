@@ -11,7 +11,7 @@ import { APP_VERSION } from '@/config/constants';
 
 export function SettingsScreen() {
   const { user, organization, logout } = useAuth();
-  const { tierLabel, subscription } = useSubscriptionStore();
+  const { tierLabel, subscription, canUseFeature } = useSubscriptionStore();
   const { isPinEnabled, refreshPinStatus } = useAppLock();
   const isEnterprise = subscription?.tier === 'ENTERPRISE';
   const isOrgAdmin = user?.role === 'owner' || user?.role === 'admin';

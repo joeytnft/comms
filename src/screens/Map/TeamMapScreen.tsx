@@ -44,7 +44,7 @@ const MemberCard = memo(({ item }: { item: TeamMemberLocation }) => {
 });
 
 export function TeamMapScreen() {
-  const { teamLocations, isSharing, isLoading, error, fetchTeamLocations, setSharing, initSharing } =
+  const { teamLocations, isSharing, error, fetchTeamLocations, setSharing, initSharing } =
     useLocationStore();
   const { activeAlerts, fetchAlerts } = useAlertStore();
   const { user } = useAuthStore();

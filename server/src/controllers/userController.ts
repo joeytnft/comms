@@ -16,6 +16,12 @@ interface UpdatePushTokenBody {
   expoPushToken: string | null;
 }
 
+interface AdminUpdateBody {
+  displayName?: string;
+  phone?: string;
+  isOrgAdmin?: boolean;
+}
+
 const USER_SELECT = {
   id: true,
   email: true,

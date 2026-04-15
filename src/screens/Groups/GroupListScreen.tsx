@@ -105,7 +105,7 @@ export function GroupListScreen({ navigation }: Props) {
       {error ? (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity onPress={fetchGroups}>
+          <TouchableOpacity onPress={() => fetchGroups()}>
             <Text style={styles.retryText}>Tap to retry</Text>
           </TouchableOpacity>
         </View>

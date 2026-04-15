@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  FlatList,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,7 +21,7 @@ type SyncTab = 'people' | 'services';
 
 export function PlanningCenterScreen() {
   const navigation = useNavigation();
-  const { status, people, serviceTypes, plans, isLoading, isSyncing, error, fetchStatus, disconnect, syncPeople, syncServices } = usePcoStore();
+  const { status, people, plans, isLoading, isSyncing, error, fetchStatus, disconnect, syncPeople, syncServices } = usePcoStore();
   const [activeTab, setActiveTab] = useState<SyncTab>('people');
 
   // Handle deep link callback from PCO OAuth

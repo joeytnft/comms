@@ -11,6 +11,8 @@ Notifications.setNotificationHandler({
     const isAlert = data?.type === 'alert';
     return {
       shouldShowAlert: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
       shouldPlaySound: isAlert,
       shouldSetBadge: false,
     };

@@ -42,6 +42,7 @@ model Organization {
   posts            Post[]
   campuses         Campus[]
   responsePlans    ResponsePlan[]
+  pcoConnection    PcoConnection?
 
   @@map("organizations")
 }
