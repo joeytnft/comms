@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Alert, TriggerAlertData, AlertLevel } from '@/types';
+import { Alert, TriggerAlertData } from '@/types';
 import { alertService } from '@/services/alertService';
 
 interface AlertState {
@@ -9,7 +9,7 @@ interface AlertState {
   error: string | null;
   nextCursor: string | null;
 
-  fetchAlerts: (opts?: { active?: boolean; refresh?: boolean }) => Promise<void>;
+  fetchAlerts: (opts?: { active?: boolean; refresh?: boolean; campusId?: string | null }) => Promise<void>;
   loadMore: () => Promise<void>;
   triggerAlert: (data: TriggerAlertData) => Promise<Alert>;
   acknowledgeAlert: (id: string) => Promise<void>;
@@ -37,6 +37,7 @@ export const useAlertStore = create<AlertState>((set, get) => ({
       const { alerts, nextCursor } = await alertService.listAlerts({
         active: opts?.active,
         limit: 20,
+        campusId: opts?.campusId,
       });
       set({ alerts, nextCursor, isLoading: false });
       if (opts?.active) {

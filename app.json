@@ -1,11 +1,17 @@
 {
   "expo": {
-    "name": "Guardian Comm",
+    "name": "GatherSafe",
     "slug": "guardian-comm",
     "version": "0.1.0",
     "orientation": "portrait",
-    "scheme": "guardiancomm",
+    "scheme": "gathersafe",
     "userInterfaceStyle": "automatic",
+    "updates": {
+      "url": "https://u.expo.dev/0305c4ae-e29a-4d01-afbf-402f427c8e54"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "splash": {
       "resizeMode": "contain",
       "backgroundColor": "#1a1a2e"
@@ -15,32 +21,39 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.guardiancomm.app",
+      "bundleIdentifier": "com.gathersafeapp.app",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Guardian Comm needs your location to share with your security team.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Guardian Comm needs background location to keep your team informed of your position.",
-        "NSMicrophoneUsageDescription": "Guardian Comm needs microphone access for push-to-talk communication.",
-        "NSCameraUsageDescription": "Guardian Comm needs camera access for incident reports.",
+        "NSLocationWhenInUseUsageDescription": "GatherSafe needs your location to share with your security team.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "GatherSafe needs background location to keep your team informed of your position.",
+        "NSMicrophoneUsageDescription": "GatherSafe needs microphone access for push-to-talk communication.",
+        "NSCameraUsageDescription": "GatherSafe needs camera access for incident reports.",
         "UIBackgroundModes": [
           "audio",
           "voip",
           "location",
           "remote-notification"
-        ]
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "com.guardiancomm.app",
+      "package": "com.gathersafeapp.app",
+      "googleServicesFile": "./google-services.json",
       "permissions": [
-        "RECORD_AUDIO",
-        "CAMERA",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_BACKGROUND_LOCATION",
-        "FOREGROUND_SERVICE",
-        "WAKE_LOCK",
-        "VIBRATE",
-        "BLUETOOTH",
-        "BLUETOOTH_CONNECT"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+        "android.permission.WAKE_LOCK",
+        "android.permission.VIBRATE",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT"
       ]
     },
     "plugins": [
@@ -52,13 +65,35 @@
       "expo-asset",
       "expo-audio",
       [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "minSdkVersion": 26
+          },
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ],
+      [
         "react-native-ble-plx",
         {
           "isBackgroundEnabled": true,
-          "modes": ["peripheral", "central"],
-          "bluetoothAlwaysPermission": "Allow Guardian Comm to connect to Bluetooth PTT accessories."
+          "modes": [
+            "peripheral",
+            "central"
+          ],
+          "bluetoothAlwaysPermission": "Allow GatherSafe to connect to Bluetooth PTT accessories."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "0305c4ae-e29a-4d01-afbf-402f427c8e54"
+      }
+    },
+    "owner": "joeyt56"
   }
 }

@@ -1,10 +1,14 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscriptionStore } from '@/store/useSubscriptionStore';
+import { useLocationStore } from '@/store/useLocationStore';
+import { useAlertStore } from '@/store/useAlertStore';
+import { useIncidentStore } from '@/store/useIncidentStore';
 import { MainTabParamList } from '@/navigation/MainTabNavigator';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 
@@ -13,11 +17,39 @@ type DashboardNav = BottomTabNavigationProp<MainTabParamList>;
 export function DashboardScreen() {
   const { user } = useAuth();
   const { subscription, daysLeftInTrial, fetchSubscription } = useSubscriptionStore();
+  const { teamLocations, fetchTeamLocations } = useLocationStore();
+  const { activeAlerts, fetchAlerts } = useAlertStore();
+  const { incidents, fetchIncidents } = useIncidentStore();
   const navigation = useNavigation<DashboardNav>();
+  const refreshInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     fetchSubscription();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchTeamLocations();
+      fetchAlerts({ active: true });
+      fetchIncidents({ status: 'OPEN' });
+
+      refreshInterval.current = setInterval(() => {
+        fetchTeamLocations();
+        fetchAlerts({ active: true });
+        fetchIncidents({ status: 'OPEN' });
+      }, 30_000);
+
+      return () => {
+        if (refreshInterval.current) clearInterval(refreshInterval.current);
+      };
+    }, []),
+  );
+
+  const onlineCount = teamLocations.filter(
+    (l) => Date.now() - new Date(l.updatedAt).getTime() < 300_000,
+  ).length;
+  const activeAlertCount = activeAlerts.length;
+  const openIncidentCount = incidents.filter((i) => i.status === 'OPEN' || i.status === 'IN_PROGRESS').length;
 
   const trialDays = daysLeftInTrial();
   const showTrialBanner = subscription?.status === 'TRIALING' && trialDays <= 3 && trialDays > 0;
@@ -79,7 +111,7 @@ export function DashboardScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.gridItem, { backgroundColor: COLORS.success }]}
-            onPress={() => navigation.navigate('More')}
+            onPress={() => navigation.navigate('More', { screen: 'TeamMap' })}
           >
             <Text style={styles.gridIcon}>L</Text>
             <Text style={styles.gridLabel}>Team Map</Text>
@@ -89,20 +121,20 @@ export function DashboardScreen() {
         {/* Info section */}
         <Text style={styles.sectionTitle}>Status</Text>
         <View style={styles.infoCard}>
-          <View style={styles.infoRow}>
+          <TouchableOpacity style={styles.infoRow} onPress={() => navigation.navigate('More', { screen: 'TeamMap' } as any)}>
             <Text style={styles.infoLabel}>Team Members Online</Text>
-            <Text style={styles.infoValue}>--</Text>
-          </View>
+            <Text style={[styles.infoValue, onlineCount > 0 && styles.valueOnline]}>{onlineCount}</Text>
+          </TouchableOpacity>
           <View style={styles.divider} />
-          <View style={styles.infoRow}>
+          <TouchableOpacity style={styles.infoRow} onPress={() => navigation.navigate('Alerts')}>
             <Text style={styles.infoLabel}>Active Alerts</Text>
-            <Text style={styles.infoValue}>0</Text>
-          </View>
+            <Text style={[styles.infoValue, activeAlertCount > 0 && styles.valueDanger]}>{activeAlertCount}</Text>
+          </TouchableOpacity>
           <View style={styles.divider} />
-          <View style={styles.infoRow}>
+          <TouchableOpacity style={styles.infoRow} onPress={() => navigation.navigate('More', { screen: 'Incidents' } as any)}>
             <Text style={styles.infoLabel}>Open Incidents</Text>
-            <Text style={styles.infoValue}>0</Text>
-          </View>
+            <Text style={[styles.infoValue, openIncidentCount > 0 && styles.valueWarning]}>{openIncidentCount}</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -218,6 +250,9 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     fontWeight: '600',
   },
+  valueOnline: { color: COLORS.success },
+  valueDanger: { color: COLORS.danger },
+  valueWarning: { color: COLORS.warning },
   divider: {
     height: 1,
     backgroundColor: COLORS.gray700,

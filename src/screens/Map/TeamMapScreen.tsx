@@ -1,56 +1,30 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState, memo } from 'react';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocationStore } from '@/store/useLocationStore';
+import { useAlertStore } from '@/store/useAlertStore';
+import { useAuthStore } from '@/store/useAuthStore';
+import { useCampusViewStore } from '@/store/useCampusViewStore';
+import { useCampusStore } from '@/store/useCampusStore';
+import { useSubscriptionStore } from '@/store/useSubscriptionStore';
+import { CampusSwitcher } from '@/components/common/CampusSwitcher';
 import { TeamMemberLocation, Geofence } from '@/types';
 import { TeamMapView } from '@/components/map/TeamMapView';
 import { geofenceService } from '@/services/geofenceService';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 
-export function TeamMapScreen() {
-  const { teamLocations, isSharing, isLoading, error, fetchTeamLocations, setSharing, initSharing } =
-    useLocationStore();
-  const refreshInterval = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [geofence, setGeofence] = useState<Geofence | null>(null);
-
-  // Restore persisted sharing state once on mount
-  useEffect(() => {
-    initSharing();
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      fetchTeamLocations();
-
-      // Load geofence and start background monitoring
-      geofenceService.fetchGeofence().then((gf) => {
-        setGeofence(gf);
-        if (gf) geofenceService.startGeofencing(gf).catch(() => null);
-      });
-
-      refreshInterval.current = setInterval(() => {
-        fetchTeamLocations();
-      }, 10_000);
-
-      return () => {
-        if (refreshInterval.current) clearInterval(refreshInterval.current);
-      };
-    }, []),
-  );
-
-  const timeSince = (dateStr: string | null): string => {
-    if (!dateStr) return 'Unknown';
-    const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-    if (seconds < 60) return 'Just now';
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    return `${Math.floor(hours / 24)}d ago`;
-  };
-
-  const renderMember = ({ item }: { item: TeamMemberLocation }) => (
+const MemberCard = memo(({ item }: { item: TeamMemberLocation }) => {
+  const isOnline = Date.now() - new Date(item.updatedAt).getTime() < 300_000;
+  const seconds = Math.floor((Date.now() - new Date(item.updatedAt).getTime()) / 1000);
+  let timeSince = 'Unknown';
+  if (!isNaN(seconds)) {
+    if (seconds < 60) timeSince = 'Just now';
+    else if (seconds < 3600) timeSince = `${Math.floor(seconds / 60)}m ago`;
+    else if (seconds < 86400) timeSince = `${Math.floor(seconds / 3600)}h ago`;
+    else timeSince = `${Math.floor(seconds / 86400)}d ago`;
+  }
+  return (
     <View style={styles.memberCard}>
       <View style={styles.memberAvatar}>
         <Text style={styles.avatarText}>{item.displayName.charAt(0).toUpperCase()}</Text>
@@ -62,27 +36,102 @@ export function TeamMapScreen() {
         </Text>
       </View>
       <View style={styles.memberMeta}>
-        <Text style={styles.lastSeen}>{timeSince(item.updatedAt)}</Text>
-        <View
-          style={[
-            styles.onlineDot,
-            {
-              backgroundColor:
-                Date.now() - new Date(item.updatedAt).getTime() < 300_000
-                  ? COLORS.success
-                  : COLORS.gray500,
-            },
-          ]}
-        />
+        <Text style={styles.lastSeen}>{timeSince}</Text>
+        <View style={[styles.onlineDot, { backgroundColor: isOnline ? COLORS.success : COLORS.gray500 }]} />
       </View>
     </View>
+  );
+});
+
+export function TeamMapScreen() {
+  const { teamLocations, isSharing, isLoading, error, fetchTeamLocations, setSharing, initSharing } =
+    useLocationStore();
+  const { activeAlerts, fetchAlerts } = useAlertStore();
+  const { user } = useAuthStore();
+  const { activeCampusId } = useCampusViewStore();
+  const { fetchCampuses } = useCampusStore();
+  const { subscription } = useSubscriptionStore();
+  const refreshInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [geofence, setGeofence] = useState<Geofence | null>(null);
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+  const [mapExpanded, setMapExpanded] = useState(false);
+  const mapHeight = useRef(new Animated.Value(280)).current;
+  const lastTapRef = useRef(0);
+
+  // Restore persisted sharing state once on mount
+  useEffect(() => {
+    initSharing();
+  }, []);
+
+  // One-time setup on focus: campuses, alerts
+  useFocusEffect(
+    useCallback(() => {
+      if (subscription?.tier === 'ENTERPRISE') fetchCampuses();
+      fetchAlerts({ active: true });
+
+      return () => {
+        if (refreshInterval.current) clearInterval(refreshInterval.current);
+      };
+    }, []),
+  );
+
+  // Re-fetch locations and geofence whenever the selected campus changes (or on first focus)
+  useEffect(() => {
+    fetchTeamLocations(activeCampusId);
+
+    if (refreshInterval.current) clearInterval(refreshInterval.current);
+    refreshInterval.current = setInterval(() => {
+      fetchTeamLocations(activeCampusId);
+    }, 5_000);
+
+    // Fetch geofence for the active campus (no campus = no geofence)
+    if (activeCampusId) {
+      geofenceService.fetchGeofence(activeCampusId).then((gf) => {
+        setGeofence(gf);
+        if (gf) geofenceService.startGeofencing(gf).catch(() => null);
+        else geofenceService.stopGeofencing().catch(() => null);
+      });
+    } else {
+      setGeofence(null);
+      geofenceService.stopGeofencing().catch(() => null);
+    }
+
+    return () => {
+      if (refreshInterval.current) clearInterval(refreshInterval.current);
+    };
+  }, [activeCampusId]);
+
+  // Filter current user out of map markers only — native showsUserLocation draws their blue dot.
+  // The member list shows everyone including self.
+  const mapLocations = teamLocations.filter((l) => l.userId !== user?.id);
+
+  const handleMapTap = useCallback(() => {
+    const now = Date.now();
+    if (now - lastTapRef.current < 300) {
+      // Double tap
+      const expanded = !mapExpanded;
+      setMapExpanded(expanded);
+      Animated.spring(mapHeight, {
+        toValue: expanded ? 520 : 280,
+        useNativeDriver: false,
+        bounciness: 4,
+      }).start();
+    }
+    lastTapRef.current = now;
+  }, [mapExpanded, mapHeight]);
+
+  const renderMember = useCallback(
+    ({ item }: { item: TeamMemberLocation }) => <MemberCard item={item} />,
+    [],
   );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>Team Map</Text>
-        <TouchableOpacity
+        <View style={styles.headerRight}>
+          <CampusSwitcher />
+          <TouchableOpacity
           style={[styles.sharingToggle, isSharing && styles.sharingActive]}
           onPress={() => setSharing(!isSharing)}
         >
@@ -90,9 +139,17 @@ export function TeamMapScreen() {
             {isSharing ? 'Sharing ON' : 'Sharing OFF'}
           </Text>
         </TouchableOpacity>
+        </View>
       </View>
 
-      <TeamMapView locations={teamLocations} geofence={geofence} style={styles.map} />
+      <TouchableOpacity activeOpacity={1} onPress={handleMapTap}>
+        <Animated.View style={[styles.map, { height: mapHeight }]}>
+          <TeamMapView locations={mapLocations} geofence={geofence} activeAlerts={activeAlerts} style={styles.mapInner} />
+          <View style={styles.mapHint}>
+            <Text style={styles.mapHintText}>{mapExpanded ? '▲ Double-tap to shrink' : '▼ Double-tap to expand'}</Text>
+          </View>
+        </Animated.View>
+      </TouchableOpacity>
 
       {geofence && (
         <View style={styles.geofenceBar}>
@@ -118,10 +175,15 @@ export function TeamMapScreen() {
         renderItem={renderMember}
         keyExtractor={(item) => item.userId}
         contentContainerStyle={styles.list}
+        bounces={false}
         refreshControl={
           <RefreshControl
-            refreshing={isLoading}
-            onRefresh={fetchTeamLocations}
+            refreshing={isManualRefreshing}
+            onRefresh={async () => {
+              setIsManualRefreshing(true);
+              await fetchTeamLocations();
+              setIsManualRefreshing(false);
+            }}
             tintColor={COLORS.accent}
           />
         }
@@ -145,6 +207,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
   },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
   title: { ...TYPOGRAPHY.heading1, color: COLORS.textPrimary },
   sharingToggle: {
     borderWidth: 1,
@@ -158,9 +225,27 @@ const styles = StyleSheet.create({
   sharingTextActive: { color: COLORS.white },
   map: {
     marginHorizontal: SPACING.lg,
-    height: 220,
     marginBottom: SPACING.lg,
+    borderRadius: BORDER_RADIUS.lg,
+    overflow: 'hidden',
     ...SHADOWS.sm,
+  },
+  mapInner: {
+    flex: 1,
+  },
+  mapHint: {
+    position: 'absolute',
+    bottom: 6,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  mapHintText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.white,
+    fontSize: 10,
   },
   sectionTitle: {
     ...TYPOGRAPHY.heading3,

@@ -11,7 +11,8 @@ export const locationService = {
     return apiClient.post<{ status: string }>(ENDPOINTS.LOCATION.UPDATE, { latitude, longitude });
   },
 
-  async getTeamLocations(): Promise<TeamLocationsResponse> {
-    return apiClient.get<TeamLocationsResponse>(ENDPOINTS.LOCATION.TEAM);
+  async getTeamLocations(campusId?: string | null): Promise<TeamLocationsResponse> {
+    const params = campusId ? { campusId } : undefined;
+    return apiClient.get<TeamLocationsResponse>(ENDPOINTS.LOCATION.TEAM, params);
   },
 };

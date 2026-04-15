@@ -10,6 +10,8 @@ export interface Group {
   type: GroupType;
   organizationId: string;
   parentGroupId?: string; // Only for sub-groups — points to lead group
+  campusId?: string | null; // Enterprise multi-campus assignment
+  campus?: { id: string; name: string } | null;
   createdBy: string;
   createdAt: string;
   memberCount: number;
@@ -42,6 +44,7 @@ export interface CreateGroupData {
   description?: string;
   type: GroupType;
   parentGroupId?: string; // Required if type is 'sub'
+  campusId?: string | null;
   iconColor?: string;
   alertsEnabled?: boolean;
 }

@@ -1,10 +1,12 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, TextInput, Share, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { useGroupStore } from '@/store/useGroupStore';
+import { useCampusStore } from '@/store/useCampusStore';
+import { useSubscriptionStore } from '@/store/useSubscriptionStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { MemberList } from '@/components/groups/MemberList';
 import { LoadingOverlay, Button } from '@/components/common';
@@ -19,11 +21,19 @@ type Props = {
 export function GroupDetailScreen({ navigation, route }: Props) {
   const { groupId } = route.params;
   const { user } = useAuth();
-  const { currentGroup, isLoading, fetchGroup, addMember, removeMember, deleteGroup, updateGroup, generateInvite, revokeInvite, clearCurrentGroup } = useGroupStore();
+  const { currentGroup, isLoading, fetchGroup, addMember, removeMember, deleteGroup, updateGroup, generateInvite, revokeInvite, clearCurrentGroup, assignGroupCampus } = useGroupStore();
+  const { campuses, fetchCampuses } = useCampusStore();
+  const { subscription } = useSubscriptionStore();
+  const isEnterprise = subscription?.tier === 'ENTERPRISE';
   const [showAddMember, setShowAddMember] = useState(false);
   const [memberEmail, setMemberEmail] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
+  const [showCampusPicker, setShowCampusPicker] = useState(false);
+
+  useEffect(() => {
+    if (isEnterprise) fetchCampuses();
+  }, [isEnterprise]);
 
   useFocusEffect(
     useCallback(() => {
@@ -88,7 +98,7 @@ export function GroupDetailScreen({ navigation, route }: Props) {
     try {
       const code = await generateInvite(groupId);
       await Share.share({
-        message: `Join my channel on Guardian Comm! Use invite code: ${code}`,
+        message: `Join my channel on GatherSafe! Use invite code: ${code}`,
       });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to generate invite code';
@@ -102,7 +112,7 @@ export function GroupDetailScreen({ navigation, route }: Props) {
     if (!currentGroup?.inviteCode) return;
     try {
       await Share.share({
-        message: `Join my channel on Guardian Comm! Use invite code: ${currentGroup.inviteCode}`,
+        message: `Join my channel on GatherSafe! Use invite code: ${currentGroup.inviteCode}`,
       });
     } catch {
       // User cancelled share
@@ -161,6 +171,9 @@ export function GroupDetailScreen({ navigation, route }: Props) {
             {currentGroup.description ? (
               <Text style={styles.description}>{currentGroup.description}</Text>
             ) : null}
+            {currentGroup.campus && (
+              <Text style={styles.campusLabel}>{currentGroup.campus.name}</Text>
+            )}
             <Text style={styles.memberCount}>
               {currentGroup.memberCount} {currentGroup.memberCount === 1 ? 'member' : 'members'}
             </Text>
@@ -244,6 +257,58 @@ export function GroupDetailScreen({ navigation, route }: Props) {
                 thumbColor={currentGroup.alertsEnabled ? COLORS.accent : COLORS.gray500}
               />
             </View>
+          </View>
+        )}
+
+        {/* Campus assignment — Enterprise + admin only */}
+        {isEnterprise && isAdmin && campuses.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Campus</Text>
+              <TouchableOpacity onPress={() => setShowCampusPicker(!showCampusPicker)}>
+                <Text style={styles.addMemberText}>{showCampusPicker ? 'Cancel' : 'Change'}</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.campusCurrentText}>
+              {currentGroup.campus?.name ?? 'All Campuses'}
+            </Text>
+            {showCampusPicker && (
+              <View style={styles.campusPicker}>
+                <TouchableOpacity
+                  style={[styles.campusOption, !currentGroup.campusId && styles.campusOptionSelected]}
+                  onPress={async () => {
+                    try {
+                      await assignGroupCampus(groupId, null);
+                      setShowCampusPicker(false);
+                    } catch {
+                      Alert.alert('Error', 'Failed to update campus');
+                    }
+                  }}
+                >
+                  <Text style={[styles.campusOptionText, !currentGroup.campusId && styles.campusOptionTextSelected]}>
+                    All Campuses
+                  </Text>
+                </TouchableOpacity>
+                {campuses.map((c) => (
+                  <TouchableOpacity
+                    key={c.id}
+                    style={[styles.campusOption, currentGroup.campusId === c.id && styles.campusOptionSelected]}
+                    onPress={async () => {
+                      try {
+                        await assignGroupCampus(groupId, c.id);
+                        setShowCampusPicker(false);
+                      } catch {
+                        Alert.alert('Error', 'Failed to update campus');
+                      }
+                    }}
+                  >
+                    <Text style={[styles.campusOptionText, currentGroup.campusId === c.id && styles.campusOptionTextSelected]}>
+                      {c.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </View>
         )}
 
@@ -359,6 +424,12 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.bodySmall,
     color: COLORS.textSecondary,
     marginTop: SPACING.xs,
+  },
+  campusLabel: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.info,
+    fontWeight: '600',
+    marginTop: 2,
   },
   memberCount: {
     ...TYPOGRAPHY.caption,
@@ -492,5 +563,35 @@ const styles = StyleSheet.create({
     color: COLORS.danger,
     textAlign: 'center',
     marginTop: SPACING.xxl,
+  },
+  campusCurrentText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textPrimary,
+    fontWeight: '600',
+  },
+  campusPicker: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
+  },
+  campusOption: {
+    backgroundColor: COLORS.background,
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderWidth: 2,
+    borderColor: COLORS.gray700,
+  },
+  campusOptionSelected: {
+    borderColor: COLORS.accent,
+  },
+  campusOptionText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+  },
+  campusOptionTextSelected: {
+    color: COLORS.accent,
   },
 });

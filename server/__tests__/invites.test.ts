@@ -17,14 +17,14 @@ const testOrg = {
 };
 
 const adminUser = {
-  email: 'invite-admin@guardiancomm.app',
+  email: 'invite-admin@gathersafeapp.com',
   password: 'securepassword123',
   displayName: 'Invite Admin',
   organizationCode: 'INVITE-TEST-CODE',
 };
 
 const memberUser = {
-  email: 'invite-member@guardiancomm.app',
+  email: 'invite-member@gathersafeapp.com',
   password: 'securepassword123',
   displayName: 'Invite Member',
   organizationCode: 'INVITE-TEST-CODE',

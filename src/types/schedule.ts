@@ -37,6 +37,8 @@ export interface ShiftCheckIn {
   checkedOutAt: string | null;
 }
 
+export type AssignmentStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED';
+
 export interface ShiftAssignment {
   id: string;
   serviceId: string;
@@ -44,6 +46,7 @@ export interface ShiftAssignment {
   postId: string | null;
   role: string | null;
   notes: string | null;
+  status: AssignmentStatus;
   createdAt: string;
   user: { id: string; displayName: string; avatarUrl: string | null };
   post: { id: string; name: string; zone: string | null } | null;

@@ -3,76 +3,91 @@ import { prisma } from '../config/database';
 import { authenticate } from '../middleware/auth';
 
 interface GeofenceBody {
+  campusId: string;
   name: string;
   latitude: number;
   longitude: number;
   radius: number; // metres
 }
 
+interface GeofenceQuerystring {
+  campusId: string;
+}
+
 async function canManageGeofence(userId: string, organizationId: string): Promise<boolean> {
-  // Org creator can always manage geofence
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
     select: { createdBy: true },
   });
   if (org?.createdBy === userId) return true;
 
-  // Any group admin in the org can also manage geofence
   const adminMembership = await prisma.groupMembership.findFirst({
-    where: {
-      userId,
-      role: 'ADMIN',
-      group: { organizationId },
-    },
-    include: { group: { select: { organizationId: true } } },
+    where: { userId, role: 'ADMIN', group: { organizationId } },
   });
   return !!adminMembership;
 }
 
 export async function geofenceRoutes(app: FastifyInstance) {
-  // GET /geofence — get org geofence
-  app.get('/', { preHandler: [authenticate] }, async (request, reply) => {
-    const geofence = await prisma.geofence.findUnique({
-      where: { organizationId: request.organizationId },
-    });
-    return reply.send({ geofence });
-  });
+  // GET /geofence?campusId=xxx — get campus geofence
+  app.get<{ Querystring: GeofenceQuerystring }>(
+    '/',
+    { preHandler: [authenticate] },
+    async (request, reply) => {
+      const { campusId } = request.query;
+      if (!campusId) return reply.status(400).send({ error: 'campusId is required' });
 
-  // PUT /geofence — create or update org geofence
+      const geofence = await prisma.geofence.findUnique({ where: { campusId } });
+      return reply.send({ geofence });
+    },
+  );
+
+  // PUT /geofence — create or update campus geofence
   app.put<{ Body: GeofenceBody }>(
     '/',
     { preHandler: [authenticate] },
     async (request, reply) => {
       const { userId, organizationId } = request;
-      const { name, latitude, longitude, radius } = request.body;
+      const { campusId, name, latitude, longitude, radius } = request.body;
+
+      if (!campusId) return reply.status(400).send({ error: 'campusId is required' });
+
+      // Verify campus belongs to this org
+      const campus = await prisma.campus.findFirst({
+        where: { id: campusId, organizationId },
+      });
+      if (!campus) return reply.status(404).send({ error: 'Campus not found' });
 
       const allowed = await canManageGeofence(userId, organizationId);
       if (!allowed) {
-        return reply.status(403).send({
-          error: 'FORBIDDEN',
-          message: 'You must be the org creator or a group admin to manage the geofence.',
-        });
+        return reply.status(403).send({ error: 'FORBIDDEN', message: 'Admin role required' });
       }
 
       const geofence = await prisma.geofence.upsert({
-        where: { organizationId },
-        create: { organizationId, name, latitude, longitude, radius },
+        where: { campusId },
+        create: { organizationId, campusId, name, latitude, longitude, radius },
         update: { name, latitude, longitude, radius },
       });
       return reply.send({ geofence });
     },
   );
 
-  // DELETE /geofence — remove geofence
-  app.delete('/', { preHandler: [authenticate] }, async (request, reply) => {
-    const { userId, organizationId } = request;
+  // DELETE /geofence?campusId=xxx — remove campus geofence
+  app.delete<{ Querystring: GeofenceQuerystring }>(
+    '/',
+    { preHandler: [authenticate] },
+    async (request, reply) => {
+      const { userId, organizationId } = request;
+      const { campusId } = request.query;
 
-    const allowed = await canManageGeofence(userId, organizationId);
-    if (!allowed) {
-      return reply.status(403).send({ error: 'FORBIDDEN', message: 'Admin role required' });
-    }
+      if (!campusId) return reply.status(400).send({ error: 'campusId is required' });
 
-    await prisma.geofence.deleteMany({ where: { organizationId } });
-    return reply.send({ success: true });
-  });
+      const allowed = await canManageGeofence(userId, organizationId);
+      if (!allowed) {
+        return reply.status(403).send({ error: 'FORBIDDEN', message: 'Admin role required' });
+      }
+
+      await prisma.geofence.deleteMany({ where: { campusId, organizationId } });
+      return reply.send({ success: true });
+    },
+  );
 }

@@ -13,6 +13,7 @@ import { COLORS } from '@/config/theme';
 
 export type MoreStackParamList = {
   MoreMenu: undefined;
+  EditProfile: undefined;
   Subscription: undefined;
   TeamMap: undefined;
   Incidents: undefined;
@@ -36,6 +37,11 @@ export function MoreStackNavigator() {
       <Stack.Screen
         name="MoreMenu"
         component={SettingsScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="EditProfile"
+        component={EditProfileScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen

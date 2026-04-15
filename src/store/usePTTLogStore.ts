@@ -14,7 +14,7 @@ interface PTTLogState {
   clearError: () => void;
 }
 
-export const usePTTLogStore = create<PTTLogState>((set, get) => ({
+export const usePTTLogStore = create<PTTLogState>((set) => ({
   logs: {},
   isLoading: false,
   error: null,

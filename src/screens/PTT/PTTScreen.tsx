@@ -107,7 +107,7 @@ export function PTTScreen() {
               <View style={styles.groupInfo}>
                 <Text style={styles.groupName}>{item.name}</Text>
                 <Text style={styles.groupType}>
-                  {item.type === 'LEAD' ? 'Lead Channel' : 'Sub Channel'}
+                  {item.type === 'lead' ? 'Lead Channel' : 'Sub Channel'}
                 </Text>
               </View>
               <View style={styles.groupMembers}>

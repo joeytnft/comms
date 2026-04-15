@@ -6,8 +6,15 @@ export interface User {
   avatarUrl?: string;
   publicKey: string;
   organizationId: string;
+  campusId?: string | null;
+  isOrgAdmin?: boolean;
+  role?: OrganizationRole;
   createdAt: string;
   lastSeenAt?: string;
+}
+
+export interface OrgMember extends User {
+  campus?: { id: string; name: string } | null;
 }
 
 export interface UserProfile extends User {

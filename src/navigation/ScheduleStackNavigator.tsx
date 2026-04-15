@@ -5,7 +5,7 @@ import { ServiceDetailScreen } from '@/screens/Schedule/ServiceDetailScreen';
 import { COLORS } from '@/config/theme';
 
 export type ScheduleStackParamList = {
-  Schedule: undefined;
+  ScheduleHome: undefined;
   ServiceDetail: { serviceId: string };
 };
 
@@ -19,7 +19,7 @@ export function ScheduleStackNavigator() {
         headerTintColor: COLORS.textPrimary,
       }}
     >
-      <Stack.Screen name="Schedule" component={ScheduleScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="ScheduleHome" component={ScheduleScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ServiceDetail" component={ServiceDetailScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );

@@ -14,6 +14,7 @@ interface CreateGroupBody {
   description?: string;
   type: string; // Accepts 'lead'/'sub' or 'LEAD'/'SUB' — normalized to uppercase
   parentGroupId?: string;
+  campusId?: string | null;
   iconColor?: string;
 }
 
@@ -58,6 +59,7 @@ const GROUP_SELECT = {
   type: true,
   organizationId: true,
   campusId: true,
+  campus: { select: { id: true, name: true } },
   parentGroupId: true,
   iconColor: true,
   inviteCode: true,
@@ -94,20 +96,27 @@ export async function listGroups(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
+  const query = request.query as { campusId?: string };
+  // Campus-assigned users are always scoped to their campus.
+  // Org-level users can pass ?campusId= to view a specific campus's groups.
+  const effectiveCampusId = request.campusId ?? (query.campusId || null);
+
   let groups = await hierarchyService.getGroupsForUser(
     request.userId,
     request.organizationId,
   );
 
-  // Campus-scoped users only see their campus groups
-  if (request.campusId) {
-    groups = groups.filter((g) => !g.campusId || g.campusId === request.campusId);
+  // Filter groups by campus if a campus scope is active
+  if (effectiveCampusId) {
+    groups = groups.filter((g) => !g.campusId || g.campusId === effectiveCampusId);
   }
 
   const formatted = groups.map((g) => ({
     ...g,
     type: formatGroupType(g.type),
     memberCount: g._count.memberships,
+    members: (g as { memberships?: { role: string; user: object }[] }).memberships?.map(formatMembership) ?? [],
+    memberships: undefined,
     _count: undefined,
   }));
 
@@ -118,8 +127,11 @@ export async function createGroup(
   request: FastifyRequest<{ Body: CreateGroupBody }>,
   reply: FastifyReply,
 ) {
-  const { name, description, type: rawType, parentGroupId, iconColor } = request.body;
+  const { name, description, type: rawType, parentGroupId, campusId: bodyCampusId, iconColor } = request.body;
   const type = rawType.toUpperCase() as 'LEAD' | 'SUB';
+  // Explicit campusId from body takes precedence (Enterprise admins assigning a campus);
+  // fall back to the caller's own campus assignment.
+  const campusId = bodyCampusId !== undefined ? (bodyCampusId || null) : (request.campusId ?? null);
 
   await hierarchyService.validateGroupCreation(
     { name, description, type, parentGroupId, iconColor },
@@ -133,7 +145,7 @@ export async function createGroup(
       description: description?.trim() || null,
       type,
       organizationId: request.organizationId,
-      campusId: request.campusId ?? null,
+      campusId,
       parentGroupId: parentGroupId || null,
       iconColor: iconColor || null,
       createdBy: request.userId,
@@ -248,6 +260,56 @@ export async function updateGroup(
       type: formatGroupType(group.type),
       memberCount: group._count.memberships,
       _count: undefined,
+    },
+  });
+}
+
+export async function assignCampus(
+  request: FastifyRequest<{ Params: GroupIdParams; Body: { campusId: string | null } }>,
+  reply: FastifyReply,
+) {
+  await findGroupInOrg(request.params.id, request.organizationId);
+
+  const role = await hierarchyService.getUserRole(request.userId, request.params.id);
+  if (role !== 'ADMIN') {
+    throw new AuthorizationError('Only group admins can assign a campus');
+  }
+
+  const { campusId } = request.body;
+
+  // Verify campus belongs to the same org (if not null)
+  if (campusId) {
+    const campus = await prisma.campus.findFirst({
+      where: { id: campusId, organizationId: request.organizationId },
+    });
+    if (!campus) throw new NotFoundError('Campus');
+  }
+
+  const group = await prisma.group.update({
+    where: { id: request.params.id },
+    data: { campusId: campusId ?? null },
+    select: {
+      ...GROUP_SELECT,
+      memberships: {
+        include: {
+          user: {
+            select: { id: true, displayName: true, avatarUrl: true, lastSeenAt: true },
+          },
+        },
+        orderBy: { joinedAt: 'asc' },
+      },
+      _count: { select: { memberships: true } },
+    },
+  });
+
+  reply.send({
+    group: {
+      ...group,
+      type: formatGroupType(group.type),
+      memberCount: group._count.memberships,
+      members: group.memberships.map(formatMembership),
+      _count: undefined,
+      memberships: undefined,
     },
   });
 }
@@ -549,4 +611,29 @@ export async function getGroupKey(
   }
 
   return reply.send({ groupKey: group.groupKey });
+}
+
+export async function updateMemberRole(
+  request: FastifyRequest<{ Params: { id: string; userId: string }; Body: { role: 'admin' | 'member' } }>,
+  reply: FastifyReply,
+) {
+  const { id: groupId, userId: targetUserId } = request.params;
+  const { role } = request.body;
+  if (!['admin', 'member'].includes(role)) throw new ValidationError('role must be admin or member');
+
+  const callerRole = await hierarchyService.getUserRole(request.userId, groupId);
+  if (callerRole !== 'ADMIN') throw new AuthorizationError('Only group admins can change member roles');
+
+  const membership = await prisma.groupMembership.findUnique({
+    where: { groupId_userId: { groupId, userId: targetUserId } },
+  });
+  if (!membership) throw new NotFoundError('Member');
+
+  const updated = await prisma.groupMembership.update({
+    where: { groupId_userId: { groupId, userId: targetUserId } },
+    data: { role: role.toUpperCase() as 'ADMIN' | 'MEMBER' },
+    include: { user: { select: { id: true, displayName: true, avatarUrl: true, lastSeenAt: true } } },
+  });
+
+  return reply.send({ membership: formatMembership(updated) });
 }

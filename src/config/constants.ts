@@ -1,6 +1,6 @@
 // App-wide constants
 
-export const APP_NAME = 'Guardian Comm';
+export const APP_NAME = 'GatherSafe';
 export const APP_VERSION = '0.1.0';
 
 // API
@@ -25,8 +25,8 @@ export const PTT_AUDIO_SAMPLE_RATE = 16000;
 export const PTT_AUDIO_CHANNELS = 1;
 
 // Location
-export const LOCATION_UPDATE_INTERVAL = 5000; // 5 seconds
-export const LOCATION_DISTANCE_FILTER = 5; // meters
+export const LOCATION_UPDATE_INTERVAL = 2000; // 2 seconds
+export const LOCATION_DISTANCE_FILTER = 2; // meters
 export const GEOFENCE_DEFAULT_RADIUS = 200; // meters
 export const LOCATION_SHARING_KEY = 'guardian_location_sharing'; // persisted sharing preference
 

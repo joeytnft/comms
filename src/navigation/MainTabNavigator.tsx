@@ -1,5 +1,6 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { NavigatorScreenParams } from '@react-navigation/native';
 import { StyleSheet, View, Text } from 'react-native';
 import { COLORS, TYPOGRAPHY } from '@/config/theme';
 
@@ -8,13 +9,14 @@ import { GroupStackNavigator } from './GroupStackNavigator';
 import { PTTScreen } from '@/screens/PTT/PTTScreen';
 import { AlertsScreen } from '@/screens/Alerts/AlertsScreen';
 import { MoreStackNavigator } from './MoreStackNavigator';
+import { MoreStackParamList } from './MoreStackNavigator';
 
 export type MainTabParamList = {
   Dashboard: undefined;
   Groups: undefined;
   PTT: undefined;
   Alerts: undefined;
-  More: undefined;
+  More: NavigatorScreenParams<MoreStackParamList> | undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -83,6 +85,16 @@ export function MainTabNavigator() {
           headerShown: false,
           tabBarIcon: ({ color }) => <TabIcon label="⚙" color={color} />,
         }}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            // Always reset the More stack back to MoreMenu
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'More', state: { routes: [{ name: 'MoreMenu' }] } }],
+            });
+          },
+        })}
       />
     </Tab.Navigator>
   );

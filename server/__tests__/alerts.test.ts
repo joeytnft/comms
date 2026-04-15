@@ -16,14 +16,14 @@ const testOrg = {
 };
 
 const adminUser = {
-  email: 'alerts-admin@guardiancomm.app',
+  email: 'alerts-admin@gathersafeapp.com',
   password: 'securepassword123',
   displayName: 'Alerts Admin',
   organizationCode: 'ALERTS-TEST-CODE',
 };
 
 const memberUser = {
-  email: 'alerts-member@guardiancomm.app',
+  email: 'alerts-member@gathersafeapp.com',
   password: 'securepassword123',
   displayName: 'Alerts Member',
   organizationCode: 'ALERTS-TEST-CODE',
@@ -375,7 +375,7 @@ describe('Cross-organization isolation', () => {
       method: 'POST',
       url: '/auth/register',
       payload: {
-        email: 'alerts-other@guardiancomm.app',
+        email: 'alerts-other@gathersafeapp.com',
         password: 'securepassword123',
         displayName: 'Other User',
         organizationCode: 'ALERTS-OTHER-CODE',
@@ -409,7 +409,7 @@ describe('Cross-organization isolation', () => {
     });
     await prisma.alert.deleteMany({ where: { organizationId: otherOrg.id } });
     await prisma.refreshToken.deleteMany({ where: { userId: otherRes.json().user.id } });
-    await prisma.user.deleteMany({ where: { email: 'alerts-other@guardiancomm.app' } });
+    await prisma.user.deleteMany({ where: { email: 'alerts-other@gathersafeapp.com' } });
     await prisma.organization.deleteMany({ where: { id: otherOrg.id } });
   });
 });

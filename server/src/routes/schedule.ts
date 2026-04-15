@@ -36,6 +36,16 @@ export async function scheduleRoutes(app: FastifyInstance) {
   // My assignment for a service
   app.get('/services/:id/my-assignment', ctrl.getMyAssignment);
 
+  // Availability
+  app.put('/services/:id/availability', ctrl.setAvailability);
+  app.get('/services/:id/availability', ctrl.getAvailability);
+
+  // Accept / decline assignment
+  app.patch('/assignments/:assignmentId/respond', ctrl.respondToAssignment);
+
+  // Push token registration
+  app.put('/push-token', ctrl.registerPushToken);
+
   // Check-in
   app.post('/check-in/:assignmentId', ctrl.checkIn);
   app.post('/check-out/:assignmentId', ctrl.checkOut);

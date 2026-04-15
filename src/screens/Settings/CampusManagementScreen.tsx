@@ -1,17 +1,19 @@
 import React, { useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Modal, Alert, RefreshControl,
+  TextInput, Modal, Alert, RefreshControl, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import * as Location from 'expo-location';
 import { useCampusStore } from '@/store/useCampusStore';
 import { Campus, OrgMemberWithCampus } from '@/types/campus';
+import { geofenceService } from '@/services/geofenceService';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 
 export function CampusManagementScreen() {
   const {
-    campuses, orgMembers, isLoading,
+    campuses, orgMembers,
     fetchCampuses, fetchOrgMembers,
     createCampus, updateCampus, deleteCampus,
     assignUser, removeUser,
@@ -35,6 +37,15 @@ export function CampusManagementScreen() {
 
   // Assign modal
   const [assignCampus, setAssignCampus] = useState<Campus | null>(null);
+
+  // Geofence modal
+  const [geofenceCampus, setGeofenceCampus] = useState<Campus | null>(null);
+  const [gfName, setGfName] = useState('');
+  const [gfLat, setGfLat] = useState('');
+  const [gfLng, setGfLng] = useState('');
+  const [gfRadius, setGfRadius] = useState('');
+  const [gfSaving, setGfSaving] = useState(false);
+  const [gfLocating, setGfLocating] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -103,6 +114,74 @@ export function CampusManagementScreen() {
     }
   };
 
+  const openGeofenceModal = async (campus: Campus) => {
+    setGeofenceCampus(campus);
+    // Pre-fill if existing geofence
+    const existing = await geofenceService.fetchGeofence(campus.id);
+    if (existing) {
+      setGfName(existing.name);
+      setGfLat(String(existing.latitude));
+      setGfLng(String(existing.longitude));
+      setGfRadius(String(existing.radius));
+    } else {
+      setGfName(campus.name);
+      setGfLat('');
+      setGfLng('');
+      setGfRadius('200');
+    }
+  };
+
+  const handleUseCurrentLocation = async () => {
+    setGfLocating(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission denied', 'Location permission is required to use your current position.');
+        return;
+      }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      setGfLat(loc.coords.latitude.toFixed(6));
+      setGfLng(loc.coords.longitude.toFixed(6));
+    } catch {
+      Alert.alert('Error', 'Could not get your current location.');
+    } finally {
+      setGfLocating(false);
+    }
+  };
+
+  const handleSaveGeofence = async () => {
+    if (!geofenceCampus) return;
+    const lat = parseFloat(gfLat);
+    const lng = parseFloat(gfLng);
+    const radius = parseFloat(gfRadius);
+    if (isNaN(lat) || isNaN(lng) || isNaN(radius) || radius <= 0) {
+      Alert.alert('Invalid', 'Please enter valid latitude, longitude, and radius (metres).');
+      return;
+    }
+    setGfSaving(true);
+    try {
+      await geofenceService.saveGeofence({ campusId: geofenceCampus.id, name: gfName || geofenceCampus.name, latitude: lat, longitude: lng, radius });
+      setGeofenceCampus(null);
+    } catch {
+      Alert.alert('Error', 'Failed to save geofence.');
+    } finally {
+      setGfSaving(false);
+    }
+  };
+
+  const handleDeleteGeofence = async () => {
+    if (!geofenceCampus) return;
+    Alert.alert('Remove Geofence', `Remove geofence from "${geofenceCampus.name}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove', style: 'destructive', onPress: async () => {
+          await geofenceService.deleteGeofence(geofenceCampus.id);
+          setGeofenceCampus(null);
+        },
+      },
+    ]);
+  };
+
   const handleRemove = (member: OrgMemberWithCampus) => {
     if (!member.campusId) return;
     Alert.alert('Remove from Campus', `Remove ${member.displayName} from their campus?`, [
@@ -167,7 +246,10 @@ export function CampusManagementScreen() {
                 </View>
                 <View style={styles.cardActions}>
                   <TouchableOpacity style={styles.actionBtn} onPress={() => setAssignCampus(campus)}>
-                    <Text style={styles.actionBtnText}>Assign Members</Text>
+                    <Text style={styles.actionBtnText}>Members</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => openGeofenceModal(campus)}>
+                    <Text style={styles.actionBtnText}>Geofence</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.actionBtn} onPress={() => {
                     setEditTarget(campus);
@@ -214,7 +296,7 @@ export function CampusManagementScreen() {
 
       {/* Create campus modal */}
       <Modal visible={showCreate} transparent animationType="slide" onRequestClose={() => setShowCreate(false)}>
-        <View style={styles.overlay}>
+        <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>New Campus</Text>
             <TextInput style={styles.input} placeholder="Campus name *" placeholderTextColor={COLORS.textMuted}
@@ -231,12 +313,12 @@ export function CampusManagementScreen() {
               <Text style={styles.ghostBtnText}>Cancel</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Edit campus modal */}
       <Modal visible={!!editTarget} transparent animationType="slide" onRequestClose={() => setEditTarget(null)}>
-        <View style={styles.overlay}>
+        <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>Edit Campus</Text>
             <TextInput style={styles.input} placeholder="Campus name *" placeholderTextColor={COLORS.textMuted}
@@ -253,7 +335,43 @@ export function CampusManagementScreen() {
               <Text style={styles.ghostBtnText}>Cancel</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Geofence modal */}
+      <Modal visible={!!geofenceCampus} transparent animationType="slide" onRequestClose={() => setGeofenceCampus(null)}>
+        <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={styles.sheet}>
+            <Text style={styles.sheetTitle}>Geofence — {geofenceCampus?.name}</Text>
+            <Text style={styles.sheetSub}>Set the check-in boundary for this campus. Members get a notification when they arrive.</Text>
+            <TextInput style={styles.input} placeholder="Label (e.g. Main Campus)" placeholderTextColor={COLORS.textMuted}
+              value={gfName} onChangeText={setGfName} maxLength={60} />
+            <TouchableOpacity style={styles.locationBtn} onPress={handleUseCurrentLocation} disabled={gfLocating}>
+              {gfLocating
+                ? <ActivityIndicator size="small" color={COLORS.accent} />
+                : <Text style={styles.locationBtnText}>Use My Current Location</Text>}
+            </TouchableOpacity>
+            <TextInput style={styles.input} placeholder="Latitude (e.g. 37.7749)" placeholderTextColor={COLORS.textMuted}
+              value={gfLat} onChangeText={setGfLat} keyboardType="decimal-pad" />
+            <TextInput style={styles.input} placeholder="Longitude (e.g. -122.4194)" placeholderTextColor={COLORS.textMuted}
+              value={gfLng} onChangeText={setGfLng} keyboardType="decimal-pad" />
+            <TextInput style={styles.input} placeholder="Radius in metres (e.g. 200)" placeholderTextColor={COLORS.textMuted}
+              value={gfRadius} onChangeText={setGfRadius} keyboardType="numeric" />
+            <TouchableOpacity
+              style={[styles.primaryBtn, (!gfLat || !gfLng || !gfRadius || gfSaving) && styles.primaryBtnDisabled]}
+              onPress={handleSaveGeofence}
+              disabled={!gfLat || !gfLng || !gfRadius || gfSaving}
+            >
+              <Text style={styles.primaryBtnText}>{gfSaving ? 'Saving...' : 'Save Geofence'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.ghostBtn} onPress={handleDeleteGeofence}>
+              <Text style={[styles.ghostBtnText, { color: COLORS.danger }]}>Remove Geofence</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.ghostBtn} onPress={() => setGeofenceCampus(null)}>
+              <Text style={styles.ghostBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Assign members modal */}
@@ -301,7 +419,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm, borderRadius: BORDER_RADIUS.md,
   },
   addBtnText: { ...TYPOGRAPHY.bodySmall, color: COLORS.white, fontWeight: '600' },
-  tabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  tabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: COLORS.gray700 },
   tab: { flex: 1, paddingVertical: SPACING.sm, alignItems: 'center' },
   tabActive: { borderBottomWidth: 2, borderBottomColor: COLORS.accent },
   tabText: { ...TYPOGRAPHY.bodySmall, color: COLORS.textMuted },
@@ -313,14 +431,14 @@ const styles = StyleSheet.create({
   },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: SPACING.sm },
   cardTitleBlock: { flex: 1 },
-  cardName: { ...TYPOGRAPHY.bodyLarge, color: COLORS.textPrimary, fontWeight: '600' },
+  cardName: { ...TYPOGRAPHY.body, color: COLORS.textPrimary, fontWeight: '600' },
   cardSub: { ...TYPOGRAPHY.bodySmall, color: COLORS.textMuted, marginTop: 2 },
   cardDesc: { ...TYPOGRAPHY.bodySmall, color: COLORS.textSecondary, marginTop: 2 },
   cardStats: { alignItems: 'flex-end', gap: 2 },
   statText: { ...TYPOGRAPHY.caption, color: COLORS.textMuted },
   cardActions: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.sm },
   actionBtn: {
-    flex: 1, borderWidth: 1, borderColor: COLORS.border,
+    flex: 1, borderWidth: 1, borderColor: COLORS.gray700,
     borderRadius: BORDER_RADIUS.sm, paddingVertical: SPACING.xs, alignItems: 'center',
   },
   actionBtnDanger: { borderColor: COLORS.danger },
@@ -332,7 +450,7 @@ const styles = StyleSheet.create({
   },
   memberRowModal: {
     flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
-    paddingVertical: SPACING.sm, borderBottomWidth: 1, borderBottomColor: COLORS.border,
+    paddingVertical: SPACING.sm, borderBottomWidth: 1, borderBottomColor: COLORS.gray700,
   },
   memberAvatar: {
     width: 36, height: 36, borderRadius: 18,
@@ -346,7 +464,7 @@ const styles = StyleSheet.create({
   removeMemberText: { ...TYPOGRAPHY.bodySmall, color: COLORS.danger },
   assignPlus: { ...TYPOGRAPHY.heading2, color: COLORS.accent, paddingHorizontal: SPACING.sm },
   empty: { alignItems: 'center', paddingVertical: SPACING.xl },
-  emptyTitle: { ...TYPOGRAPHY.bodyLarge, color: COLORS.textSecondary, fontWeight: '600' },
+  emptyTitle: { ...TYPOGRAPHY.body, color: COLORS.textSecondary, fontWeight: '600' },
   emptySubtitle: { ...TYPOGRAPHY.bodySmall, color: COLORS.textMuted, marginTop: SPACING.xs, textAlign: 'center' },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   sheet: {
@@ -356,7 +474,7 @@ const styles = StyleSheet.create({
   sheetTitle: { ...TYPOGRAPHY.heading2, color: COLORS.textPrimary, marginBottom: SPACING.xs },
   sheetSub: { ...TYPOGRAPHY.bodySmall, color: COLORS.textMuted, marginBottom: SPACING.sm },
   input: {
-    backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border,
+    backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.gray700,
     borderRadius: BORDER_RADIUS.md, padding: SPACING.md,
     color: COLORS.textPrimary, ...TYPOGRAPHY.body,
   },
@@ -368,4 +486,14 @@ const styles = StyleSheet.create({
   primaryBtnText: { ...TYPOGRAPHY.body, color: COLORS.white, fontWeight: '700' },
   ghostBtn: { paddingVertical: SPACING.sm, alignItems: 'center' },
   ghostBtnText: { ...TYPOGRAPHY.body, color: COLORS.textMuted },
+  locationBtn: {
+    borderWidth: 1,
+    borderColor: COLORS.accent,
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: SPACING.sm,
+    alignItems: 'center',
+    minHeight: 40,
+    justifyContent: 'center',
+  },
+  locationBtnText: { ...TYPOGRAPHY.bodySmall, color: COLORS.accent, fontWeight: '600' },
 });

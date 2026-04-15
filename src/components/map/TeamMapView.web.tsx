@@ -1,11 +1,13 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { TeamMemberLocation, Geofence } from '@/types';
+import { TeamMemberLocation, Geofence, Alert } from '@/types';
+import { ALERT_COLORS } from '@/types/alert';
 import { COLORS, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 
 interface Props {
   locations: TeamMemberLocation[];
   geofence?: Geofence | null;
+  activeAlerts?: Alert[];
   style?: object;
 }
 
@@ -16,10 +18,19 @@ const PAD = 10;
 const isOnline = (updatedAt: string) =>
   Date.now() - new Date(updatedAt).getTime() < 300_000;
 
-export function TeamMapView({ locations, geofence, style }: Props) {
+export function TeamMapView({ locations, geofence, activeAlerts = [], style }: Props) {
   // Include geofence center in bounds calculation
-  const allLats = [...locations.map((l) => l.latitude), ...(geofence ? [geofence.latitude] : [])];
-  const allLngs = [...locations.map((l) => l.longitude), ...(geofence ? [geofence.longitude] : [])];
+  const alertsWithCoords = activeAlerts.filter((a) => a.latitude != null && a.longitude != null);
+  const allLats = [
+    ...locations.map((l) => l.latitude),
+    ...alertsWithCoords.map((a) => a.latitude!),
+    ...(geofence ? [geofence.latitude] : []),
+  ];
+  const allLngs = [
+    ...locations.map((l) => l.longitude),
+    ...alertsWithCoords.map((a) => a.longitude!),
+    ...(geofence ? [geofence.longitude] : []),
+  ];
   const lats = allLats.length ? allLats : [0];
   const lngs = allLngs.length ? allLngs : [0];
 
@@ -67,6 +78,22 @@ export function TeamMapView({ locations, geofence, style }: Props) {
             No locations yet
           </text>
         )}
+
+        {alertsWithCoords.map((alert) => {
+          const x = toX(alert.longitude!);
+          const y = toY(alert.latitude!);
+          const color = ALERT_COLORS[alert.level];
+          return (
+            <g key={`alert-${alert.id}`}>
+              <circle cx={x} cy={y} r="6" fill={color} opacity="0.25" />
+              <circle cx={x} cy={y} r="3.5" fill={color} />
+              <text x={x} y={y + 0.9} textAnchor="middle"
+                dominantBaseline="middle" fontSize="3" fill="#fff">!</text>
+              <text x={x} y={y + 8} textAnchor="middle"
+                fontSize="2.2" fill={color}>{alert.triggeredBy.displayName}</text>
+            </g>
+          );
+        })}
 
         {locations.map((member) => {
           const x = toX(member.longitude);

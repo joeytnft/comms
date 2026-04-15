@@ -32,7 +32,6 @@ export function ChatRoomScreen({ navigation, route }: Props) {
     receiveMessage,
     setTyping,
     markRead,
-    clearError,
   } = useChatStore();
 
   const messages = messagesByGroup[groupId] || [];
@@ -125,9 +124,9 @@ export function ChatRoomScreen({ navigation, route }: Props) {
       {/* Messages */}
       <View style={styles.messageArea}>
         {error ? (
-          <TouchableOpacity style={styles.errorBanner} onPress={clearError}>
-            <Text style={styles.errorText}>{error}  ✕</Text>
-          </TouchableOpacity>
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
         ) : null}
         <MessageList
           messages={messages}

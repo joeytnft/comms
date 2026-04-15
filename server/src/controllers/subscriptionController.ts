@@ -15,6 +15,7 @@ export async function getSubscription(
       subscriptionTier: true,
       subscriptionStatus: true,
       trialEndsAt: true,
+      pcoIntegrationEnabled: true,
       _count: { select: { users: true } },
     },
   });
@@ -33,7 +34,15 @@ export async function getSubscription(
     }),
   ]);
 
-  const limits = PLAN_LIMITS[org.subscriptionTier];
+  const baseLimits = PLAN_LIMITS[org.subscriptionTier];
+  // Override planningCenter feature flag based on per-org add-on
+  const limits = {
+    ...baseLimits,
+    features: {
+      ...baseLimits.features,
+      planningCenter: org.pcoIntegrationEnabled,
+    },
+  };
 
   reply.send({
     subscription: {

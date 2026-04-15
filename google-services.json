@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "599236306534",
+    "project_id": "gathersafe-abb38",
+    "storage_bucket": "gathersafe-abb38.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:599236306534:android:54b4b3cd830155af4eafa7",
+        "android_client_info": {
+          "package_name": "com.gathersafeapp.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCrfjwwQB3eEt2J6rid9Al8Q-6Yhw4kvs4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

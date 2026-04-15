@@ -12,6 +12,7 @@ export interface PlanLimits {
     incidents: boolean;
     multiCampus: boolean;
     scheduling: boolean;
+    planningCenter: boolean; // add-on — enabled per-org regardless of tier
   };
 }
 

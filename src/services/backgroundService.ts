@@ -14,14 +14,13 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
 
-export const BACKGROUND_PTT_TASK = 'GUARDIAN_COMM_PTT_BG';
+export const BACKGROUND_PTT_TASK = 'GATHERSAFE_PTT_BG';
 
 // Register the background task (module scope — required by expo-task-manager)
 if (Platform.OS !== 'web') {
-  TaskManager.defineTask(BACKGROUND_PTT_TASK, () => {
+  TaskManager.defineTask(BACKGROUND_PTT_TASK, async (): Promise<void> => {
     // The actual PTT work happens in PTTContext / socket connection.
     // This task registration keeps the process alive on Android.
-    return TaskManager.TaskManagerTaskResult.REPEAT_CONTENT;
   });
 }
 
@@ -46,18 +45,11 @@ export const backgroundService = {
     await Notifications.scheduleNotificationAsync({
       identifier: 'ptt-foreground',
       content: {
-        title: 'Guardian Comm — PTT Active',
+        title: 'GatherSafe — PTT Active',
         body: `Listening on ${groupName}. Press the PTT button to talk.`,
         sticky: true,
         autoDismiss: false,
         data: { type: 'ptt_foreground' },
-        android: {
-          channelId: 'ptt-foreground',
-          ongoing: true,
-          priority: Notifications.AndroidNotificationPriority.LOW,
-          smallIcon: 'notification_icon',
-          color: '#6366F1',
-        },
       },
       trigger: null,
     });

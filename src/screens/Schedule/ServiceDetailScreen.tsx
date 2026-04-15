@@ -1,7 +1,7 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Alert, Modal, TextInput, RefreshControl,
+  Alert, Modal, TextInput, RefreshControl, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -11,6 +11,7 @@ import { useScheduleStore } from '@/store/useScheduleStore';
 import { useGroupStore } from '@/store/useGroupStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { ShiftAssignment } from '@/types';
+import { scheduleService } from '@/services/scheduleService';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 import { ScheduleStackParamList } from '@/navigation/ScheduleStackNavigator';
 
@@ -53,7 +54,7 @@ export function ServiceDetailScreen({ navigation, route }: Props) {
   const {
     currentService, isLoading, posts,
     fetchService, fetchPosts, assignUser, removeAssignment,
-    checkIn, checkOut, requestSwap, respondToSwap, deleteService,
+    checkIn, checkOut, requestSwap, deleteService,
     createPost,
   } = useScheduleStore();
 
@@ -68,6 +69,9 @@ export function ServiceDetailScreen({ navigation, route }: Props) {
   const [showPostCreate, setShowPostCreate] = useState(false);
   const [newPostName, setNewPostName] = useState('');
   const [newPostZone, setNewPostZone] = useState('');
+  const [availability, setAvailability] = useState<Record<string, boolean>>({});
+  const [myAvailable, setMyAvailable] = useState<boolean | null>(null);
+  const [filterGroupId, setFilterGroupId] = useState<string | null>(null);
 
   const isAdmin = groups.some((g) => g.myRole === 'admin');
 
@@ -79,6 +83,15 @@ export function ServiceDetailScreen({ navigation, route }: Props) {
       return () => useScheduleStore.getState().clearCurrentService();
     }, [serviceId]),
   );
+
+  useEffect(() => {
+    scheduleService.getAvailability(serviceId).then(({ availability: rows }) => {
+      const map: Record<string, boolean> = {};
+      rows.forEach((r) => { map[r.userId] = r.available; });
+      setAvailability(map);
+      if (user?.id) setMyAvailable(map[user.id] ?? null);
+    }).catch(() => null);
+  }, [serviceId, user?.id]);
 
   if (!currentService) {
     return (
@@ -105,6 +118,26 @@ export function ServiceDetailScreen({ navigation, route }: Props) {
     if (!myAssignment) return;
     try { await checkOut(myAssignment.id); }
     catch (e: unknown) { Alert.alert('Error', e instanceof Error ? e.message : 'Failed to check out'); }
+  };
+
+  const handleToggleAvailability = async (available: boolean) => {
+    try {
+      await scheduleService.setAvailability(serviceId, available);
+      setMyAvailable(available);
+      if (user?.id) setAvailability((prev) => ({ ...prev, [user.id]: available }));
+    } catch (e: unknown) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to update availability');
+    }
+  };
+
+  const handleRespondToAssignment = async (accept: boolean) => {
+    if (!myAssignment) return;
+    try {
+      await scheduleService.respondToAssignment(myAssignment.id, accept);
+      await fetchService(serviceId);
+    } catch (e: unknown) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to respond');
+    }
   };
 
   const handleAssign = async (userId: string) => {
@@ -194,8 +227,12 @@ export function ServiceDetailScreen({ navigation, route }: Props) {
     return acc;
   }, {});
 
-  const filteredMembers = allMembers.filter((m) =>
-    m.displayName?.toLowerCase().includes(assignSearch.toLowerCase()) &&
+  const sourceMembers = filterGroupId
+    ? (groups.find((g) => g.id === filterGroupId)?.members ?? [])
+    : allMembers;
+
+  const filteredMembers = sourceMembers.filter((m) =>
+    (m.user?.displayName ?? '').toLowerCase().includes(assignSearch.toLowerCase()) &&
     !currentService.assignments.find((a) => a.userId === m.userId)
   );
 
@@ -291,6 +328,27 @@ export function ServiceDetailScreen({ navigation, route }: Props) {
           ))}
         </View>
 
+        {/* Availability toggle (non-assigned members) */}
+        {!myAssignment && (
+          <View style={styles.myCard}>
+            <Text style={styles.myCardLabel}>YOUR AVAILABILITY</Text>
+            <View style={styles.checkInButtons}>
+              <TouchableOpacity
+                style={[styles.checkInBtn, myAvailable === true && { backgroundColor: COLORS.success }]}
+                onPress={() => handleToggleAvailability(true)}
+              >
+                <Text style={styles.checkInBtnText}>✓ Available</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.checkInBtn, myAvailable === false && { backgroundColor: COLORS.danger }]}
+                onPress={() => handleToggleAvailability(false)}
+              >
+                <Text style={styles.checkInBtnText}>✗ Unavailable</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* My check-in card */}
         {myAssignment && (
           <View style={styles.myCard}>
@@ -299,19 +357,34 @@ export function ServiceDetailScreen({ navigation, route }: Props) {
               {myAssignment.post ? `📍 ${myAssignment.post.name}` : 'No post assigned'}
               {myAssignment.role ? `  ·  ${myAssignment.role}` : ''}
             </Text>
-            <View style={styles.checkInButtons}>
-              {!myAssignment.checkIn ? (
-                <TouchableOpacity style={styles.checkInBtn} onPress={handleCheckIn}>
-                  <Text style={styles.checkInBtnText}>CHECK IN</Text>
+            {myAssignment.status === 'PENDING' && (
+              <View style={styles.checkInButtons}>
+                <TouchableOpacity style={[styles.checkInBtn, { backgroundColor: COLORS.success }]} onPress={() => handleRespondToAssignment(true)}>
+                  <Text style={styles.checkInBtnText}>✓ Accept</Text>
                 </TouchableOpacity>
-              ) : !myAssignment.checkIn.checkedOutAt ? (
-                <TouchableOpacity style={[styles.checkInBtn, styles.checkOutBtn]} onPress={handleCheckOut}>
-                  <Text style={styles.checkInBtnText}>CHECK OUT</Text>
+                <TouchableOpacity style={[styles.checkInBtn, { backgroundColor: COLORS.danger }]} onPress={() => handleRespondToAssignment(false)}>
+                  <Text style={styles.checkInBtnText}>✗ Decline</Text>
                 </TouchableOpacity>
-              ) : (
-                <Text style={styles.checkedOutText}>Checked out at {formatTime(myAssignment.checkIn.checkedOutAt)}</Text>
-              )}
-            </View>
+              </View>
+            )}
+            {myAssignment.status === 'ACCEPTED' && (
+              <View style={styles.checkInButtons}>
+                {!myAssignment.checkIn ? (
+                  <TouchableOpacity style={styles.checkInBtn} onPress={handleCheckIn}>
+                    <Text style={styles.checkInBtnText}>CHECK IN</Text>
+                  </TouchableOpacity>
+                ) : !myAssignment.checkIn.checkedOutAt ? (
+                  <TouchableOpacity style={[styles.checkInBtn, styles.checkOutBtn]} onPress={handleCheckOut}>
+                    <Text style={styles.checkInBtnText}>CHECK OUT</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={styles.checkedOutText}>Checked out at {formatTime(myAssignment.checkIn.checkedOutAt)}</Text>
+                )}
+              </View>
+            )}
+            {myAssignment.status === 'DECLINED' && (
+              <Text style={[styles.checkedOutText, { color: COLORS.danger }]}>You declined this shift</Text>
+            )}
           </View>
         )}
 
@@ -354,9 +427,28 @@ export function ServiceDetailScreen({ navigation, route }: Props) {
 
       {/* Assign user modal */}
       <Modal visible={showAssignModal} transparent animationType="slide" onRequestClose={() => setShowAssignModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Assign Volunteer</Text>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.postRow}>
+              <TouchableOpacity
+                style={[styles.postChip, !filterGroupId && styles.postChipActive]}
+                onPress={() => setFilterGroupId(null)}
+              >
+                <Text style={[styles.postChipText, !filterGroupId && styles.postChipTextActive]}>All Teams</Text>
+              </TouchableOpacity>
+              {groups.map((g) => (
+                <TouchableOpacity
+                  key={g.id}
+                  style={[styles.postChip, filterGroupId === g.id && styles.postChipActive]}
+                  onPress={() => setFilterGroupId(g.id)}
+                >
+                  <Text style={[styles.postChipText, filterGroupId === g.id && styles.postChipTextActive]}>{g.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
 
             <TextInput
               style={styles.input}
@@ -374,10 +466,12 @@ export function ServiceDetailScreen({ navigation, route }: Props) {
                   onPress={() => handleAssign(m.userId)}
                 >
                   <View style={styles.memberAvatar}>
-                    <Text style={styles.memberAvatarText}>{m.displayName?.charAt(0)?.toUpperCase()}</Text>
+                    <Text style={styles.memberAvatarText}>{m.user?.displayName?.charAt(0)?.toUpperCase()}</Text>
                   </View>
-                  <Text style={styles.memberName}>{m.displayName}</Text>
-                  <Text style={styles.memberTap}>Tap to assign</Text>
+                  <Text style={styles.memberName}>{m.user?.displayName}</Text>
+                  {availability[m.userId] === true && <Text style={{ color: COLORS.success, fontSize: 11 }}>✓ Available</Text>}
+                  {availability[m.userId] === false && <Text style={{ color: COLORS.danger, fontSize: 11 }}>✗ Unavailable</Text>}
+                  {availability[m.userId] === undefined && <Text style={styles.memberTap}>Tap to assign</Text>}
                 </TouchableOpacity>
               ))}
               {filteredMembers.length === 0 && (
@@ -426,10 +520,12 @@ export function ServiceDetailScreen({ navigation, route }: Props) {
             </TouchableOpacity>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Create post modal */}
       <Modal visible={showPostCreate} transparent animationType="slide" onRequestClose={() => setShowPostCreate(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>New Post / Zone</Text>
@@ -461,10 +557,12 @@ export function ServiceDetailScreen({ navigation, route }: Props) {
             </TouchableOpacity>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Swap request modal */}
       <Modal visible={showSwapModal} transparent animationType="slide" onRequestClose={() => setShowSwapModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Request Shift Swap</Text>
@@ -483,10 +581,10 @@ export function ServiceDetailScreen({ navigation, route }: Props) {
                     onPress={() => setSwapTargetId(m.userId)}
                   >
                     <View style={styles.memberAvatar}>
-                      <Text style={styles.memberAvatarText}>{m.displayName?.charAt(0)?.toUpperCase()}</Text>
+                      <Text style={styles.memberAvatarText}>{m.user?.displayName?.charAt(0)?.toUpperCase()}</Text>
                     </View>
                     <Text style={[styles.memberName, swapTargetId === m.userId && { color: COLORS.accent }]}>
-                      {m.displayName}
+                      {m.user?.displayName}
                     </Text>
                     {swapTargetId === m.userId && <Text style={{ color: COLORS.accent }}>✓</Text>}
                   </TouchableOpacity>
@@ -515,6 +613,7 @@ export function ServiceDetailScreen({ navigation, route }: Props) {
             </TouchableOpacity>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

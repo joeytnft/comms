@@ -3,13 +3,13 @@ import { Group, GroupWithMembers, GroupHierarchy, CreateGroupData, InviteMemberD
 import { groupService } from '@/services/groupService';
 
 interface GroupState {
-  groups: Group[];
+  groups: GroupWithMembers[];
   currentGroup: GroupWithMembers | null;
   hierarchy: GroupHierarchy[];
   isLoading: boolean;
   error: string | null;
 
-  fetchGroups: () => Promise<void>;
+  fetchGroups: (campusId?: string | null) => Promise<void>;
   fetchGroup: (id: string) => Promise<void>;
   fetchHierarchy: () => Promise<void>;
   createGroup: (data: CreateGroupData) => Promise<Group>;
@@ -20,21 +20,22 @@ interface GroupState {
   generateInvite: (groupId: string) => Promise<string>;
   revokeInvite: (groupId: string) => Promise<void>;
   joinByInvite: (inviteCode: string) => Promise<void>;
+  assignGroupCampus: (groupId: string, campusId: string | null) => Promise<void>;
   clearError: () => void;
   clearCurrentGroup: () => void;
 }
 
-export const useGroupStore = create<GroupState>((set, get) => ({
+export const useGroupStore = create<GroupState>((set, _get) => ({
   groups: [],
   currentGroup: null,
   hierarchy: [],
   isLoading: false,
   error: null,
 
-  fetchGroups: async () => {
+  fetchGroups: async (campusId?: string | null) => {
     set({ isLoading: true, error: null });
     try {
-      const { groups } = await groupService.listGroups();
+      const { groups } = await groupService.listGroups(campusId);
       set({ groups, isLoading: false });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to load groups';
@@ -206,6 +207,23 @@ export const useGroupStore = create<GroupState>((set, get) => ({
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to join group';
       set({ error: message, isLoading: false });
+      throw error;
+    }
+  },
+
+  assignGroupCampus: async (groupId, campusId) => {
+    set({ error: null });
+    try {
+      const { group } = await groupService.assignCampus(groupId, campusId);
+      set((state) => ({
+        groups: state.groups.map((g) => (g.id === groupId ? { ...g, ...group } : g)),
+        currentGroup: state.currentGroup?.id === groupId
+          ? { ...state.currentGroup, ...group }
+          : state.currentGroup,
+      }));
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to assign campus';
+      set({ error: message });
       throw error;
     }
   },

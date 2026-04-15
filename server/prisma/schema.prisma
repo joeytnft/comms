@@ -1,8 +1,9 @@
-// Guardian Comm — Database Schema
+// GatherSafe — Database Schema
 // Run: npx prisma migrate dev --name init
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -28,12 +29,14 @@ model Organization {
   trialEndsAt          DateTime?
   rcCustomerId         String?            @unique // RevenueCat customer ID
 
+  pcoIntegrationEnabled Boolean @default(false)
+
   users            User[]
   groups           Group[]
   alerts           Alert[]
   incidents        Incident[]
   billingEvents    BillingEvent[]
-  geofence         Geofence?
+  geofences        Geofence[]
   serviceSchedules ServiceSchedule[]
   serviceTemplates ServiceTemplate[]
   posts            Post[]
@@ -62,6 +65,7 @@ model Campus {
   groups       Group[]
   alerts       Alert[]
   incidents    Incident[]
+  geofence     Geofence?
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -114,6 +118,8 @@ model User {
   organizationId  String
   campusId        String?
   lastSeenAt      DateTime?
+  pushToken       String?  // Expo push notification token
+  isOrgAdmin      Boolean  @default(false)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -130,6 +136,7 @@ model User {
   swapRequestsReceived ShiftSwapRequest[] @relation("swapRequestsReceived")
   createdServices      ServiceSchedule[]  @relation("serviceCreatedBy")
   createdTemplates     ServiceTemplate[]  @relation("templateCreatedBy")
+  availability         ServiceAvailability[]
 
   @@index([organizationId])
   @@map("users")
@@ -462,28 +469,51 @@ model ServiceSchedule {
   template     ServiceTemplate?  @relation(fields: [templateId], references: [id], onDelete: SetNull)
   createdBy    User              @relation("serviceCreatedBy", fields: [createdById], references: [id])
   assignments  ShiftAssignment[]
+  availability ServiceAvailability[]
 
   @@index([organizationId, serviceDate])
   @@map("service_schedules")
 }
 
 model ShiftAssignment {
-  id        String   @id @default(cuid())
+  id        String           @id @default(cuid())
   serviceId String
   userId    String
   postId    String?
   role      String?
   notes     String?
-  createdAt DateTime @default(now())
+  status    AssignmentStatus @default(PENDING)
+  createdAt DateTime         @default(now())
 
-  service      ServiceSchedule   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  user         User              @relation("shiftAssignments", fields: [userId], references: [id])
-  post         Post?             @relation(fields: [postId], references: [id])
+  service      ServiceSchedule    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  user         User               @relation("shiftAssignments", fields: [userId], references: [id])
+  post         Post?              @relation(fields: [postId], references: [id])
   checkIn      CheckIn?
   swapRequests ShiftSwapRequest[] @relation("fromAssignment")
 
   @@unique([serviceId, userId])
   @@map("shift_assignments")
+}
+
+model ServiceAvailability {
+  id        String   @id @default(cuid())
+  serviceId String
+  userId    String
+  available Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  service ServiceSchedule @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceId, userId])
+  @@map("service_availability")
+}
+
+enum AssignmentStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
 }
 
 model CheckIn {
@@ -554,9 +584,73 @@ model ResponsePlanStep {
 // GEOFENCING
 // ============================================================================
 
-model Geofence {
+// ============================================================================
+// PLANNING CENTER INTEGRATION
+// ============================================================================
+
+model PcoConnection {
   id             String   @id @default(cuid())
   organizationId String   @unique
+  accessToken    String
+  refreshToken   String
+  tokenExpiresAt DateTime
+  scope          String   @default("people services")
+  pcoOrgId       String?
+  pcoOrgName     String?
+  connectedById  String
+  connectedAt    DateTime @default(now())
+  lastSyncAt     DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  people       PcoPerson[]
+  plans        PcoPlan[]
+
+  @@map("pco_connections")
+}
+
+model PcoPerson {
+  id             String   @id @default(cuid())
+  organizationId String
+  pcoId          String   // PCO's person ID
+  name           String
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String?
+  avatarUrl      String?
+  status         String   @default("active")
+  syncedAt       DateTime @default(now()) @updatedAt
+
+  connection PcoConnection @relation(fields: [organizationId], references: [organizationId], onDelete: Cascade)
+
+  @@unique([organizationId, pcoId])
+  @@index([organizationId])
+  @@map("pco_people")
+}
+
+model PcoPlan {
+  id              String   @id @default(cuid())
+  organizationId  String
+  pcoId           String
+  serviceTypeId   String
+  serviceTypeName String
+  title           String?
+  seriesTitle     String?
+  sortDate        DateTime?
+  totalLength     Int      @default(0) // seconds
+  syncedAt        DateTime @default(now()) @updatedAt
+
+  connection PcoConnection @relation(fields: [organizationId], references: [organizationId], onDelete: Cascade)
+
+  @@unique([organizationId, pcoId])
+  @@index([organizationId, sortDate])
+  @@map("pco_plans")
+}
+
+model Geofence {
+  id             String   @id @default(cuid())
+  organizationId String
+  campusId       String   @unique
   name           String
   latitude       Float
   longitude      Float
@@ -565,6 +659,8 @@ model Geofence {
   updatedAt      DateTime @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id])
+  campus       Campus       @relation(fields: [campusId], references: [id])
 
+  @@index([organizationId])
   @@map("geofences")
 }

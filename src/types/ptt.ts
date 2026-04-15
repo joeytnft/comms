@@ -44,6 +44,7 @@ export interface PttLog {
 export interface Geofence {
   id: string;
   organizationId: string;
+  campusId: string;
   name: string;
   latitude: number;
   longitude: number;

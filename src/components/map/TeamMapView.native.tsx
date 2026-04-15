@@ -2,21 +2,23 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import MapView, { Marker, Callout, Circle } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { TeamMemberLocation, Geofence } from '@/types';
+import { TeamMemberLocation, Geofence, Alert } from '@/types';
+import { ALERT_COLORS, ALERT_TYPE_DEFS } from '@/types/alert';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 
 interface Props {
   locations: TeamMemberLocation[];
   geofence?: Geofence | null;
+  activeAlerts?: Alert[];
   style?: object;
 }
 
-const DELTA = 0.01; // ~1km zoom
+const DELTA = 0.0009; // ~300 ft zoom
 
 const isOnline = (updatedAt: string) =>
   Date.now() - new Date(updatedAt).getTime() < 300_000;
 
-export function TeamMapView({ locations, geofence, style }: Props) {
+export function TeamMapView({ locations, geofence, activeAlerts = [], style }: Props) {
   const mapRef = useRef<MapView>(null);
   const [deviceCoords, setDeviceCoords] = useState<{ lat: number; lng: number } | null>(null);
   const centeredRef = useRef(false); // has the map been centered at least once?
@@ -28,16 +30,16 @@ export function TeamMapView({ locations, geofence, style }: Props) {
     Location.requestForegroundPermissionsAsync().then(({ status }) => {
       if (status !== 'granted') return;
 
-      // Get immediate fix
-      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
+      // Get immediate high-accuracy fix
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.BestForNavigation })
         .then((loc) => {
           setDeviceCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
         })
         .catch(() => null);
 
-      // Keep updating so the map can follow the user
+      // Live tracking — high accuracy, update every ~1s or 2m of movement
       Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.Balanced, timeInterval: 5_000, distanceInterval: 5 },
+        { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1_000, distanceInterval: 2 },
         (loc) => {
           setDeviceCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
         },
@@ -95,6 +97,38 @@ export function TeamMapView({ locations, geofence, style }: Props) {
           />
         )}
 
+        {/* Alert pins — shown for active alerts with GPS coords, removed on resolve */}
+        {activeAlerts
+          .filter((a) => a.latitude != null && a.longitude != null)
+          .map((alert) => {
+            const pinColor = ALERT_COLORS[alert.level];
+            const emoji = alert.alertType ? (ALERT_TYPE_DEFS[alert.alertType]?.emoji ?? '🚨') : '🚨';
+            return (
+              <Marker
+                key={`alert-${alert.id}`}
+                coordinate={{ latitude: alert.latitude!, longitude: alert.longitude! }}
+                anchor={{ x: 0.5, y: 1 }}
+              >
+                <View style={[styles.alertPin, { borderColor: pinColor }]}>
+                  <Text style={styles.alertPinEmoji}>{emoji}</Text>
+                </View>
+                <Callout>
+                  <View style={styles.callout}>
+                    <Text style={[styles.calloutName, { color: pinColor }]}>
+                      {emoji} {alert.level}
+                    </Text>
+                    <Text style={styles.calloutCoords}>
+                      Reported by {alert.triggeredBy.displayName}
+                    </Text>
+                    {alert.message ? (
+                      <Text style={styles.calloutCoords}>{alert.message}</Text>
+                    ) : null}
+                  </View>
+                </Callout>
+              </Marker>
+            );
+          })}
+
         {locations.map((member) => (
           <Marker
             key={member.userId}
@@ -123,9 +157,22 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     ...SHADOWS.sm,
   },
+  alertPin: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.surface,
+    borderWidth: 3,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...SHADOWS.sm,
+  },
+  alertPinEmoji: {
+    fontSize: 20,
+  },
   callout: {
     padding: SPACING.sm,
-    minWidth: 120,
+    minWidth: 140,
   },
   calloutName: {
     ...TYPOGRAPHY.body,

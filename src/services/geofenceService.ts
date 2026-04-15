@@ -7,11 +7,11 @@ import { secureStorage } from '@/utils/secureStorage';
 import { ACCESS_TOKEN_KEY } from '@/config/constants';
 import { Geofence } from '@/types';
 
-export const GEOFENCE_TASK = 'GUARDIAN_COMM_GEOFENCE';
+export const GEOFENCE_TASK = 'GATHERSAFE_GEOFENCE';
 
 // Register the background geofence task (must be called at module scope, outside components)
 if (Platform.OS !== 'web') {
-  TaskManager.defineTask(GEOFENCE_TASK, ({ data, error }: TaskManager.TaskManagerTaskBody) => {
+  TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: TaskManager.TaskManagerTaskBody) => {
     if (error) return;
     const { eventType, region } = data as {
       eventType: Location.GeofencingEventType;
@@ -19,25 +19,24 @@ if (Platform.OS !== 'web') {
     };
 
     if (eventType === Location.GeofencingEventType.Enter) {
-      // Send a local notification prompting the user to log in and enable tracking
       Notifications.scheduleNotificationAsync({
         content: {
           title: 'You\'ve arrived at ' + (region.identifier || 'church'),
-          body: 'Open Guardian Comm to check in and enable location tracking for your team.',
+          body: 'Open GatherSafe to check in and enable location tracking for your team.',
           sound: true,
           data: { action: 'checkin' },
         },
-        trigger: null, // immediate
+        trigger: null,
       }).catch(() => null);
     }
   });
 }
 
 export const geofenceService = {
-  async fetchGeofence(): Promise<Geofence | null> {
+  async fetchGeofence(campusId: string): Promise<Geofence | null> {
     try {
       const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
-      const res = await fetch(`${ENV.apiUrl}/geofence`, {
+      const res = await fetch(`${ENV.apiUrl}/geofence?campusId=${encodeURIComponent(campusId)}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return null;
@@ -48,7 +47,13 @@ export const geofenceService = {
     }
   },
 
-  async saveGeofence(data: { name: string; latitude: number; longitude: number; radius: number }): Promise<Geofence | null> {
+  async saveGeofence(data: {
+    campusId: string;
+    name: string;
+    latitude: number;
+    longitude: number;
+    radius: number;
+  }): Promise<Geofence | null> {
     try {
       const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
       const res = await fetch(`${ENV.apiUrl}/geofence`, {
@@ -64,10 +69,10 @@ export const geofenceService = {
     }
   },
 
-  async deleteGeofence(): Promise<void> {
+  async deleteGeofence(campusId: string): Promise<void> {
     try {
       const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
-      await fetch(`${ENV.apiUrl}/geofence`, {
+      await fetch(`${ENV.apiUrl}/geofence?campusId=${encodeURIComponent(campusId)}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });

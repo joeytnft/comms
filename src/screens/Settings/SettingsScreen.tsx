@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, Pressable, Share, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, Pressable, Share, TouchableOpacity, Linking, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,13 +14,30 @@ export function SettingsScreen() {
   const { tierLabel, subscription } = useSubscriptionStore();
   const { isPinEnabled, refreshPinStatus } = useAppLock();
   const isEnterprise = subscription?.tier === 'ENTERPRISE';
+  const isOrgAdmin = user?.role === 'owner' || user?.role === 'admin';
+  const hasPcoAddon = isOrgAdmin; // Visible to all org owners/admins; connection optional
   const navigation = useNavigation<any>();
+
+  const handleSchedulePress = () => {
+    if (!canUseFeature('scheduling')) {
+      Alert.alert(
+        'Paid Feature',
+        'Schedule & Check-In is available on Basic, Standard, and Enterprise plans. Upgrade to unlock it.',
+        [
+          { text: 'Not Now', style: 'cancel' },
+          { text: 'View Plans', onPress: () => navigation.navigate('Subscription') },
+        ],
+      );
+      return;
+    }
+    navigation.navigate('Schedule');
+  };
 
   const handleShareInvite = async () => {
     if (!organization?.inviteCode) return;
     try {
       await Share.share({
-        message: `Join ${organization.name} on Guardian Comm!\n\nDownload the app and use this invite code when registering:\n\n${organization.inviteCode}`,
+        message: `Join ${organization.name} on GatherSafe!\n\nDownload the app and use this invite code when registering:\n\n${organization.inviteCode}`,
       });
     } catch {
       // User cancelled
@@ -45,27 +62,41 @@ export function SettingsScreen() {
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         {/* Profile card */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {user?.displayName?.charAt(0)?.toUpperCase() || '?'}
-            </Text>
-          </View>
+        <Pressable style={styles.profileCard} onPress={() => navigation.navigate('EditProfile')}>
+          {user?.avatarUrl ? (
+            <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+          ) : (
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {user?.displayName?.charAt(0)?.toUpperCase() || '?'}
+              </Text>
+            </View>
+          )}
           <Text style={styles.name}>{user?.displayName || 'Team Member'}</Text>
           <Text style={styles.email}>{user?.email}</Text>
-        </View>
+          <Text style={styles.editHint}>Tap to edit profile</Text>
+        </Pressable>
 
         {/* Settings sections */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
-          <View style={styles.settingRow}>
+          <Pressable
+            style={styles.settingRow}
+            onPress={() => user?.email && Linking.openURL(`mailto:${user.email}`)}
+          >
             <Text style={styles.settingLabel}>Email</Text>
-            <Text style={styles.settingValue}>{user?.email}</Text>
-          </View>
-          <View style={styles.settingRow}>
+            <Text style={[styles.settingValue, styles.linkValue]}>{user?.email}</Text>
+          </Pressable>
+          <Pressable
+            style={styles.settingRow}
+            onPress={() => user?.phone && Linking.openURL(`tel:${user.phone}`)}
+            disabled={!user?.phone}
+          >
             <Text style={styles.settingLabel}>Phone</Text>
-            <Text style={styles.settingValue}>{user?.phone || 'Not set'}</Text>
-          </View>
+            <Text style={[styles.settingValue, user?.phone && styles.linkValue]}>
+              {user?.phone || 'Not set'}
+            </Text>
+          </Pressable>
         </View>
 
         <View style={styles.section}>
@@ -114,7 +145,7 @@ export function SettingsScreen() {
           </Pressable>
           <Pressable
             style={styles.settingRow}
-            onPress={() => navigation.navigate('Schedule')}
+            onPress={handleSchedulePress}
           >
             <Text style={styles.settingLabel}>Schedule & Check-In</Text>
             <Text style={styles.chevron}>{'>'}</Text>
@@ -125,6 +156,24 @@ export function SettingsScreen() {
               onPress={() => navigation.navigate('CampusManagement')}
             >
               <Text style={styles.settingLabel}>Campus Management</Text>
+              <Text style={styles.chevron}>{'>'}</Text>
+            </Pressable>
+          )}
+          {isOrgAdmin && (
+            <Pressable
+              style={styles.settingRow}
+              onPress={() => navigation.navigate('Members')}
+            >
+              <Text style={styles.settingLabel}>Manage Members</Text>
+              <Text style={styles.chevron}>{'>'}</Text>
+            </Pressable>
+          )}
+          {hasPcoAddon && (
+            <Pressable
+              style={styles.settingRow}
+              onPress={() => navigation.navigate('PlanningCenter')}
+            >
+              <Text style={styles.settingLabel}>Planning Center</Text>
               <Text style={styles.chevron}>{'>'}</Text>
             </Pressable>
           )}
@@ -227,6 +276,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: SPACING.md,
   },
+  avatarImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    marginBottom: SPACING.md,
+  },
   avatarText: {
     ...TYPOGRAPHY.heading1,
     color: COLORS.white,
@@ -239,6 +294,11 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.bodySmall,
     color: COLORS.textSecondary,
     marginTop: SPACING.xs,
+  },
+  editHint: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+    marginTop: SPACING.sm,
   },
   section: {
     backgroundColor: COLORS.surface,
@@ -267,6 +327,10 @@ const styles = StyleSheet.create({
   settingValue: {
     ...TYPOGRAPHY.body,
     color: COLORS.textPrimary,
+  },
+  linkValue: {
+    color: COLORS.info,
+    textDecorationLine: 'underline',
   },
   tierRow: {
     flexDirection: 'row',

@@ -91,4 +91,19 @@ export const scheduleService = {
   async listSwapRequests(): Promise<{ swaps: ShiftSwapRequest[] }> {
     return apiClient.get(ENDPOINTS.SCHEDULE.SWAP_REQUESTS);
   },
+
+  async setAvailability(serviceId: string, available: boolean): Promise<void> {
+    return apiClient.put(`/schedule/services/${serviceId}/availability`, { available });
+  },
+  async getAvailability(serviceId: string): Promise<{ availability: { userId: string; available: boolean; user: { id: string; displayName: string; avatarUrl: string | null } }[] }> {
+    return apiClient.get(`/schedule/services/${serviceId}/availability`);
+  },
+
+  async respondToAssignment(assignmentId: string, accept: boolean): Promise<{ assignment: ShiftAssignment }> {
+    return apiClient.patch(`/schedule/assignments/${assignmentId}/respond`, { accept });
+  },
+
+  async registerPushToken(token: string): Promise<void> {
+    return apiClient.put('/schedule/push-token', { token });
+  },
 };

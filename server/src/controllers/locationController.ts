@@ -51,16 +51,26 @@ export async function updateLocation(
 
 /**
  * GET /location/team — Get all team members' locations for the org.
+ * Campus-scoped users see only their campus. Org-level users (campusId=null)
+ * may pass ?campusId= to filter to a specific campus.
  */
 export async function getTeamLocations(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const { organizationId } = request;
+  const { organizationId, campusId: jwtCampusId } = request;
+  const query = request.query as { campusId?: string };
+
+  // Campus-assigned users are always scoped to their campus.
+  // Org-level users can optionally pass a campusId query param to filter.
+  const campusFilter = jwtCampusId ?? (query.campusId || null);
 
   const locations = await prisma.userLocation.findMany({
     where: {
-      user: { organizationId },
+      user: {
+        organizationId,
+        ...(campusFilter ? { campusId: campusFilter } : {}),
+      },
     },
     include: {
       user: {

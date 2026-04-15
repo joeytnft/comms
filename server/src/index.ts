@@ -4,7 +4,7 @@ import { logger } from './utils/logger';
 import { prisma } from './config/database';
 
 async function start() {
-  const app = await buildApp();
+const app = await buildApp();
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {
@@ -25,7 +25,7 @@ async function start() {
 
   try {
     await app.listen({ port: env.PORT, host: env.HOST });
-    logger.info(`Guardian Comm server running on ${env.HOST}:${env.PORT}`);
+    logger.info(`GatherSafe server running on ${env.HOST}:${env.PORT}`);
     logger.info(`Environment: ${env.NODE_ENV}`);
   } catch (err) {
     logger.error(err);

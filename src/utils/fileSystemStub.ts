@@ -1,2 +1,2 @@
-// Native — re-export from expo-file-system
-export { readAsStringAsync, EncodingType } from 'expo-file-system';
+// Native — re-export from expo-file-system legacy API
+export { readAsStringAsync, EncodingType } from 'expo-file-system/legacy';

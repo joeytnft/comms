@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect } from 'react';
+import { Platform } from 'react-native';
 import { User, LoginCredentials, RegisterData } from '@/types';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useSubscriptionStore } from '@/store/useSubscriptionStore';

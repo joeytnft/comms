@@ -28,6 +28,10 @@ import { ENV } from '@/config/env';
 import { useAlertStore } from '@/store/useAlertStore';
 import { useGroupStore } from '@/store/useGroupStore';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCampusViewStore } from '@/store/useCampusViewStore';
+import { useCampusStore } from '@/store/useCampusStore';
+import { useSubscriptionStore } from '@/store/useSubscriptionStore';
+import { CampusSwitcher } from '@/components/common/CampusSwitcher';
 import {
   Alert,
   AlertLevel,
@@ -76,6 +80,9 @@ export function AlertsScreen() {
     deleteAlert,
   } = useAlertStore();
   const { groups, fetchGroups } = useGroupStore();
+  const { activeCampusId } = useCampusViewStore();
+  const { fetchCampuses } = useCampusStore();
+  const { subscription } = useSubscriptionStore();
 
   const [showHistory, setShowHistory] = useState(false);
   const [triggering, setTriggering] = useState(false);
@@ -102,9 +109,10 @@ export function AlertsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      fetchAlerts({ active: true });
-      if (groups.length === 0) fetchGroups();
-    }, []),
+      if (subscription?.tier === 'ENTERPRISE') fetchCampuses();
+      fetchAlerts({ active: true, campusId: activeCampusId });
+      if (groups.length === 0) fetchGroups(activeCampusId);
+    }, [activeCampusId]),
   );
 
   // Load custom types from SecureStore on mount
@@ -388,9 +396,12 @@ export function AlertsScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>Alerts</Text>
-        <TouchableOpacity onPress={() => { if (!showHistory) fetchAlerts(); setShowHistory(!showHistory); }}>
-          <Text style={styles.historyToggle}>{showHistory ? 'Active Only' : 'History'}</Text>
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <CampusSwitcher />
+          <TouchableOpacity onPress={() => { if (!showHistory) fetchAlerts({ campusId: activeCampusId }); setShowHistory(!showHistory); }}>
+            <Text style={styles.historyToggle}>{showHistory ? 'Active Only' : 'History'}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Alert type grid */}
@@ -750,6 +761,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
   },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   title: { ...TYPOGRAPHY.heading1, color: COLORS.textPrimary },
   historyToggle: { ...TYPOGRAPHY.bodySmall, color: COLORS.info, fontWeight: '600' },
 

@@ -15,7 +15,7 @@ interface LocationState {
   isLoading: boolean;
   error: string | null;
 
-  fetchTeamLocations: () => Promise<void>;
+  fetchTeamLocations: (campusId?: string | null) => Promise<void>;
   updateMyLocation: (latitude: number, longitude: number) => Promise<void>;
   startSharing: () => Promise<void>;
   stopSharing: () => void;
@@ -33,10 +33,10 @@ export const useLocationStore = create<LocationState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  fetchTeamLocations: async () => {
+  fetchTeamLocations: async (campusId?: string | null) => {
     set({ isLoading: true, error: null });
     try {
-      const { locations } = await locationService.getTeamLocations();
+      const { locations } = await locationService.getTeamLocations(campusId);
       set({ teamLocations: locations, isLoading: false });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to load team locations';
@@ -67,13 +67,13 @@ export const useLocationStore = create<LocationState>((set, get) => ({
     }
 
     // Get initial position immediately
-    const initial = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+    const initial = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.BestForNavigation });
     await get().updateMyLocation(initial.coords.latitude, initial.coords.longitude);
 
-    // Watch for updates every 5 seconds / 5 metres
+    // Watch for updates every 2 seconds / 2 metres
     watchSubscription = await Location.watchPositionAsync(
       {
-        accuracy: Location.Accuracy.High,
+        accuracy: Location.Accuracy.BestForNavigation,
         timeInterval: LOCATION_UPDATE_INTERVAL,
         distanceInterval: LOCATION_DISTANCE_FILTER,
       },

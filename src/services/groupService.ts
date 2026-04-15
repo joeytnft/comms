@@ -1,9 +1,9 @@
 import { apiClient } from '@/api/client';
 import { ENDPOINTS } from '@/api/endpoints';
-import { Group, GroupWithMembers, GroupHierarchy, CreateGroupData, InviteMemberData, GroupMember } from '@/types';
+import { GroupWithMembers, GroupHierarchy, CreateGroupData, InviteMemberData, GroupMember } from '@/types';
 
 interface GroupListResponse {
-  groups: (Group & { memberCount: number })[];
+  groups: GroupWithMembers[];
 }
 
 interface GroupDetailResponse {
@@ -19,8 +19,9 @@ interface MemberResponse {
 }
 
 export const groupService = {
-  async listGroups(): Promise<GroupListResponse> {
-    return apiClient.get<GroupListResponse>(ENDPOINTS.GROUPS.LIST);
+  async listGroups(campusId?: string | null): Promise<GroupListResponse> {
+    const params = campusId ? { campusId } : undefined;
+    return apiClient.get<GroupListResponse>(ENDPOINTS.GROUPS.LIST, params);
   },
 
   async createGroup(data: CreateGroupData): Promise<GroupDetailResponse> {
@@ -61,5 +62,9 @@ export const groupService = {
 
   async joinByInvite(inviteCode: string): Promise<GroupDetailResponse> {
     return apiClient.post<GroupDetailResponse>(ENDPOINTS.GROUPS.JOIN_BY_INVITE, { inviteCode });
+  },
+
+  async assignCampus(groupId: string, campusId: string | null): Promise<GroupDetailResponse> {
+    return apiClient.patch<GroupDetailResponse>(ENDPOINTS.GROUPS.ASSIGN_CAMPUS(groupId), { campusId });
   },
 };

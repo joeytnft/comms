@@ -18,6 +18,7 @@ export const ENDPOINTS = {
     UPDATE_PUBLIC_KEY: '/users/me/public-key',
     UPDATE_PUSH_TOKEN: '/users/me/push-token',
     GET_USER: (id: string) => `/users/${id}`,
+    ADMIN_UPDATE: (id: string) => `/users/${id}`,
   },
 
   // Organizations
@@ -42,6 +43,7 @@ export const ENDPOINTS = {
     GENERATE_INVITE: (id: string) => `/groups/${id}/invite`,
     REVOKE_INVITE: (id: string) => `/groups/${id}/invite`,
     JOIN_BY_INVITE: '/groups/join',
+    ASSIGN_CAMPUS: (id: string) => `/groups/${id}/campus`,
   },
 
   // Messages

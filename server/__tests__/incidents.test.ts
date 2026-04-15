@@ -16,14 +16,14 @@ const testOrg = {
 };
 
 const adminUser = {
-  email: 'inc-admin@guardiancomm.app',
+  email: 'inc-admin@gathersafeapp.com',
   password: 'securepassword123',
   displayName: 'Inc Admin',
   organizationCode: 'INC-TEST-CODE',
 };
 
 const memberUser = {
-  email: 'inc-member@guardiancomm.app',
+  email: 'inc-member@gathersafeapp.com',
   password: 'securepassword123',
   displayName: 'Inc Member',
   organizationCode: 'INC-TEST-CODE',
@@ -456,7 +456,7 @@ describe('Cross-organization isolation', () => {
       method: 'POST',
       url: '/auth/register',
       payload: {
-        email: 'inc-other@guardiancomm.app',
+        email: 'inc-other@gathersafeapp.com',
         password: 'securepassword123',
         displayName: 'Other User',
         organizationCode: 'INC-OTHER-CODE',
@@ -489,7 +489,7 @@ describe('Cross-organization isolation', () => {
     });
     await prisma.incident.deleteMany({ where: { organizationId: otherOrg.id } });
     await prisma.refreshToken.deleteMany({ where: { userId: otherRes.json().user.id } });
-    await prisma.user.deleteMany({ where: { email: 'inc-other@guardiancomm.app' } });
+    await prisma.user.deleteMany({ where: { email: 'inc-other@gathersafeapp.com' } });
     await prisma.organization.deleteMany({ where: { id: otherOrg.id } });
   });
 
@@ -508,7 +508,7 @@ describe('Cross-organization isolation', () => {
       method: 'POST',
       url: '/auth/register',
       payload: {
-        email: 'inc-another@guardiancomm.app',
+        email: 'inc-another@gathersafeapp.com',
         password: 'securepassword123',
         displayName: 'Another User',
         organizationCode: 'INC-ANOTHER-CODE',
@@ -539,7 +539,7 @@ describe('Cross-organization isolation', () => {
     });
     await prisma.incident.deleteMany({ where: { organizationId: otherOrg.id } });
     await prisma.refreshToken.deleteMany({ where: { userId: otherRes.json().user.id } });
-    await prisma.user.deleteMany({ where: { email: 'inc-another@guardiancomm.app' } });
+    await prisma.user.deleteMany({ where: { email: 'inc-another@gathersafeapp.com' } });
     await prisma.organization.deleteMany({ where: { id: otherOrg.id } });
   });
 });

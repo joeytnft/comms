@@ -1,17 +1,19 @@
 import { FastifyInstance } from 'fastify';
 import { authenticate } from '../middleware/auth';
-import path from 'path';
-import fs from 'fs/promises';
+import { createClient } from '@supabase/supabase-js';
 import { nanoid } from 'nanoid';
+import { env } from '../config/env';
 
-const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
+const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+const BUCKET = env.SUPABASE_STORAGE_BUCKET;
+
 const ALLOWED_MIME: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/jpg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
   'image/gif': 'gif',
-  'image/heic': 'jpg',  // iPhone photos — stored as jpg
+  'image/heic': 'jpg',
   'image/heif': 'jpg',
   'audio/m4a': 'm4a',
   'audio/mp4': 'm4a',
@@ -22,7 +24,7 @@ const ALLOWED_MIME: Record<string, string> = {
 const MAX_BYTES = 8 * 1024 * 1024; // 8MB
 
 interface UploadBody {
-  data: string;      // base64-encoded image
+  data: string;
   mimeType: string;
 }
 
@@ -39,18 +41,30 @@ export async function uploadRoutes(app: FastifyInstance) {
 
       const ext = ALLOWED_MIME[mimeType];
       if (!ext) {
-        return reply.status(400).send({ error: 'Unsupported image type' });
+        return reply.status(400).send({ error: 'Unsupported file type' });
       }
 
       const buffer = Buffer.from(data, 'base64');
       if (buffer.byteLength > MAX_BYTES) {
-        return reply.status(413).send({ error: 'Image too large (max 8MB)' });
+        return reply.status(413).send({ error: 'File too large (max 8MB)' });
       }
 
       const filename = `${nanoid()}.${ext}`;
-      await fs.writeFile(path.join(UPLOADS_DIR, filename), buffer);
 
-      return reply.status(201).send({ url: `/files/${filename}` });
+      const { error } = await supabase.storage
+        .from(BUCKET)
+        .upload(filename, buffer, { contentType: mimeType, upsert: false });
+
+      if (error) {
+        request.log.error(error, 'Supabase storage upload failed');
+        return reply.status(500).send({ error: 'Upload failed' });
+      }
+
+      const { data: publicUrl } = supabase.storage
+        .from(BUCKET)
+        .getPublicUrl(filename);
+
+      return reply.status(201).send({ url: publicUrl.publicUrl });
     },
   );
 }

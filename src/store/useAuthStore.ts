@@ -41,7 +41,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isLoading: true,
   isAuthenticated: false,
 
-  setUser: (user) => set({ user, isAuthenticated: !!user }),
+  setUser: (user) => {
+    set({ user, isAuthenticated: !!user });
+    if (user) {
+      secureStorage.setItemAsync(USER_KEY, JSON.stringify(user)).catch(() => null);
+    }
+  },
 
   login: async (credentials) => {
     set({ isLoading: true });
