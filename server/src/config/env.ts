@@ -14,6 +14,11 @@ const envSchema = z.object({
   JWT_ACCESS_EXPIRY: z.string().default('15m'),
   JWT_REFRESH_EXPIRY: z.string().default('7d'),
 
+  // Supabase (database + file storage)
+  SUPABASE_URL: z.string().url(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(32),
+  SUPABASE_STORAGE_BUCKET: z.string().default('uploads'),
+
   // LiveKit (optional until PTT is implemented)
   LIVEKIT_API_KEY: z.string().optional(),
   LIVEKIT_API_SECRET: z.string().optional(),
