@@ -15,8 +15,8 @@ interface EnvConfig {
 const DEV_HOST = Platform.OS === 'web' ? 'localhost' : '10.0.0.48';
 
 const DEV_CONFIG: EnvConfig = {
-  apiUrl: `http://${DEV_HOST}:3001`,
-  socketUrl: `ws://${DEV_HOST}:3001`,
+  apiUrl: 'https://api.gathersafeapp.com',
+  socketUrl: 'wss://api.gathersafeapp.com',
   livekitUrl: `ws://${DEV_HOST}:7880`,
   isDev: true,
 };
