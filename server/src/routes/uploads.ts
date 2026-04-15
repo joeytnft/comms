@@ -3,10 +3,12 @@ import { authenticate } from '../middleware/auth';
 import { createClient } from '@supabase/supabase-js';
 import { nanoid } from 'nanoid';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
+function getSupabase() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for uploads');
+  return createClient(url, key);
+}
 
 const BUCKET = process.env.SUPABASE_STORAGE_BUCKET ?? 'uploads';
 
@@ -53,6 +55,8 @@ export async function uploadRoutes(app: FastifyInstance) {
       }
 
       const filename = `${nanoid()}.${ext}`;
+
+      const supabase = getSupabase();
 
       const { error } = await supabase.storage
         .from(BUCKET)
