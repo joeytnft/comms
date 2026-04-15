@@ -1,3 +1,14 @@
+// Polyfill DOMException for LiveKit/WebRTC compatibility
+if (typeof global.DOMException === 'undefined') {
+  // @ts-ignore
+  global.DOMException = class DOMException extends Error {
+    constructor(message?: string, name?: string) {
+      super(message);
+      this.name = name ?? 'DOMException';
+    }
+  };
+}
+
 // Register LiveKit globals (WebRTC polyfills) before anything else
 import { registerGlobals } from '@livekit/react-native';
 registerGlobals();
