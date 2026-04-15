@@ -6,6 +6,12 @@
     "orientation": "portrait",
     "scheme": "gathersafe",
     "userInterfaceStyle": "automatic",
+    "updates": {
+      "url": "https://u.expo.dev/0305c4ae-e29a-4d01-afbf-402f427c8e54"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "splash": {
       "resizeMode": "contain",
       "backgroundColor": "#1a1a2e"
@@ -16,6 +22,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.gathersafeapp.app",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "GatherSafe needs your location to share with your security team.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "GatherSafe needs background location to keep your team informed of your position.",
@@ -32,20 +39,17 @@
     },
     "android": {
       "package": "com.gathersafeapp.app",
+      "googleServicesFile": "./google-services.json",
       "permissions": [
-        "RECORD_AUDIO",
-        "CAMERA",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_BACKGROUND_LOCATION",
-        "FOREGROUND_SERVICE",
-        "WAKE_LOCK",
-        "VIBRATE",
-        "BLUETOOTH",
-        "BLUETOOTH_CONNECT",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+        "android.permission.WAKE_LOCK",
+        "android.permission.VIBRATE",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_ADMIN",
@@ -60,6 +64,19 @@
       "expo-av",
       "expo-asset",
       "expo-audio",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "minSdkVersion": 26
+          },
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ],
       [
         "react-native-ble-plx",
         {
