@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Encrypted communication app for church security teams",
-  "main": "node_modules/expo/AppEntry.js",
+  "main": "index.js",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
