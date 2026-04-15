@@ -10,6 +10,11 @@
       "channel": "development",
       "ios": {
         "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.gathersafeapp.com",
+        "EXPO_PUBLIC_SOCKET_URL": "wss://api.gathersafeapp.com",
+        "EXPO_PUBLIC_LIVEKIT_URL": "wss://livekit.gathersafeapp.com"
       }
     },
     "preview": {
@@ -22,6 +27,11 @@
       },
       "ios": {
         "buildConfiguration": "Release"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.gathersafeapp.com",
+        "EXPO_PUBLIC_SOCKET_URL": "wss://api.gathersafeapp.com",
+        "EXPO_PUBLIC_LIVEKIT_URL": "wss://livekit.gathersafeapp.com"
       }
     },
     "production": {
@@ -34,6 +44,11 @@
       },
       "ios": {
         "buildConfiguration": "Release"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.gathersafeapp.com",
+        "EXPO_PUBLIC_SOCKET_URL": "wss://api.gathersafeapp.com",
+        "EXPO_PUBLIC_LIVEKIT_URL": "wss://livekit.gathersafeapp.com"
       }
     }
   },
