@@ -4,6 +4,7 @@ import { logger } from './utils/logger';
 import { prisma } from './config/database';
 
 async function start() {
+  logger.info(`[Startup] REDIS_URL = ${process.env.REDIS_URL ? process.env.REDIS_URL.replace(/:\/\/[^@]+@/, '://***@') : 'undefined'}`);
   const app = await buildApp();
 
   // Graceful shutdown
