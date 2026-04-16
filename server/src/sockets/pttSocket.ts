@@ -3,6 +3,10 @@ import fs from 'fs';
 import path from 'path';
 import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
+import {
+  notifyTransmissionStarted,
+  notifyTransmissionStopped,
+} from '../services/apns/pttPushService';
 
 // In-memory store: "userId:groupId" → { chunks, startedAt, mimeType }
 const activeSessions = new Map<string, { chunks: Buffer[]; startedAt: number; mimeType: string }>();
@@ -124,13 +128,39 @@ export function setupPTTSocket(io: Server, socket: Socket) {
         select: { displayName: true },
       });
 
+      const displayName = user?.displayName || 'Unknown';
+
       // Broadcast to everyone in the PTT room that this user is speaking
       socket.to(room).emit('ptt:speaking', {
         groupId,
         userId,
-        displayName: user?.displayName || 'Unknown',
+        displayName,
         startedAt: new Date().toISOString(),
       });
+
+      // Send APNs pushtotalk push to iOS members who are NOT connected via socket
+      // (i.e., app is in background / closed — PTT framework wakes them)
+      const socketsInRoom = await io.in(room).fetchSockets();
+      const onlineUserIds = new Set(
+        socketsInRoom.map((s) => (s as unknown as Socket).user?.userId).filter(Boolean),
+      );
+
+      const pushTokens = await prisma.pttPushToken.findMany({
+        where: {
+          groupId,
+          NOT: { userId: { in: [...onlineUserIds] } }, // exclude already-connected users
+        },
+        select: { token: true },
+      });
+
+      if (pushTokens.length > 0) {
+        notifyTransmissionStarted(
+          pushTokens.map((t) => t.token),
+          groupId,
+          userId,
+          displayName,
+        ).catch((err) => logger.error({ err }, '[PTT] APNs notify start failed'));
+      }
 
       // Also broadcast to parent LEAD group if this is a SUB group
       const group = await prisma.group.findUnique({
@@ -165,6 +195,18 @@ export function setupPTTSocket(io: Server, socket: Socket) {
     try {
       const endedAt = new Date().toISOString();
       socket.to(room).emit('ptt:stopped', { groupId, userId, endedAt });
+
+      // Notify background iOS clients that transmission ended
+      const pushTokensForStop = await prisma.pttPushToken.findMany({
+        where: { groupId },
+        select: { token: true },
+      });
+      if (pushTokensForStop.length > 0) {
+        notifyTransmissionStopped(
+          pushTokensForStop.map((t) => t.token),
+          groupId,
+        ).catch((err) => logger.error({ err }, '[PTT] APNs notify stop failed'));
+      }
 
       // Save web audio log if chunks exist
       const sessionKey = `${userId}:${groupId}`;

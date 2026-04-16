@@ -13,4 +13,7 @@ export async function pttRoutes(app: FastifyInstance) {
 
   // Get participants in a PTT room
   app.get('/:groupId/participants', pttController.getParticipants);
+
+  // Register an ephemeral APNs PTT push token (iOS only)
+  app.post('/:groupId/register-token', pttController.registerPushToken);
 }

@@ -44,6 +44,13 @@ const envSchema = z.object({
   EMAIL_FROM: z.string().default('GatherSafe <noreply@gathersafeapp.com>'),
   APP_URL: z.string().url().default('https://gathersafeapp.com'),
 
+  // Apple Push To Talk (APNs JWT auth — required for iOS PTT pushes)
+  APNS_KEY_ID:     z.string().optional(),   // 10-char key ID
+  APNS_TEAM_ID:    z.string().optional(),   // 10-char team ID
+  APNS_KEY:        z.string().optional(),   // P8 private key contents (newlines as \n)
+  APNS_BUNDLE_ID:  z.string().optional().default('com.gathersafeapp.app'),
+  APNS_PRODUCTION: z.string().optional(),   // "true" for production APNs endpoint
+
   // Server
   PORT: z.coerce.number().default(3001),
   HOST: z.string().default('0.0.0.0'),

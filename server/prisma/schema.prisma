@@ -134,6 +134,7 @@ model User {
   passwordResetTokens  PasswordResetToken[]
   location             UserLocation?
   pttLogs         PttLog[]
+  pttPushTokens   PttPushToken[]
   shiftAssignments     ShiftAssignment[]  @relation("shiftAssignments")
   swapRequestsReceived ShiftSwapRequest[] @relation("swapRequestsReceived")
   createdServices      ServiceSchedule[]  @relation("serviceCreatedBy")
@@ -200,6 +201,7 @@ model Group {
   memberships     GroupMembership[]
   messages        Message[]
   pttLogs         PttLog[]
+  pttPushTokens   PttPushToken[]
   alertTargets    AlertGroupTarget[]
 
   @@map("groups")
@@ -401,6 +403,25 @@ model PttLog {
 
   @@index([groupId, createdAt])
   @@map("ptt_logs")
+}
+
+// Ephemeral APNs device tokens for Apple's Push To Talk framework.
+// Each token is valid only while the user is joined to that PTT channel.
+// Tokens are replaced on every new channel join.
+model PttPushToken {
+  id        String   @id @default(cuid())
+  userId    String
+  groupId   String
+  token     String   // Hex-encoded ephemeral APNs device token
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId])
+  @@index([groupId])
+  @@map("ptt_push_tokens")
 }
 
 // ============================================================================

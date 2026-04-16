@@ -2,7 +2,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../config/database';
 import { generateLiveKitToken, getRoomName } from '../config/livekit';
 import { env } from '../config/env';
-import { AuthorizationError } from '../utils/errors';
+import { AuthorizationError, ValidationError } from '../utils/errors';
 
 interface TokenParams {
   groupId: string;
@@ -90,4 +90,39 @@ export async function getParticipants(
       role: m.role,
     })),
   });
+}
+
+/**
+ * POST /ptt/:groupId/register-token
+ * Body: { token: string }
+ *
+ * Stores (or replaces) the ephemeral APNs PTT push token for this user + group.
+ * Called by the iOS app after PTChannelManager fires receivedEphemeralPushToken.
+ */
+export async function registerPushToken(
+  request: FastifyRequest<{ Params: TokenParams; Body: { token: string } }>,
+  reply: FastifyReply,
+) {
+  const { groupId } = request.params;
+  const { userId }  = request;
+  const { token }   = request.body ?? {};
+
+  if (!token || typeof token !== 'string') {
+    throw new ValidationError('token is required');
+  }
+
+  const membership = await prisma.groupMembership.findUnique({
+    where: { groupId_userId: { groupId, userId } },
+  });
+  if (!membership) {
+    throw new AuthorizationError('You are not a member of this group');
+  }
+
+  await prisma.pttPushToken.upsert({
+    where:  { userId_groupId: { userId, groupId } },
+    create: { userId, groupId, token },
+    update: { token },
+  });
+
+  reply.status(204).send();
 }

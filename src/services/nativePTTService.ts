@@ -1,0 +1,188 @@
+/**
+ * nativePTTService — TypeScript wrapper for the iOS Apple PTT native module.
+ *
+ * Available on iOS 16+ only. On older iOS / Android / Web, every method is a
+ * silent no-op so the rest of the codebase does not need platform guards.
+ *
+ * PTTContext.tsx uses this service on iOS and falls back to callKitService on Android.
+ */
+
+import { Platform, NativeModules, NativeEventEmitter } from 'react-native';
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+export type PTTTransmitSource = 'user' | 'systemUI' | 'bluetooth';
+export type PTTServiceStatus  = 'ready' | 'connecting' | 'disrupted';
+
+export interface PTTTransmissionEvent {
+  channelId: string;
+  source: PTTTransmitSource;
+  error?: string;
+}
+
+// ─── Native module reference ─────────────────────────────────────────────────
+
+const { PushToTalkModule } = NativeModules;
+
+const isAvailable = Platform.OS === 'ios' && !!PushToTalkModule;
+
+let emitter: NativeEventEmitter | null = null;
+if (isAvailable) {
+  emitter = new NativeEventEmitter(PushToTalkModule);
+}
+
+// ─── Event subscription helpers ──────────────────────────────────────────────
+
+type Unsubscribe = () => void;
+
+function on(event: string, handler: (data: Record<string, unknown>) => void): Unsubscribe {
+  if (!emitter) return () => undefined;
+  const sub = emitter.addListener(event, handler);
+  return () => sub.remove();
+}
+
+// ─── Public API ──────────────────────────────────────────────────────────────
+
+/**
+ * Join a PTT channel. Returns the resolved channel UUID (may differ from the
+ * requested one when iOS normalises it).
+ */
+async function joinChannel(channelId: string, channelName: string): Promise<string> {
+  if (!isAvailable) return channelId;
+  return PushToTalkModule.joinChannel(channelId, channelName);
+}
+
+async function leaveChannel(channelId: string): Promise<void> {
+  if (!isAvailable) return;
+  return PushToTalkModule.leaveChannel(channelId);
+}
+
+/** Call when the user presses the PTT button. */
+async function beginTransmitting(channelId: string): Promise<void> {
+  if (!isAvailable) return;
+  return PushToTalkModule.beginTransmitting(channelId);
+}
+
+/** Call when the user releases the PTT button. */
+async function stopTransmitting(channelId: string): Promise<void> {
+  if (!isAvailable) return;
+  return PushToTalkModule.stopTransmitting(channelId);
+}
+
+/**
+ * Tell the system who is speaking (received via APNs pushtotalk push).
+ * This updates the Dynamic Island and lock screen UI.
+ */
+async function setActiveRemoteParticipant(channelId: string, participantName: string): Promise<void> {
+  if (!isAvailable) return;
+  return PushToTalkModule.setActiveRemoteParticipant(channelId, participantName);
+}
+
+/** Clear the active speaker indicator when they stop talking. */
+async function clearActiveRemoteParticipant(channelId: string): Promise<void> {
+  if (!isAvailable) return;
+  return PushToTalkModule.clearActiveRemoteParticipant(channelId);
+}
+
+/**
+ * Update the channel name shown in system UI (e.g. when the user switches groups).
+ */
+async function setChannelDescriptor(channelId: string, channelName: string): Promise<void> {
+  if (!isAvailable) return;
+  return PushToTalkModule.setChannelDescriptor(channelId, channelName);
+}
+
+/**
+ * Report backend connectivity to the system UI.
+ * Call 'connecting' when network drops; 'ready' when restored.
+ */
+async function setServiceStatus(channelId: string, status: PTTServiceStatus): Promise<void> {
+  if (!isAvailable) return;
+  return PushToTalkModule.setServiceStatus(channelId, status);
+}
+
+// ─── Event subscriptions ─────────────────────────────────────────────────────
+
+/** Fired once after joinChannel succeeds. */
+function onChannelJoined(cb: (channelId: string) => void): Unsubscribe {
+  return on('PTT_CHANNEL_JOINED', (d) => cb(d.channelId as string));
+}
+
+function onChannelLeft(cb: (channelId: string) => void): Unsubscribe {
+  return on('PTT_CHANNEL_LEFT', (d) => cb(d.channelId as string));
+}
+
+function onJoinFailed(cb: (channelId: string, error: string) => void): Unsubscribe {
+  return on('PTT_JOIN_FAILED', (d) => cb(d.channelId as string, d.error as string));
+}
+
+/**
+ * Fired with the ephemeral APNs device token after the channel is joined.
+ * Send this token to your server so it can send pushtotalk pushes to this device.
+ */
+function onPushTokenReceived(cb: (token: string) => void): Unsubscribe {
+  return on('PTT_PUSH_TOKEN_RECEIVED', (d) => cb(d.token as string));
+}
+
+/**
+ * Fired when audio transmission begins — regardless of source.
+ * Source is 'user' (app button), 'systemUI' (lock screen / Dynamic Island),
+ * or 'bluetooth' (accessory).
+ */
+function onTransmissionStarted(cb: (event: PTTTransmissionEvent) => void): Unsubscribe {
+  return on('PTT_TRANSMISSION_STARTED', (d) => cb(d as unknown as PTTTransmissionEvent));
+}
+
+function onTransmissionEnded(cb: (event: PTTTransmissionEvent) => void): Unsubscribe {
+  return on('PTT_TRANSMISSION_ENDED', (d) => cb(d as unknown as PTTTransmissionEvent));
+}
+
+function onTransmissionFailed(cb: (channelId: string, error: string) => void): Unsubscribe {
+  return on('PTT_TRANSMISSION_FAILED', (d) => cb(d.channelId as string, d.error as string));
+}
+
+/**
+ * Fired when iOS activates the audio session — safe to start recording or playback.
+ * On transmit: start LiveKit mic.
+ * On receive: start LiveKit audio playback.
+ */
+function onAudioActivated(cb: () => void): Unsubscribe {
+  return on('PTT_AUDIO_ACTIVATED', () => cb());
+}
+
+function onAudioDeactivated(cb: () => void): Unsubscribe {
+  return on('PTT_AUDIO_DEACTIVATED', () => cb());
+}
+
+// ─── Exported service ─────────────────────────────────────────────────────────
+
+export const nativePTTService = {
+  isAvailable,
+
+  // Channel lifecycle
+  joinChannel,
+  leaveChannel,
+
+  // Transmission control
+  beginTransmitting,
+  stopTransmitting,
+
+  // Remote participant (incoming push)
+  setActiveRemoteParticipant,
+  clearActiveRemoteParticipant,
+
+  // System UI
+  setChannelDescriptor,
+  setServiceStatus,
+
+  // Event subscriptions
+  onChannelJoined,
+  onChannelLeft,
+  onJoinFailed,
+  onPushTokenReceived,
+  onTransmissionStarted,
+  onTransmissionEnded,
+  onTransmissionFailed,
+  onAudioActivated,
+  onAudioDeactivated,
+};

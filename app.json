@@ -33,6 +33,7 @@
         "UIBackgroundModes": [
           "audio",
           "voip",
+          "push-to-talk",
           "location",
           "remote-notification"
         ],
@@ -62,6 +63,7 @@
       ]
     },
     "plugins": [
+      "./plugins/withPushToTalk",
       "expo-location",
       "expo-camera",
       "expo-notifications",
