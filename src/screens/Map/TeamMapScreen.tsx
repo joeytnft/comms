@@ -75,8 +75,14 @@ export function TeamMapScreen() {
     }, []),
   );
 
-  // Re-fetch locations and geofence whenever the selected campus changes (or on first focus)
+  // Re-fetch locations and geofence whenever the selected campus changes (or on first focus).
+  // Fall back to the user's own campusId so campus-assigned users see their geofence
+  // even when no explicit campus view is selected.
+  const effectiveCampusId = activeCampusId ?? user?.campusId ?? null;
+
   useEffect(() => {
+    let cancelled = false;
+
     fetchTeamLocations(activeCampusId);
 
     if (refreshInterval.current) clearInterval(refreshInterval.current);
@@ -84,22 +90,25 @@ export function TeamMapScreen() {
       fetchTeamLocations(activeCampusId);
     }, 5_000);
 
-    // Fetch geofence for the active campus (no campus = no geofence)
-    if (activeCampusId) {
-      geofenceService.fetchGeofence(activeCampusId).then((gf) => {
+    // Always stop the previous geofence region before registering a new one.
+    // Not doing this is what causes the crash when switching campuses quickly.
+    geofenceService.stopGeofencing().catch(() => null);
+
+    if (effectiveCampusId) {
+      geofenceService.fetchGeofence(effectiveCampusId).then((gf) => {
+        if (cancelled) return; // campus changed before this promise resolved — discard
         setGeofence(gf);
         if (gf) geofenceService.startGeofencing(gf).catch(() => null);
-        else geofenceService.stopGeofencing().catch(() => null);
       });
     } else {
       setGeofence(null);
-      geofenceService.stopGeofencing().catch(() => null);
     }
 
     return () => {
+      cancelled = true;
       if (refreshInterval.current) clearInterval(refreshInterval.current);
     };
-  }, [activeCampusId]);
+  }, [effectiveCampusId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filter current user out of map markers only — native showsUserLocation draws their blue dot.
   // The member list shows everyone including self.

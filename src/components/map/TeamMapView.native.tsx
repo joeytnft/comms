@@ -64,6 +64,25 @@ export function TeamMapView({ locations, geofence, activeAlerts = [], style }: P
     centeredRef.current = true;
   }, [deviceCoords]);
 
+  // When the geofence changes (campus switch), pan the map to the new boundary center
+  // so the circle is visible even if the user is at a different location.
+  const prevGeofenceId = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!geofence || geofence.id === prevGeofenceId.current) return;
+    prevGeofenceId.current = geofence.id;
+    // Zoom out enough to show the full geofence circle
+    const degreeSpan = (geofence.radius / 111_000) * 3; // ~3x radius in degrees
+    mapRef.current?.animateToRegion(
+      {
+        latitude: geofence.latitude,
+        longitude: geofence.longitude,
+        latitudeDelta: Math.max(degreeSpan, DELTA),
+        longitudeDelta: Math.max(degreeSpan, DELTA),
+      },
+      600,
+    );
+  }, [geofence]);
+
   // Fallback initial region — overridden once deviceCoords arrives
   const fallbackLat = geofence?.latitude
     ?? (locations.length ? locations.reduce((s, l) => s + l.latitude, 0) / locations.length : null)
@@ -89,6 +108,7 @@ export function TeamMapView({ locations, geofence, activeAlerts = [], style }: P
         {/* Geofence boundary circle */}
         {geofence && (
           <Circle
+            key={geofence.id}
             center={{ latitude: geofence.latitude, longitude: geofence.longitude }}
             radius={geofence.radius}
             strokeColor={COLORS.info}
