@@ -10,5 +10,7 @@ export async function userRoutes(app: FastifyInstance) {
   app.put('/me', userController.updateMe);
   app.put('/me/public-key', userController.updatePublicKey);
   app.put('/me/push-token', userController.updatePushToken);
+  app.get('/org-members', userController.listOrgMembers);
   app.get('/:id', userController.getUser);
+  app.patch('/:id', userController.adminUpdateUser);
 }

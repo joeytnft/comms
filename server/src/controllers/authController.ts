@@ -132,6 +132,7 @@ export async function register(
       displayName,
       phone: phone || null,
       organizationId: organization.id,
+      isOrgAdmin: !!organizationName, // org creator is automatically an admin
     },
     select: {
       id: true,
