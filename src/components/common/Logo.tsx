@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, Image, StyleSheet } from 'react-native';
-import { COLORS, BORDER_RADIUS } from '@/config/theme';
+import { COLORS } from '@/config/theme';
 
 // Drop your icon.png into assets/ and this component will use it automatically.
 // Until then it falls back to the "GS" text placeholder.

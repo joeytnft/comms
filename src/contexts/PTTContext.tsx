@@ -14,10 +14,11 @@ let Room: typeof import('livekit-client').Room | null = null;
 let RoomEvent: typeof import('livekit-client').RoomEvent | null = null;
 let AudioSession: typeof import('@livekit/react-native').AudioSession | null = null;
 if (Platform.OS !== 'web') {
-  const lk = require('@livekit/react-native');
+  const lk = require('livekit-client');
   Room = lk.Room;
   RoomEvent = lk.RoomEvent;
-  AudioSession = lk.AudioSession;
+  const rnLk = require('@livekit/react-native');
+  AudioSession = rnLk.AudioSession;
 }
 
 interface PTTContextType {
