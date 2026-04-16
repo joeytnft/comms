@@ -62,7 +62,6 @@
       ]
     },
     "plugins": [
-      "react-native-callkeep",
       "expo-location",
       "expo-camera",
       "expo-notifications",
