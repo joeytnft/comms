@@ -99,6 +99,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const { tokens } = await authService.refresh(refreshToken);
       await storeTokens(tokens);
+
+      // Re-fetch user profile so role and other derived fields stay current
+      try {
+        const { user: freshUser, organization } = await authService.getMe();
+        set({ user: freshUser, organization: organization ?? null });
+        await secureStorage.setItemAsync(USER_KEY, JSON.stringify(freshUser));
+      } catch {
+        // Non-fatal — tokens were refreshed, profile fetch can retry later
+      }
     } catch {
       // Refresh failed — session is expired
       await clearTokens();

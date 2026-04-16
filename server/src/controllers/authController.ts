@@ -163,6 +163,9 @@ export async function register(
     });
   }
 
+  // Derive role for the newly created user
+  const registerRole = organization.createdBy === user.id ? 'owner' : 'member';
+
   // Generate tokens
   const accessToken = request.server.jwt.sign({
     userId: user.id,
@@ -180,7 +183,7 @@ export async function register(
   });
 
   reply.status(201).send({
-    user,
+    user: { ...user, role: registerRole },
     tokens: {
       accessToken,
       refreshToken,
@@ -203,7 +206,7 @@ export async function login(
     select: {
       id: true, email: true, displayName: true, phone: true,
       avatarUrl: true, publicKey: true, organizationId: true,
-      campusId: true, passwordHash: true, createdAt: true, lastSeenAt: true,
+      campusId: true, isOrgAdmin: true, passwordHash: true, createdAt: true, lastSeenAt: true,
     },
   });
   if (!user) {
@@ -220,6 +223,13 @@ export async function login(
     where: { id: user.id },
     data: { lastSeenAt: new Date() },
   });
+
+  // Derive role
+  const org = await prisma.organization.findUnique({
+    where: { id: user.organizationId },
+    select: { createdBy: true },
+  });
+  const role = org?.createdBy === user.id ? 'owner' : user.isOrgAdmin ? 'admin' : 'member';
 
   // Generate tokens
   const accessToken = request.server.jwt.sign({
@@ -247,6 +257,8 @@ export async function login(
       publicKey: user.publicKey,
       organizationId: user.organizationId,
       campusId: user.campusId ?? null,
+      isOrgAdmin: user.isOrgAdmin,
+      role,
       createdAt: user.createdAt,
       lastSeenAt: user.lastSeenAt,
     },
