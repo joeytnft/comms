@@ -28,7 +28,7 @@ function getSupabase() {
 }
 
 // Transcode raw WebM/OGG to M4A using ffmpeg with voice-optimised settings.
-async function transcodeToM4A(input: Buffer): Promise<Buffer> {
+async function transcodeToM4A(input: Uint8Array): Promise<Buffer> {
   const tmpIn  = path.join(os.tmpdir(), `ptt_in_${Date.now()}`);
   const tmpOut = path.join(os.tmpdir(), `ptt_out_${Date.now()}.m4a`);
   fs.writeFileSync(tmpIn, input);
@@ -58,7 +58,7 @@ async function savePttLog(
 ): Promise<{ audioUrl: string; durationMs: number; displayName: string } | null> {
   try {
     const durationMs = Date.now() - startedAt;
-    let audioBuffer = Buffer.concat(chunks);
+    let audioBuffer: Uint8Array = Buffer.concat(chunks);
     let ext = mimeType.includes('ogg') ? 'ogg' : 'webm';
     let finalMime = mimeType;
 
@@ -246,7 +246,7 @@ export function setupPTTSocket(io: Server, socket: Socket) {
         (err) => logger.warn({ err }, '[PTT] Egress stop failed'),
       );
 
-      // Retrieve and flush Redis session + chunks atomically
+      // Retrieve and flush Redis session + chunks
       const sessionKey = `ptt:session:${userId}:${groupId}`;
       const chunksKey  = `ptt:chunks:${userId}:${groupId}`;
       const [sessionData, chunks64] = await Promise.all([
@@ -328,7 +328,7 @@ export function setupPTTSocket(io: Server, socket: Socket) {
 
     const chunksKey = `ptt:chunks:${userId}:${data.groupId}`;
     redis.rpush(chunksKey, Buffer.from(data.chunk).toString('base64'))
-      .then((len) => { if (len === 1) return redis.expire(chunksKey, SESSION_TTL); })
+      .then(async (len) => { if (len === 1) await redis.expire(chunksKey, SESSION_TTL); })
       .catch((err) => logger.error({ err }, '[PTT] Failed to buffer chunk'));
   });
 

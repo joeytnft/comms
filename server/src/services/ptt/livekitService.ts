@@ -31,11 +31,11 @@ function buildOutput(groupId: string, userId: string): EncodedFileOutput | null 
     output: {
       case: 's3',
       value: new S3Upload({
-        accessKey:     SUPABASE_S3_KEY_ID,
-        secret:        SUPABASE_S3_ACCESS_SECRET,
-        region:        'us-east-1',
-        endpoint:      `${SUPABASE_URL}/storage/v1/s3`,
-        bucket:        SUPABASE_STORAGE_BUCKET,
+        accessKey:      SUPABASE_S3_KEY_ID,
+        secret:         SUPABASE_S3_ACCESS_SECRET,
+        region:         'us-east-1',
+        endpoint:       `${SUPABASE_URL}/storage/v1/s3`,
+        bucket:         SUPABASE_STORAGE_BUCKET,
         forcePathStyle: true,
       }),
     },
@@ -53,7 +53,7 @@ export async function startTransmissionEgress(groupId: string, userId: string): 
   if (!clients || !output) return;
 
   try {
-    const roomName    = `ptt:${groupId}`;
+    const roomName     = `ptt:${groupId}`;
     const participants = await clients.rooms.listParticipants(roomName);
     const participant  = participants.find((p) => p.identity === userId);
     const audioTrack   = participant?.tracks.find((t) => t.type === TrackType.AUDIO);
@@ -65,8 +65,8 @@ export async function startTransmissionEgress(groupId: string, userId: string): 
 
     const egress = await clients.egress.startTrackCompositeEgress(
       roomName,
-      { audioTrackId: audioTrack.sid },
       output,
+      audioTrack.sid,   // audioTrackId
     );
 
     await redis.setex(`ptt:egress:${userId}:${groupId}`, 3600, egress.egressId);
