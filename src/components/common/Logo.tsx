@@ -6,7 +6,7 @@ import { COLORS } from '@/config/theme';
 // Until then it falls back to the "GS" text placeholder.
 let logoSource: ReturnType<typeof require> | null = null;
 try {
-  logoSource = require('../../../assets/icon.png');
+  logoSource = require('../../assets/icon.png');
 } catch {
   logoSource = null;
 }
