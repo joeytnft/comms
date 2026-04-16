@@ -25,6 +25,7 @@ type Props = {
 export function GeofenceScreen({ navigation }: Props) {
   const { user } = useAuthStore();
   const campusId = user?.campusId ?? '';
+  const isAdmin = user?.role === 'owner' || user?.role === 'admin';
   const [geofence, setGeofence] = useState<Geofence | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -141,8 +142,9 @@ export function GeofenceScreen({ navigation }: Props) {
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.description}>
-          Set a boundary around your property. When a team member's phone enters this area,
-          they receive a notification to open the app and enable location tracking.
+          {isAdmin
+            ? 'Set a boundary around your property. When a team member\'s phone enters this area, they receive a notification to open the app and enable location tracking.'
+            : 'Shows the geofence boundary set by your org admin.'}
         </Text>
 
         {geofence && (
@@ -156,7 +158,14 @@ export function GeofenceScreen({ navigation }: Props) {
           </View>
         )}
 
-        <View style={styles.card}>
+        {!isAdmin && !geofence && (
+          <View style={styles.activeBar}>
+            <Text style={styles.activeText}>No geofence configured for your campus.</Text>
+          </View>
+        )}
+
+        {/* Edit form — admins only */}
+        {isAdmin && <View style={styles.card}>
           <Text style={styles.label}>Location Name</Text>
           <TextInput
             style={styles.input}
@@ -230,20 +239,22 @@ export function GeofenceScreen({ navigation }: Props) {
           <Text style={styles.hint}>
             Tip: Open Google Maps, long-press your building, and copy the coordinates shown at the bottom.
           </Text>
-        </View>
+        </View>}
 
-        <TouchableOpacity
-          style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
-          onPress={handleSave}
-          disabled={isSaving}
-        >
-          {isSaving
-            ? <ActivityIndicator color={COLORS.white} />
-            : <Text style={styles.saveButtonText}>{geofence ? 'Update Geofence' : 'Enable Geofence'}</Text>
-          }
-        </TouchableOpacity>
+        {isAdmin && (
+          <TouchableOpacity
+            style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
+            onPress={handleSave}
+            disabled={isSaving}
+          >
+            {isSaving
+              ? <ActivityIndicator color={COLORS.white} />
+              : <Text style={styles.saveButtonText}>{geofence ? 'Update Geofence' : 'Enable Geofence'}</Text>
+            }
+          </TouchableOpacity>
+        )}
 
-        {geofence && (
+        {isAdmin && geofence && (
           <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
             <Text style={styles.deleteButtonText}>Remove Geofence</Text>
           </TouchableOpacity>

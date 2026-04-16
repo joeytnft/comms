@@ -73,6 +73,28 @@ export function MembersScreen() {
   };
 
   const isOwner = user?.role === 'owner';
+  const isAdmin = user?.role === 'owner' || user?.role === 'admin';
+
+  // Who can tap to edit:
+  // - owner can edit anyone except other owners (server blocks that anyway)
+  // - admin can edit non-owner members
+  // - regular members cannot edit others
+  const canEdit = (member: OrgMember) => {
+    if (!isAdmin) return false;
+    if (member.role === 'owner') return false; // nobody edits the owner except possibly themselves
+    return true;
+  };
+
+  // Whether to show the admin toggle for a given edit target:
+  // - owner: can toggle anyone who isn't the org owner
+  // - admin: can only promote plain members (not demote existing admins — owner-only action)
+  const canToggleAdmin = (target: OrgMember | null) => {
+    if (!target) return false;
+    if (target.role === 'owner') return false;
+    if (isOwner) return true;
+    // Admins can promote a member to admin, but cannot demote an existing admin
+    return target.role === 'member';
+  };
 
   const renderMember = ({ item }: { item: OrgMember }) => {
     const isMe = item.id === user?.id;
@@ -89,7 +111,7 @@ export function MembersScreen() {
       <TouchableOpacity
         style={styles.memberCard}
         onPress={() => openEdit(item)}
-        disabled={item.role === 'owner' && !isOwner}
+        disabled={!canEdit(item)}
         activeOpacity={0.7}
       >
         <View style={styles.memberAvatar}>
@@ -109,7 +131,7 @@ export function MembersScreen() {
           <View style={[styles.roleBadge, roleBadgeStyle]}>
             <Text style={styles.roleText}>{roleLabel}</Text>
           </View>
-          <Text style={styles.chevron}>{'>'}</Text>
+          {canEdit(item) && <Text style={styles.chevron}>{'>'}</Text>}
         </View>
       </TouchableOpacity>
     );
@@ -235,13 +257,17 @@ export function MembersScreen() {
               />
             </View>
 
-            {/* Admin toggle — owners can promote/demote anyone except themselves */}
-            {isOwner && editTarget?.role !== 'owner' && (
+            {/* Admin toggle
+                - Owner: promote or demote anyone (except the org owner themselves)
+                - Admin: promote plain members only (demotion is owner-only) */}
+            {canToggleAdmin(editTarget) && (
               <View style={styles.toggleRow}>
                 <View style={styles.toggleInfo}>
                   <Text style={styles.toggleLabel}>Org Admin</Text>
                   <Text style={styles.toggleSub}>
-                    Admins can manage members, assignments, and org settings
+                    {isOwner
+                      ? 'Admins can manage members, assignments, and org settings'
+                      : 'Grant this member admin access to manage members and org settings'}
                   </Text>
                 </View>
                 <Switch

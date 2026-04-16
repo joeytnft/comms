@@ -78,7 +78,8 @@ async function uploadPhoto(uri: string, base64?: string, mimeType?: string): Pro
   }
 
   const { url } = await response.json() as { url: string };
-  return `${ENV.apiUrl}${url}`;
+  // The server returns the full Supabase public URL — do not prepend apiUrl
+  return url;
 }
 
 export function IncidentReportScreen({ navigation }: Props) {
@@ -92,19 +93,32 @@ export function IncidentReportScreen({ navigation }: Props) {
 
   const canSubmit = title.trim().length > 0 && details.trim().length > 0 && !isSubmitting;
 
-  const handleAddPhoto = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      RNAlert.alert('Permission required', 'Allow photo access to attach images.');
-      return;
+  const pickAndUpload = async (source: 'camera' | 'library') => {
+    // Request the appropriate permission
+    if (source === 'camera') {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        RNAlert.alert('Permission required', 'Allow camera access to take photos.');
+        return;
+      }
+    } else {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        RNAlert.alert('Permission required', 'Allow photo library access to attach images.');
+        return;
+      }
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
+    const options: ImagePicker.ImagePickerOptions = {
       mediaTypes: 'images',
-      quality: 0.6,
+      quality: 0.7,
       allowsMultipleSelection: false,
-      base64: true, // request base64 on all platforms — avoids blob URI re-fetch issues
-    });
+      base64: true,
+    };
+
+    const result = source === 'camera'
+      ? await ImagePicker.launchCameraAsync(options)
+      : await ImagePicker.launchImageLibraryAsync(options);
 
     if (result.canceled || !result.assets[0]) return;
 
@@ -120,6 +134,14 @@ export function IncidentReportScreen({ navigation }: Props) {
     } finally {
       setIsUploadingPhoto(false);
     }
+  };
+
+  const handleAddPhoto = () => {
+    RNAlert.alert('Add Photo', 'Choose a source', [
+      { text: 'Take Photo', onPress: () => pickAndUpload('camera') },
+      { text: 'Choose from Library', onPress: () => pickAndUpload('library') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
   const handleRemovePhoto = (index: number) => {
