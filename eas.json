@@ -9,10 +9,7 @@
       "distribution": "internal",
       "channel": "development",
       "ios": {
-        "simulator": false,
-        "entitlements": {
-          "com.apple.developer.push-to-talk": true
-        }
+        "simulator": false
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.gathersafeapp.com",
@@ -24,10 +21,7 @@
       "distribution": "internal",
       "channel": "preview",
       "ios": {
-        "buildConfiguration": "Release",
-        "entitlements": {
-          "com.apple.developer.push-to-talk": true
-        }
+        "buildConfiguration": "Release"
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.gathersafeapp.com",
@@ -39,10 +33,7 @@
       "autoIncrement": true,
       "channel": "production",
       "ios": {
-        "buildConfiguration": "Release",
-        "entitlements": {
-          "com.apple.developer.push-to-talk": true
-        }
+        "buildConfiguration": "Release"
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.gathersafeapp.com",
