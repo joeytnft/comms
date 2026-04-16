@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
+    "@expo/ngrok": "^4.0.0",
     "@livekit/react-native": "^2.0.0",
     "@livekit/react-native-webrtc": "^144.0.0",
     "@react-navigation/bottom-tabs": "^6.5.0",
