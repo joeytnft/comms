@@ -1,17 +1,55 @@
 import { Server, Socket } from 'socket.io';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import { createClient } from '@supabase/supabase-js';
 import { prisma } from '../config/database';
+import { redis } from '../config/redis';
 import { logger } from '../utils/logger';
+import { env } from '../config/env';
 import {
   notifyTransmissionStarted,
   notifyTransmissionStopped,
 } from '../services/apns/pttPushService';
+import {
+  startTransmissionEgress,
+  stopTransmissionEgress,
+} from '../services/ptt/livekitService';
 
-// In-memory store: "userId:groupId" → { chunks, startedAt, mimeType }
-const activeSessions = new Map<string, { chunks: Buffer[]; startedAt: number; mimeType: string }>();
+const execFileAsync = promisify(execFile);
+const SESSION_TTL = 7200; // 2-hour safety net for stale Redis keys
 
-async function saveWebPttLog(
+let _supabase: ReturnType<typeof createClient> | null = null;
+function getSupabase() {
+  if (!_supabase) _supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+  return _supabase;
+}
+
+// Transcode raw WebM/OGG to M4A using ffmpeg with voice-optimised settings.
+async function transcodeToM4A(input: Buffer): Promise<Buffer> {
+  const tmpIn  = path.join(os.tmpdir(), `ptt_in_${Date.now()}`);
+  const tmpOut = path.join(os.tmpdir(), `ptt_out_${Date.now()}.m4a`);
+  fs.writeFileSync(tmpIn, input);
+  try {
+    await execFileAsync('ffmpeg', [
+      '-i', tmpIn,
+      '-c:a', 'aac',
+      '-b:a', '32k',
+      '-ar', '16000',
+      '-ac', '1',
+      '-y', tmpOut,
+    ]);
+    return fs.readFileSync(tmpOut);
+  } finally {
+    for (const f of [tmpIn, tmpOut]) {
+      try { fs.unlinkSync(f); } catch { /* ignore */ }
+    }
+  }
+}
+
+async function savePttLog(
   userId: string,
   groupId: string,
   chunks: Buffer[],
@@ -19,32 +57,47 @@ async function saveWebPttLog(
   startedAt: number,
 ): Promise<{ audioUrl: string; durationMs: number; displayName: string } | null> {
   try {
-    const ext = mimeType.includes('ogg') ? 'ogg' : 'webm';
-    const filename = `ptt_${userId}_${Date.now()}.${ext}`;
-    const uploadsDir = path.join(process.cwd(), 'uploads');
-    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-    const filepath = path.join(uploadsDir, filename);
-    fs.writeFileSync(filepath, Buffer.concat(chunks));
     const durationMs = Date.now() - startedAt;
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { displayName: true } });
-    await prisma.pttLog.create({
-      data: { groupId, senderId: userId, audioUrl: `/files/${filename}`, durationMs },
+    let audioBuffer = Buffer.concat(chunks);
+    let ext = mimeType.includes('ogg') ? 'ogg' : 'webm';
+    let finalMime = mimeType;
+
+    try {
+      audioBuffer = await transcodeToM4A(audioBuffer);
+      ext = 'm4a';
+      finalMime = 'audio/mp4';
+    } catch {
+      // ffmpeg unavailable — keep original format
+    }
+
+    const filename = `ptt/${groupId}/${userId}_${Date.now()}.${ext}`;
+    const { error: uploadErr } = await getSupabase()
+      .storage
+      .from(env.SUPABASE_STORAGE_BUCKET)
+      .upload(filename, audioBuffer, { contentType: finalMime, upsert: false });
+    if (uploadErr) throw uploadErr;
+
+    const { data: { publicUrl } } = getSupabase()
+      .storage
+      .from(env.SUPABASE_STORAGE_BUCKET)
+      .getPublicUrl(filename);
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { displayName: true },
     });
+    await prisma.pttLog.create({
+      data: { groupId, senderId: userId, audioUrl: publicUrl, durationMs },
+    });
+
     logger.info(`[PTT] Saved voice log: ${filename} (${durationMs}ms)`);
-    return { audioUrl: `/files/${filename}`, durationMs, displayName: user?.displayName ?? 'Unknown' };
+    return { audioUrl: publicUrl, durationMs, displayName: user?.displayName ?? 'Unknown' };
   } catch (err) {
     logger.error({ err }, '[PTT] Failed to save voice log');
     return null;
   }
 }
 
-/**
- * PTT socket events for signaling who is speaking.
- * Actual audio goes through LiveKit — these events handle:
- * - Joining/leaving PTT channels
- * - Broadcasting who started/stopped talking
- * - Member presence in PTT rooms
- */
 function isValidGroupId(val: unknown): val is string {
   return typeof val === 'string' && val.length > 0 && val.length <= 64;
 }
@@ -52,7 +105,6 @@ function isValidGroupId(val: unknown): val is string {
 export function setupPTTSocket(io: Server, socket: Socket) {
   const { userId } = socket.user;
 
-  // User joins a group's PTT channel
   socket.on('ptt:join', async (data: { groupId: string }) => {
     if (!data || !isValidGroupId(data.groupId)) {
       socket.emit('ptt:error', { message: 'Invalid groupId' });
@@ -60,7 +112,6 @@ export function setupPTTSocket(io: Server, socket: Socket) {
     }
     const { groupId } = data;
 
-    // Verify membership
     const membership = await prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId, userId } },
       include: { user: { select: { displayName: true } } },
@@ -74,14 +125,12 @@ export function setupPTTSocket(io: Server, socket: Socket) {
     const room = `ptt:${groupId}`;
     socket.join(room);
 
-    // Notify others that this user joined the PTT channel
     socket.to(room).emit('ptt:member_joined', {
       userId,
       displayName: membership.user.displayName,
       groupId,
     });
 
-    // Send current members in the room back to the joiner
     const socketsInRoom = await io.in(room).fetchSockets();
     const memberIds = socketsInRoom
       .map((s) => (s as unknown as Socket).user?.userId)
@@ -96,88 +145,75 @@ export function setupPTTSocket(io: Server, socket: Socket) {
     logger.info(`[PTT] ${userId} joined PTT room ${room}`);
   });
 
-  // User leaves a group's PTT channel
   socket.on('ptt:leave', (data: { groupId: string }) => {
     if (!data || !isValidGroupId(data.groupId)) return;
     const room = `ptt:${data.groupId}`;
     socket.leave(room);
-
-    socket.to(room).emit('ptt:member_left', {
-      userId,
-      groupId: data.groupId,
-    });
-
+    socket.to(room).emit('ptt:member_left', { userId, groupId: data.groupId });
     logger.info(`[PTT] ${userId} left PTT room ${room}`);
   });
 
-  // User started transmitting (pressed PTT button)
   socket.on('ptt:start', async (data: { groupId: string; mimeType?: string }) => {
     if (!data || !isValidGroupId(data.groupId)) return;
     const { groupId } = data;
     const room = `ptt:${groupId}`;
-    // Initialize chunk buffer for this web session
-    activeSessions.set(`${userId}:${groupId}`, {
-      chunks: [],
-      startedAt: Date.now(),
-      mimeType: data.mimeType || 'audio/webm',
-    });
+    const mimeType = data.mimeType || 'audio/webm';
+
+    // Persist session metadata + clear any stale chunks from a prior session.
+    // Both keys are given a 2-hour TTL so Redis self-cleans if ptt:stop never fires.
+    const sessionKey = `ptt:session:${userId}:${groupId}`;
+    const chunksKey  = `ptt:chunks:${userId}:${groupId}`;
+    const pipeline = redis.pipeline();
+    pipeline.hset(sessionKey, { startedAt: Date.now(), mimeType });
+    pipeline.expire(sessionKey, SESSION_TTL);
+    pipeline.del(chunksKey);
+    await pipeline.exec();
 
     try {
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: { displayName: true },
       });
-
       const displayName = user?.displayName || 'Unknown';
 
-      // Broadcast to everyone in the PTT room that this user is speaking
       socket.to(room).emit('ptt:speaking', {
-        groupId,
-        userId,
-        displayName,
-        startedAt: new Date().toISOString(),
+        groupId, userId, displayName, startedAt: new Date().toISOString(),
       });
 
-      // Send APNs pushtotalk push to iOS members who are NOT connected via socket
-      // (i.e., app is in background / closed — PTT framework wakes them)
       const socketsInRoom = await io.in(room).fetchSockets();
       const onlineUserIds = new Set(
         socketsInRoom.map((s) => (s as unknown as Socket).user?.userId).filter(Boolean),
       );
 
       const pushTokens = await prisma.pttPushToken.findMany({
-        where: {
-          groupId,
-          NOT: { userId: { in: [...onlineUserIds] } }, // exclude already-connected users
-        },
+        where: { groupId, NOT: { userId: { in: [...onlineUserIds] } } },
         select: { token: true },
       });
 
       if (pushTokens.length > 0) {
         notifyTransmissionStarted(
           pushTokens.map((t) => t.token),
-          groupId,
-          userId,
-          displayName,
+          groupId, userId, displayName,
         ).catch((err) => logger.error({ err }, '[PTT] APNs notify start failed'));
       }
 
-      // Also broadcast to parent LEAD group if this is a SUB group
       const group = await prisma.group.findUnique({
         where: { id: groupId },
         select: { parentGroupId: true, type: true },
       });
 
       if (group?.parentGroupId) {
-        const parentRoom = `ptt:${group.parentGroupId}`;
-        socket.to(parentRoom).emit('ptt:speaking', {
-          groupId,
-          userId,
-          displayName: user?.displayName || 'Unknown',
+        socket.to(`ptt:${group.parentGroupId}`).emit('ptt:speaking', {
+          groupId, userId, displayName,
           startedAt: new Date().toISOString(),
           fromSubGroup: true,
         });
       }
+
+      // Start server-side LiveKit egress as backup for native clients that drop.
+      startTransmissionEgress(groupId, userId).catch(
+        (err) => logger.warn({ err }, '[PTT] Egress start failed'),
+      );
 
       logger.debug(`[PTT] ${userId} started transmitting in ${room}`);
     } catch (error) {
@@ -186,7 +222,6 @@ export function setupPTTSocket(io: Server, socket: Socket) {
     }
   });
 
-  // User stopped transmitting (released PTT button)
   socket.on('ptt:stop', async (data: { groupId: string }) => {
     if (!data || !isValidGroupId(data.groupId)) return;
     const { groupId } = data;
@@ -196,24 +231,36 @@ export function setupPTTSocket(io: Server, socket: Socket) {
       const endedAt = new Date().toISOString();
       socket.to(room).emit('ptt:stopped', { groupId, userId, endedAt });
 
-      // Notify background iOS clients that transmission ended
       const pushTokensForStop = await prisma.pttPushToken.findMany({
         where: { groupId },
         select: { token: true },
       });
       if (pushTokensForStop.length > 0) {
         notifyTransmissionStopped(
-          pushTokensForStop.map((t) => t.token),
-          groupId,
+          pushTokensForStop.map((t) => t.token), groupId,
         ).catch((err) => logger.error({ err }, '[PTT] APNs notify stop failed'));
       }
 
-      // Save web audio log if chunks exist
-      const sessionKey = `${userId}:${groupId}`;
-      const session = activeSessions.get(sessionKey);
-      activeSessions.delete(sessionKey);
-      if (session && session.chunks.length > 0) {
-        const result = await saveWebPttLog(userId, groupId, session.chunks, session.mimeType, session.startedAt);
+      // Stop LiveKit egress
+      stopTransmissionEgress(userId, groupId).catch(
+        (err) => logger.warn({ err }, '[PTT] Egress stop failed'),
+      );
+
+      // Retrieve and flush Redis session + chunks atomically
+      const sessionKey = `ptt:session:${userId}:${groupId}`;
+      const chunksKey  = `ptt:chunks:${userId}:${groupId}`;
+      const [sessionData, chunks64] = await Promise.all([
+        redis.hgetall(sessionKey),
+        redis.lrange(chunksKey, 0, -1),
+      ]);
+      await redis.del(sessionKey, chunksKey);
+
+      if (chunks64.length > 0 && sessionData?.startedAt) {
+        const chunks    = chunks64.map((b) => Buffer.from(b, 'base64'));
+        const startedAt = parseInt(sessionData.startedAt, 10);
+        const mimeType  = sessionData.mimeType || 'audio/webm';
+
+        const result = await savePttLog(userId, groupId, chunks, mimeType, startedAt);
         if (result) {
           io.to(room).emit('ptt:log_saved', {
             groupId, userId,
@@ -225,15 +272,13 @@ export function setupPTTSocket(io: Server, socket: Socket) {
         }
       }
 
-      // Also notify parent LEAD group
       const group = await prisma.group.findUnique({
         where: { id: groupId },
         select: { parentGroupId: true },
       });
 
       if (group?.parentGroupId) {
-        const parentRoom = `ptt:${group.parentGroupId}`;
-        socket.to(parentRoom).emit('ptt:stopped', {
+        socket.to(`ptt:${group.parentGroupId}`).emit('ptt:stopped', {
           groupId, userId, endedAt, fromSubGroup: true,
         });
       }
@@ -248,9 +293,17 @@ export function setupPTTSocket(io: Server, socket: Socket) {
   socket.on('ptt:native_log', async (data: { groupId: string; audioUrl: string; durationMs: number }) => {
     if (!data || !isValidGroupId(data.groupId)) return;
     try {
-      const user = await prisma.user.findUnique({ where: { id: userId }, select: { displayName: true } });
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { displayName: true },
+      });
       await prisma.pttLog.create({
-        data: { groupId: data.groupId, senderId: userId, audioUrl: data.audioUrl, durationMs: data.durationMs || 0 },
+        data: {
+          groupId: data.groupId,
+          senderId: userId,
+          audioUrl: data.audioUrl,
+          durationMs: data.durationMs || 0,
+        },
       });
       const room = `ptt:${data.groupId}`;
       const createdAt = new Date().toISOString();
@@ -267,29 +320,23 @@ export function setupPTTSocket(io: Server, socket: Socket) {
     }
   });
 
-  // Relay raw audio chunk to other members in the PTT room (web clients) and buffer for log
+  // Relay raw audio chunk to other web clients and buffer in Redis for durable log.
   socket.on('ptt:audio_chunk', (data: { groupId: string; chunk: ArrayBuffer; mimeType: string }) => {
     if (!data || !isValidGroupId(data.groupId)) return;
     const room = `ptt:${data.groupId}`;
     socket.to(room).emit('ptt:audio_chunk', { chunk: data.chunk, mimeType: data.mimeType });
-    // Buffer chunk for log
-    const session = activeSessions.get(`${userId}:${data.groupId}`);
-    if (session) session.chunks.push(Buffer.from(data.chunk));
+
+    const chunksKey = `ptt:chunks:${userId}:${data.groupId}`;
+    redis.rpush(chunksKey, Buffer.from(data.chunk).toString('base64'))
+      .then((len) => { if (len === 1) return redis.expire(chunksKey, SESSION_TTL); })
+      .catch((err) => logger.error({ err }, '[PTT] Failed to buffer chunk'));
   });
 
-  // Clean up PTT rooms on disconnect
   socket.on('disconnect', () => {
-    // Socket.IO auto-removes from all rooms on disconnect.
-    // But we should notify rooms the user was in.
-    // The rooms are cleaned up by Socket.IO, so we emit
-    // to rooms the user was in before disconnect.
     for (const room of socket.rooms) {
       if (room.startsWith('ptt:')) {
         const groupId = room.replace('ptt:', '');
-        socket.to(room).emit('ptt:member_left', {
-          userId,
-          groupId,
-        });
+        socket.to(room).emit('ptt:member_left', { userId, groupId });
       }
     }
   });
