@@ -16,4 +16,6 @@ export async function authRoutes(app: FastifyInstance) {
   app.post('/register', { ...AUTH_RATE_LIMIT, preHandler: [checkMemberLimit] }, authController.register as RouteHandlerMethod);
   app.post('/refresh', authController.refresh);
   app.post('/logout', authController.logout);
+  app.post('/forgot-password', AUTH_RATE_LIMIT, authController.forgotPassword);
+  app.post('/reset-password', AUTH_RATE_LIMIT, authController.resetPassword);
 }

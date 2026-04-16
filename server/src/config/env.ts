@@ -36,6 +36,14 @@ const envSchema = z.object({
   PCO_CLIENT_SECRET: z.string().optional(),
   PCO_REDIRECT_URI: z.string().url().optional().default('https://gathersafeapp.com/integrations/pco/callback'),
 
+  // Email (SMTP for password reset)
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  EMAIL_FROM: z.string().default('GatherSafe <noreply@gathersafeapp.com>'),
+  APP_URL: z.string().url().default('https://gathersafeapp.com'),
+
   // Server
   PORT: z.coerce.number().default(3001),
   HOST: z.string().default('0.0.0.0'),

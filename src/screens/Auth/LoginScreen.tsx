@@ -10,6 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
+import { Logo } from '@/components/common/Logo';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '@/config/theme';
 
 export function LoginScreen({ navigation }: { navigation: any }) {
@@ -37,9 +38,7 @@ export function LoginScreen({ navigation }: { navigation: any }) {
       <View style={styles.content}>
         {/* Logo / Branding */}
         <View style={styles.header}>
-          <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>GS</Text>
-          </View>
+          <Logo size={80} />
           <Text style={styles.title}>GatherSafe</Text>
           <Text style={styles.subtitle}>Secure Team Communication</Text>
         </View>
@@ -81,6 +80,13 @@ export function LoginScreen({ navigation }: { navigation: any }) {
           </TouchableOpacity>
 
           <TouchableOpacity
+            style={styles.forgotButton}
+            onPress={() => navigation.navigate('ForgotPassword')}
+          >
+            <Text style={styles.forgotText}>Forgot your password?</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={styles.linkButton}
             onPress={() => navigation.navigate('Register')}
           >
@@ -108,20 +114,6 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginBottom: SPACING.xxl,
-  },
-  logoContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
-    backgroundColor: COLORS.accent,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING.md,
-  },
-  logoText: {
-    ...TYPOGRAPHY.heading1,
-    color: COLORS.white,
-    fontSize: 32,
   },
   title: {
     ...TYPOGRAPHY.heading1,
@@ -166,6 +158,14 @@ const styles = StyleSheet.create({
   buttonText: {
     ...TYPOGRAPHY.button,
     color: COLORS.white,
+  },
+  forgotButton: {
+    alignItems: 'center',
+    paddingVertical: SPACING.xs,
+  },
+  forgotText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.info,
   },
   linkButton: {
     alignItems: 'center',

@@ -9,6 +9,8 @@ export const ENDPOINTS = {
     REFRESH: '/auth/refresh',
     LOGOUT: '/auth/logout',
     VERIFY_PIN: '/auth/verify-pin',
+    FORGOT_PASSWORD: '/auth/forgot-password',
+    RESET_PASSWORD: '/auth/reset-password',
   },
 
   // Users

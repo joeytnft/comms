@@ -8,12 +8,16 @@ import { COLORS } from '@/config/theme';
 
 import { LoginScreen } from '@/screens/Auth/LoginScreen';
 import { RegisterScreen } from '@/screens/Auth/RegisterScreen';
+import { ForgotPasswordScreen } from '@/screens/Auth/ForgotPasswordScreen';
+import { ResetPasswordScreen } from '@/screens/Auth/ResetPasswordScreen';
 import { PinEntryScreen } from '@/screens/Auth/PinEntryScreen';
 import { MainTabNavigator } from './MainTabNavigator';
 
 export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
+  ForgotPassword: undefined;
+  ResetPassword: { token?: string };
   Main: undefined;
 };
 
@@ -57,6 +61,8 @@ export function AppNavigator() {
           <>
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Register" component={RegisterScreen} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+            <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
           </>
         )}
       </Stack.Navigator>

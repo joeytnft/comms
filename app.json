@@ -12,7 +12,9 @@
     "runtimeVersion": {
       "policy": "appVersion"
     },
+    "icon": "./assets/icon.png",
     "splash": {
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#1a1a2e"
     },

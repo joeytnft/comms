@@ -9,6 +9,9 @@ import {
   ValidationError,
 } from '../utils/errors';
 import { FREE_TRIAL_DAYS } from '../config/subscriptions';
+import { sendPasswordResetEmail } from '../services/emailService';
+
+const RESET_TOKEN_EXPIRY_MINUTES = 60;
 
 interface RegisterBody {
   email: string;
@@ -318,4 +321,60 @@ export async function logout(
   }
 
   reply.status(204).send();
+}
+
+export async function forgotPassword(
+  request: FastifyRequest<{ Body: { email: string } }>,
+  reply: FastifyReply,
+) {
+  const { email } = request.body;
+  if (!email) throw new ValidationError('Email is required');
+
+  // Always respond 200 so we don't reveal whether an account exists
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) {
+    reply.send({ message: 'If that email is registered you will receive a reset link shortly.' });
+    return;
+  }
+
+  // Invalidate any existing tokens for this user
+  await prisma.passwordResetToken.deleteMany({ where: { userId: user.id } });
+
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MINUTES * 60 * 1000);
+
+  await prisma.passwordResetToken.create({
+    data: { token, userId: user.id, expiresAt },
+  });
+
+  await sendPasswordResetEmail(user.email, token);
+
+  reply.send({ message: 'If that email is registered you will receive a reset link shortly.' });
+}
+
+export async function resetPassword(
+  request: FastifyRequest<{ Body: { token: string; password: string } }>,
+  reply: FastifyReply,
+) {
+  const { token, password } = request.body;
+
+  if (!token || !password) throw new ValidationError('Token and new password are required');
+  if (password.length < 8) throw new ValidationError('Password must be at least 8 characters');
+
+  const record = await prisma.passwordResetToken.findUnique({ where: { token } });
+
+  if (!record || record.used || record.expiresAt < new Date()) {
+    throw new AuthenticationError('This reset link is invalid or has expired');
+  }
+
+  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: record.userId }, data: { passwordHash } }),
+    prisma.passwordResetToken.update({ where: { id: record.id }, data: { used: true } }),
+    // Invalidate all refresh tokens so existing sessions are logged out
+    prisma.refreshToken.deleteMany({ where: { userId: record.userId } }),
+  ]);
+
+  reply.send({ message: 'Password updated successfully. Please sign in with your new password.' });
 }
