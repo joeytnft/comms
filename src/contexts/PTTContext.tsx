@@ -2,6 +2,7 @@ import React, { createContext, useContext, useCallback, useEffect, useRef } from
 import { Platform, Vibration } from 'react-native';
 import { AudioModule } from '@/utils/audioStub';
 import { PTTState, PTTConfig } from '@/types';
+import { ENV } from '@/config/env';
 import { useSocket } from './SocketContext';
 import { usePTTStore } from '@/store/usePTTStore';
 import { usePTTLogStore } from '@/store/usePTTLogStore';
@@ -50,6 +51,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   // Track when transmit started so durationMs is accurate
   const transmitStartedAtRef = useRef<number>(0);
+  // Set to true when the user deliberately calls leaveChannel so we don't auto-rejoin
+  const intentionalLeaveRef = useRef(false);
 
   // Init BLE service once on mount
   useEffect(() => {
@@ -121,6 +124,15 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       });
     };
 
+    // When socket reconnects (e.g. after JWT refresh), rejoin the PTT signaling room
+    // so speaking/stopped events keep flowing.  LiveKit stays connected independently.
+    const handleSocketReconnect = () => {
+      const { currentGroupId, isConnected } = usePTTStore.getState();
+      if (isConnected && currentGroupId) {
+        socket.emit('ptt:join', { groupId: currentGroupId });
+      }
+    };
+
     socket.on('ptt:speaking', handleSpeaking);
     socket.on('ptt:stopped', handleStopped);
     socket.on('ptt:member_joined', handleMemberJoined);
@@ -128,6 +140,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     socket.on('ptt:room_state', handleRoomState);
     socket.on('ptt:audio_chunk', handleAudioChunk);
     socket.on('ptt:log_saved', handleLogSaved);
+    socket.on('connect', handleSocketReconnect);
 
     return () => {
       socket.off('ptt:speaking', handleSpeaking);
@@ -137,6 +150,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       socket.off('ptt:room_state', handleRoomState);
       socket.off('ptt:audio_chunk', handleAudioChunk);
       socket.off('ptt:log_saved', handleLogSaved);
+      socket.off('connect', handleSocketReconnect);
     };
   }, [socket]);
 
@@ -192,12 +206,37 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           }
         });
 
-        room.on(RoomEvent!.Disconnected, () => {
-          usePTTStore.getState().disconnect();
-          AudioSession?.stopAudioSession();
+        room.on(RoomEvent!.Reconnecting, () => {
+          console.warn('[PTT] LiveKit reconnecting...');
         });
 
-        await room.connect(response.livekitUrl!, response.token, { autoSubscribe: true });
+        room.on(RoomEvent!.Reconnected, () => {
+          console.info('[PTT] LiveKit reconnected');
+        });
+
+        room.on(RoomEvent!.Disconnected, (reason?: unknown) => {
+          console.warn('[PTT] LiveKit disconnected, reason:', reason);
+          // Only tear down fully if the user deliberately left; network drops
+          // are handled by LiveKit's own reconnect logic (Reconnecting → Reconnected).
+          // If we end up here it means reconnection was exhausted or we left intentionally.
+          if (intentionalLeaveRef.current) {
+            intentionalLeaveRef.current = false;
+            usePTTStore.getState().disconnect();
+            AudioSession?.stopAudioSession();
+          } else {
+            // Unexpected disconnect — keep isConnected true so the UI shows "reconnecting"
+            // state rather than kicking the user out of the channel entirely.
+            usePTTStore.getState().setActiveSpeaker(null);
+            AudioSession?.stopAudioSession();
+          }
+        });
+
+        const livekitUrl = response.livekitUrl || ENV.livekitUrl;
+        if (!livekitUrl) {
+          usePTTStore.getState().disconnect();
+          throw new Error('LiveKit server URL is not configured. Set LIVEKIT_URL on the server.');
+        }
+        await room.connect(livekitUrl, response.token, { autoSubscribe: true });
 
         // Pre-create mic track in muted state for instant PTT response
         await room.localParticipant.setMicrophoneEnabled(false);
@@ -215,13 +254,14 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     const currentGroupId = usePTTStore.getState().currentGroupId;
     if (!socket || !currentGroupId) return;
 
+    intentionalLeaveRef.current = true;
+
     if (Platform.OS === 'web') {
       mediaRecorderRef.current?.stop();
       mediaRecorderRef.current = null;
     } else {
       roomRef.current?.disconnect();
       roomRef.current = null;
-      AudioSession?.stopAudioSession();
     }
 
     socket.emit('ptt:leave', { groupId: currentGroupId });

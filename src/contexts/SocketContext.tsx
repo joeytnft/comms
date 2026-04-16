@@ -4,6 +4,7 @@ import { secureStorage } from '@/utils/secureStorage';
 import { ENV } from '@/config/env';
 import { ACCESS_TOKEN_KEY, SOCKET_RECONNECT_ATTEMPTS, SOCKET_RECONNECT_DELAY } from '@/config/constants';
 import { useAuth } from './AuthContext';
+import { useAuthStore } from '@/store/useAuthStore';
 
 interface SocketContextType {
   socket: Socket | null;
@@ -54,15 +55,24 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
       socket.on('connect_error', async (error) => {
         console.warn('[Socket] Connection error:', error.message);
-        // If the server rejected the token, grab the latest from storage
-        // (apiClient may have refreshed it since we connected) and retry.
         const lowerMsg = error.message.toLowerCase();
         if (lowerMsg.includes('token') || lowerMsg.includes('auth') || lowerMsg.includes('unauthorized')) {
+          // The access token may have expired — refresh it, then reconnect with the new one.
+          await useAuthStore.getState().refreshSession();
           const freshToken = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
-          if (freshToken && (socket.auth as { token: string }).token !== freshToken) {
+          if (freshToken && mounted) {
             socket.auth = { token: freshToken };
             socket.connect();
           }
+        }
+      });
+
+      // Keep the auth token up to date on every reconnect attempt
+      // so a token refreshed by the API client is picked up automatically.
+      socket.io.on('reconnect_attempt', async () => {
+        const freshToken = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
+        if (freshToken) {
+          socket.auth = { token: freshToken };
         }
       });
 
