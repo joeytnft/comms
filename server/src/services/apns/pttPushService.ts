@@ -15,7 +15,6 @@
  *   APNS_PRODUCTION  — "true" for App Store / TestFlight builds; omit for dev/sandbox
  */
 
-import https from 'https';
 import http2 from 'http2';
 import crypto from 'crypto';
 import { logger } from '../../utils/logger';
