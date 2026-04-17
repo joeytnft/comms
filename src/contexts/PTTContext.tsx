@@ -10,6 +10,8 @@ import { useHardwareButton } from '@/hooks/useHardwareButton';
 import { nativePTTService } from '@/services/nativePTTService';
 import { callKitService } from '@/services/callKitService';
 import { bluetoothPTTService } from '@/services/bluetoothPTTService';
+import { liveActivityService } from '@/services/liveActivityService';
+import { useAuthStore } from '@/store/useAuthStore';
 import { secureStorage } from '@/utils/secureStorage';
 import { ACCESS_TOKEN_KEY } from '@/config/constants';
 import { ENV as AppEnv } from '@/config/env';
@@ -66,6 +68,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   const intentionalLeaveRef = useRef(false);
   // True while we are between "transmission started" and audio session activated
   const transmittingRef = useRef(false);
+  // Live Activity ID for the current PTT session (iOS 16.2+)
+  const liveActivityIdRef = useRef<string | null>(null);
 
   // ─── iOS native PTT setup ───────────────────────────────────────────────────
   useEffect(() => {
@@ -147,7 +151,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
   // ─── Android: CallKit / ConnectionService setup ─────────────────────────────
   useEffect(() => {
-    if (Platform.OS === 'web' || USE_NATIVE_PTT) return;
+    if (Platform.OS !== 'android') return;
     callKitService.setup();
     callKitService.onEndCall(() => {
       intentionalLeaveRef.current = true;
@@ -193,6 +197,15 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       if (usePTTStore.getState().config.vibrateOnReceive) {
         Vibration.vibrate(100);
       }
+      // Update Live Activity to show who is speaking
+      const { currentGroupName, connectedMemberCount } = usePTTStore.getState();
+      liveActivityService.update(liveActivityIdRef.current, {
+        channelName: currentGroupName ?? '',
+        speakerName: data.displayName,
+        isTransmitting: false,
+        memberCount: connectedMemberCount,
+        alertLevel: null,
+      });
     };
 
     const handleStopped = () => {
@@ -201,6 +214,15 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       if (USE_NATIVE_PTT && nativePTTChannelIdRef.current) {
         nativePTTService.clearActiveRemoteParticipant(nativePTTChannelIdRef.current).catch(() => null);
       }
+      // Clear Live Activity speaker
+      const { currentGroupName, connectedMemberCount } = usePTTStore.getState();
+      liveActivityService.update(liveActivityIdRef.current, {
+        channelName: currentGroupName ?? '',
+        speakerName: null,
+        isTransmitting: false,
+        memberCount: connectedMemberCount,
+        alertLevel: null,
+      });
     };
 
     const handleMemberJoined = (data: { userId: string }) => {
@@ -292,6 +314,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       const response = await usePTTStore.getState().fetchToken(groupId);
       usePTTStore.getState().setCurrentGroup(groupId, response.groupName);
 
+      // Start the Live Activity pill (iOS 16.2+, no-op elsewhere)
+      const orgName = useAuthStore.getState().organization?.name ?? 'GatherSafe';
+      liveActivityService.start(response.groupName, orgName)
+        .then((id) => { liveActivityIdRef.current = id; })
+        .catch(() => null);
+
       if (Platform.OS === 'web') {
         try {
           await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -333,8 +361,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           // Report service as "ready" in system UI
           nativePTTService.setServiceStatus(resolvedId, 'ready').catch(() => null);
 
-        } else {
-          // ── Android: CallKit / ConnectionService ──────────────────────────
+        } else if (Platform.OS === 'android') {
+          // ── Android: ConnectionService keeps audio alive in background ────
           await new Promise<void>((resolve) => {
             const uuid = callKitService.startCall(response.groupName, () => resolve());
             callUUIDRef.current = uuid;
@@ -348,7 +376,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           if (USE_NATIVE_PTT && nativePTTChannelIdRef.current) {
             await nativePTTService.leaveChannel(nativePTTChannelIdRef.current);
             nativePTTChannelIdRef.current = null;
-          } else if (callUUIDRef.current) {
+          } else if (Platform.OS === 'android' && callUUIDRef.current) {
             callKitService.endCall(callUUIDRef.current);
             callUUIDRef.current = null;
           }
@@ -435,7 +463,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           nativePTTService.leaveChannel(nativePTTChannelIdRef.current).catch(() => null);
           nativePTTChannelIdRef.current = null;
         }
-      } else {
+      } else if (Platform.OS === 'android') {
         if (callUUIDRef.current) {
           callKitService.endCall(callUUIDRef.current);
           callUUIDRef.current = null;
@@ -446,6 +474,10 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
     socket.emit('ptt:leave', { groupId: currentGroupId });
     usePTTStore.getState().disconnect();
+
+    // Dismiss the Live Activity pill
+    liveActivityService.end(liveActivityIdRef.current);
+    liveActivityIdRef.current = null;
   }, [socket]);
 
   // ─── startTransmitting ──────────────────────────────────────────────────────
@@ -479,13 +511,22 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         nativePTTService.beginTransmitting(nativePTTChannelIdRef.current).catch(() => null);
       }
     } else {
-      // Android CallKit path
+      // iOS (no PTT framework) or Android
       usePTTStore.getState().setTransmitting(true);
       transmitStartedAtRef.current = Date.now();
       socket.emit('ptt:start', { groupId: currentGroupId });
       roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null);
-      if (callUUIDRef.current) callKitService.setMuted(callUUIDRef.current, false);
+      if (Platform.OS === 'android' && callUUIDRef.current) callKitService.setMuted(callUUIDRef.current, false);
     }
+    // Update Live Activity to show "You are speaking"
+    const { currentGroupName, connectedMemberCount } = usePTTStore.getState();
+    liveActivityService.update(liveActivityIdRef.current, {
+      channelName: currentGroupName ?? '',
+      speakerName: null,
+      isTransmitting: true,
+      memberCount: connectedMemberCount,
+      alertLevel: null,
+    });
   }, [socket]);
 
   // ─── stopTransmitting ───────────────────────────────────────────────────────
@@ -504,14 +545,23 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         nativePTTService.stopTransmitting(nativePTTChannelIdRef.current).catch(() => null);
       }
     } else {
-      // Android CallKit path
+      // iOS (no PTT framework) or Android
       const durationMs = Date.now() - transmitStartedAtRef.current;
       usePTTStore.getState().setTransmitting(false);
       socket.emit('ptt:stop', { groupId: currentGroupId });
       roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null);
-      if (callUUIDRef.current) callKitService.setMuted(callUUIDRef.current, true);
-      socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
+      if (Platform.OS === 'android' && callUUIDRef.current) callKitService.setMuted(callUUIDRef.current, true);
+      if (Platform.OS === 'android') socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
     }
+    // Update Live Activity — done transmitting
+    const { currentGroupName, connectedMemberCount } = usePTTStore.getState();
+    liveActivityService.update(liveActivityIdRef.current, {
+      channelName: currentGroupName ?? '',
+      speakerName: null,
+      isTransmitting: false,
+      memberCount: connectedMemberCount,
+      alertLevel: null,
+    });
   }, [socket]);
 
   const updateConfig = useCallback((updates: Partial<PTTConfig>) => {
