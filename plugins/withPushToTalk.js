@@ -65,8 +65,10 @@ const addNativeFiles = (config) =>
     });
 
     // ── Add a PBX group for the module files ──
-    const relPaths = SOURCES.map((f) => path.join(projectName, PTT_GROUP, f));
-    const pttGroup = xcodeProject.addPbxGroup([], PTT_GROUP, PTT_GROUP);
+    // Group path must be relative to the ios/ directory so file references
+    // resolve to ios/<AppName>/PushToTalkModule/<file> without double-prefixing.
+    const groupPath = path.join(projectName, PTT_GROUP);
+    const pttGroup  = xcodeProject.addPbxGroup([], PTT_GROUP, groupPath);
 
     // Attach the new group to the root "main group"
     const mainGroupKey = xcodeProject.getFirstProject().firstProject.mainGroup;
@@ -75,11 +77,13 @@ const addNativeFiles = (config) =>
       mainGroup.children.push({ value: pttGroup.uuid, comment: PTT_GROUP });
     }
 
-    // Add each file as a source build file for the first (app) target
+    // Add each file as a source build file for the first (app) target.
+    // Paths are relative to the group directory (just the filename), so Xcode
+    // resolves them as <groupPath>/<file> — no double-prefix.
     const targetUUID = xcodeProject.getFirstTarget().uuid;
-    relPaths.forEach((relPath) => {
+    SOURCES.forEach((file) => {
       // addSourceFile registers the file AND adds it to the PBXSourcesBuildPhase
-      xcodeProject.addSourceFile(relPath, { target: targetUUID }, pttGroup.uuid);
+      xcodeProject.addSourceFile(file, { target: targetUUID }, pttGroup.uuid);
     });
 
     // ── Weak-link PushToTalk.framework (iOS 16+ only, app runs on 15+) ──
