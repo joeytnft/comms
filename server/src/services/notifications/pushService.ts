@@ -1,9 +1,22 @@
-import type { ExpoPushMessage, ExpoPushToken } from 'expo-server-sdk';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 
+// Local type aliases — expo-server-sdk is ESM-only so top-level import type is
+// rejected by Node16 moduleResolution. These match the shapes we actually use.
+type ExpoPushToken = string;
+interface ExpoPushMessage {
+  to: string | string[];
+  sound?: 'default' | null;
+  title?: string;
+  body?: string;
+  priority?: 'default' | 'normal' | 'high';
+  data?: Record<string, unknown>;
+  channelId?: string;
+}
+
 // expo-server-sdk is ESM-only; use dynamic import to avoid CJS interop error
-let _expoCache: Promise<{ expo: import('expo-server-sdk').Expo; Expo: typeof import('expo-server-sdk').default }> | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _expoCache: Promise<{ expo: any; Expo: any }> | null = null;
 function getExpo() {
   if (!_expoCache) {
     _expoCache = import('expo-server-sdk').then((mod) => ({
