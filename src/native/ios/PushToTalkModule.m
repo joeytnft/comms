@@ -138,6 +138,67 @@ RCT_EXPORT_METHOD(leaveChannel:(NSString *)channelId
     reject(@"UNSUPPORTED", @"Push To Talk requires iOS 16 or later", nil);
 }
 
+// Called by JS after receiving and finishing playback of remote audio.
+// Pass nil participantName to release the audio session so local user can transmit.
+RCT_EXPORT_METHOD(setActiveRemoteParticipant:(NSString *)channelId
+                  participantName:(NSString *)participantName
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+{
+#ifdef PTTM_HAS_FRAMEWORK
+    if (@available(iOS 16.0, *)) {
+        if (!_channelManager || !_channelUUID) {
+            reject(@"PTT_NOT_INITIALIZED", @"PTT channel not initialized", nil);
+            return;
+        }
+        PTParticipant *participant = participantName
+            ? [[PTParticipant alloc] initWithName:participantName image:nil]
+            : nil;
+        [_channelManager setActiveRemoteParticipant:participant
+                                     forChannelUUID:_channelUUID
+                                  completionHandler:^(NSError *err) {
+            if (err) { reject(@"PTT_PARTICIPANT_ERROR", err.localizedDescription, err); return; }
+            resolve(nil);
+        }];
+        return;
+    }
+#endif
+    reject(@"UNSUPPORTED", @"Push To Talk requires iOS 16 or later", nil);
+}
+
+// Report network connectivity to the PTT system UI.
+// status: "ready" | "connecting" | "unavailable"
+RCT_EXPORT_METHOD(setServiceStatus:(NSString *)channelId
+                  status:(NSString *)status
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+{
+#ifdef PTTM_HAS_FRAMEWORK
+    if (@available(iOS 16.0, *)) {
+        if (!_channelManager || !_channelUUID) {
+            reject(@"PTT_NOT_INITIALIZED", @"PTT channel not initialized", nil);
+            return;
+        }
+        PTServiceStatus serviceStatus;
+        if ([status isEqualToString:@"connecting"]) {
+            serviceStatus = PTServiceStatusConnecting;
+        } else if ([status isEqualToString:@"unavailable"]) {
+            serviceStatus = PTServiceStatusUnavailable;
+        } else {
+            serviceStatus = PTServiceStatusReady;
+        }
+        [_channelManager setServiceStatus:serviceStatus
+                           forChannelUUID:_channelUUID
+                        completionHandler:^(NSError *err) {
+            if (err) { reject(@"PTT_STATUS_ERROR", err.localizedDescription, err); return; }
+            resolve(nil);
+        }];
+        return;
+    }
+#endif
+    reject(@"UNSUPPORTED", @"Push To Talk requires iOS 16 or later", nil);
+}
+
 // ─── PTChannelManagerDelegate ─────────────────────────────────────────────────
 
 #ifdef PTTM_HAS_FRAMEWORK
@@ -189,9 +250,9 @@ RCT_EXPORT_METHOD(leaveChannel:(NSString *)channelId
                                           pushPayload:(NSDictionary *)pushPayload API_AVAILABLE(ios(16.0))
 {
     NSString *sender = pushPayload[@"senderName"];
-    if (!sender) return [PTPushResult leaveChannel];
+    if (!sender) return [PTPushResult leaveChannelPushResult];
     PTParticipant *participant = [[PTParticipant alloc] initWithName:sender image:nil];
-    return [PTPushResult activeRemoteParticipant:participant];
+    return [PTPushResult pushResultForActiveRemoteParticipant:participant];
 }
 
 - (void)channelManager:(PTChannelManager *)channelManager
