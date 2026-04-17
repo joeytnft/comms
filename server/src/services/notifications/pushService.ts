@@ -1,8 +1,18 @@
-import Expo, { ExpoPushMessage, ExpoPushToken } from 'expo-server-sdk';
+import type { ExpoPushMessage, ExpoPushToken } from 'expo-server-sdk';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 
-const expo = new Expo();
+// expo-server-sdk is ESM-only; use dynamic import to avoid CJS interop error
+let _expoCache: Promise<{ expo: import('expo-server-sdk').Expo; Expo: typeof import('expo-server-sdk').default }> | null = null;
+function getExpo() {
+  if (!_expoCache) {
+    _expoCache = import('expo-server-sdk').then((mod) => ({
+      Expo: mod.default,
+      expo: new mod.default(),
+    }));
+  }
+  return _expoCache;
+}
 
 export async function sendAlertPushNotifications(
   organizationId: string,
@@ -11,6 +21,8 @@ export async function sendAlertPushNotifications(
   message: string | null,
   triggeredByName: string,
 ): Promise<void> {
+  const { expo, Expo } = await getExpo();
+
   // Fetch all push tokens for active org members
   const users = await prisma.user.findMany({
     where: { organizationId, expoPushToken: { not: null } },
@@ -58,6 +70,7 @@ export async function sendMessagePushNotification(
   messageId: string,
   groupId: string,
 ): Promise<void> {
+  const { expo, Expo } = await getExpo();
   if (!Expo.isExpoPushToken(recipientToken)) return;
 
   try {
