@@ -35,7 +35,7 @@ export interface PttLog {
   id: string;
   groupId: string;
   senderId: string;
-  audioUrl: string;
+  audioUrl: string | null;
   durationMs: number;
   createdAt: string;
   sender: { id: string; displayName: string; avatarUrl: string | null };

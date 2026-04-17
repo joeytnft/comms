@@ -23,6 +23,7 @@ import { geofenceRoutes } from './routes/geofence';
 import { scheduleRoutes } from './routes/schedule';
 import { campusRoutes } from './routes/campuses';
 import { responsePlanRoutes } from './routes/responsePlans';
+import { integrationRoutes } from './routes/integrations';
 import { setupSocketHandlers } from './sockets/socketHandler';
 
 export async function buildApp() {
@@ -108,6 +109,7 @@ export async function buildApp() {
   app.register(scheduleRoutes, { prefix: '/schedule' });
   app.register(campusRoutes, { prefix: '/campuses' });
   app.register(responsePlanRoutes, { prefix: '/response-plans' });
+  app.register(integrationRoutes, { prefix: '/integrations' });
 
   // Socket.IO setup
   app.addHook('onReady', async () => {
