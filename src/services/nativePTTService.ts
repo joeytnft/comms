@@ -24,7 +24,7 @@ export interface PTTTransmissionEvent {
 
 const { PushToTalkModule } = NativeModules;
 
-const isAvailable = Platform.OS === 'ios' && !!PushToTalkModule;
+const isAvailable = Platform.OS === 'ios' && typeof PushToTalkModule?.initialize === 'function';
 
 let emitter: NativeEventEmitter | null = null;
 if (isAvailable) {
@@ -49,7 +49,7 @@ function on(event: string, handler: (data: Record<string, unknown>) => void): Un
  */
 async function joinChannel(channelId: string, channelName: string): Promise<string> {
   if (!isAvailable) return channelId;
-  return PushToTalkModule.joinChannel(channelId, channelName);
+  return PushToTalkModule.initialize(channelId, channelName);
 }
 
 async function leaveChannel(channelId: string): Promise<void> {
@@ -60,7 +60,7 @@ async function leaveChannel(channelId: string): Promise<void> {
 /** Call when the user presses the PTT button. */
 async function beginTransmitting(channelId: string): Promise<void> {
   if (!isAvailable) return;
-  return PushToTalkModule.beginTransmitting(channelId);
+  return PushToTalkModule.startTransmitting(channelId);
 }
 
 /** Call when the user releases the PTT button. */
