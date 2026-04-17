@@ -1,9 +1,17 @@
 import Foundation
-import PushToTalk
 import React
 
-// iOS 16+ PTT delegate — kept in a separate class so the RN module
-// itself remains loadable on iOS 15 (framework is weak-linked).
+// Conditionally import PushToTalk. In iOS 26+ the framework module was
+// restructured and PTTChannelManager / PTTChannelManagerDelegate were
+// removed, so we guard every usage with #if hasSymbol(PTTChannelManager).
+// The app falls back to its LiveKit-only PTT path on those platforms.
+#if canImport(PushToTalk)
+import PushToTalk
+#endif
+
+// iOS 16+ PTT delegate — kept in a separate class so the RN module itself
+// remains loadable on iOS 15 (framework is weak-linked).
+#if canImport(PushToTalk) && hasSymbol(PTTChannelManager)
 @available(iOS 16.0, *)
 private class PTTChannelHandler: NSObject, PTTChannelManagerDelegate {
   weak var emitter: PushToTalkModule?
@@ -108,13 +116,13 @@ private class PTTChannelHandler: NSObject, PTTChannelManagerDelegate {
     ])
   }
 }
+#endif // canImport(PushToTalk) && hasSymbol(PTTChannelManager)
 
 // MARK: - React Native Module
 
 @objc(PushToTalkModule)
 class PushToTalkModule: RCTEventEmitter {
 
-  // Stored as AnyObject so this class compiles cleanly on iOS 15.
   private var pttHandler: AnyObject?
   private var hasListeners = false
 
@@ -142,14 +150,13 @@ class PushToTalkModule: RCTEventEmitter {
                         channelName: String,
                         resolver: @escaping RCTPromiseResolveBlock,
                         rejecter: @escaping RCTPromiseRejectBlock) {
+#if canImport(PushToTalk) && hasSymbol(PTTChannelManager)
     guard #available(iOS 16.0, *) else {
       rejecter("UNSUPPORTED", "Push To Talk requires iOS 16 or later", nil)
       return
     }
-
     let handler = PTTChannelHandler(emitter: self)
     self.pttHandler = handler
-
     Task {
       do {
         let manager = try await PTTChannelManager.channelManager(
@@ -174,11 +181,15 @@ class PushToTalkModule: RCTEventEmitter {
         rejecter("PTT_INIT_ERROR", error.localizedDescription, error)
       }
     }
+#else
+    rejecter("UNSUPPORTED", "Push To Talk framework not available on this platform", nil)
+#endif
   }
 
   @objc func startTransmitting(_ channelId: String,
                                 resolver: @escaping RCTPromiseResolveBlock,
                                 rejecter: @escaping RCTPromiseRejectBlock) {
+#if canImport(PushToTalk) && hasSymbol(PTTChannelManager)
     guard #available(iOS 16.0, *),
           let handler = pttHandler as? PTTChannelHandler,
           let manager = handler.channelManager else {
@@ -193,11 +204,15 @@ class PushToTalkModule: RCTEventEmitter {
         rejecter("PTT_TRANSMIT_ERROR", error.localizedDescription, error)
       }
     }
+#else
+    rejecter("UNSUPPORTED", "Push To Talk framework not available on this platform", nil)
+#endif
   }
 
   @objc func stopTransmitting(_ channelId: String,
                                resolver: @escaping RCTPromiseResolveBlock,
                                rejecter: @escaping RCTPromiseRejectBlock) {
+#if canImport(PushToTalk) && hasSymbol(PTTChannelManager)
     guard #available(iOS 16.0, *),
           let handler = pttHandler as? PTTChannelHandler,
           let manager = handler.channelManager else {
@@ -212,11 +227,15 @@ class PushToTalkModule: RCTEventEmitter {
         rejecter("PTT_STOP_ERROR", error.localizedDescription, error)
       }
     }
+#else
+    rejecter("UNSUPPORTED", "Push To Talk framework not available on this platform", nil)
+#endif
   }
 
   @objc func leaveChannel(_ channelId: String,
                            resolver: @escaping RCTPromiseResolveBlock,
                            rejecter: @escaping RCTPromiseRejectBlock) {
+#if canImport(PushToTalk) && hasSymbol(PTTChannelManager)
     guard #available(iOS 16.0, *),
           let handler = pttHandler as? PTTChannelHandler,
           let manager = handler.channelManager else {
@@ -232,5 +251,8 @@ class PushToTalkModule: RCTEventEmitter {
         rejecter("PTT_LEAVE_ERROR", error.localizedDescription, error)
       }
     }
+#else
+    rejecter("UNSUPPORTED", "Push To Talk framework not available on this platform", nil)
+#endif
   }
 }
