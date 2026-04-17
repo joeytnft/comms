@@ -10,6 +10,7 @@ export function Nav() {
   const links = [
     { href: '/features', label: 'Features' },
     { href: '/how-it-works', label: 'How It Works' },
+    { href: '/compare/zello', label: 'vs. Zello' },
     { href: '/pricing', label: 'Pricing' },
   ];
 
