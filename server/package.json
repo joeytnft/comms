@@ -28,7 +28,7 @@
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.12.0",
     "dotenv": "^16.4.0",
-    "expo-file-system": "~19.0.21",
+    "expo-file-system": "~55.0.16",
     "expo-server-sdk": "^6.1.0",
     "fastify": "^4.28.0",
     "ioredis": "^5.4.0",
