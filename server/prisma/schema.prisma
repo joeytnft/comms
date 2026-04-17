@@ -394,7 +394,7 @@ model PttLog {
   id         String   @id @default(cuid())
   groupId    String
   senderId   String
-  audioUrl   String
+  audioUrl   String?
   durationMs Int      @default(0)
   createdAt  DateTime @default(now())
 
