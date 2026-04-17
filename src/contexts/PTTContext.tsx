@@ -136,6 +136,9 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       nativePTTChannelIdRef.current = null;
       usePTTStore.getState().disconnect();
       AudioSession?.stopAudioSession();
+      // Dismiss the Live Activity when the system closes the channel
+      liveActivityService.end(liveActivityIdRef.current);
+      liveActivityIdRef.current = null;
     });
 
     return () => {
