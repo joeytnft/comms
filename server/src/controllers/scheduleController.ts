@@ -1,11 +1,11 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
+import { prisma } from '../config/database';
 import { ValidationError, AuthorizationError } from '../utils/errors';
 import * as svc from '../services/schedule/scheduleService';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function requireAdmin(request: FastifyRequest) {
-  const { prisma } = await import('../config/database');
   const membership = await prisma.groupMembership.findFirst({
     where: { userId: request.userId, role: 'ADMIN', group: { organizationId: request.organizationId } },
   });
@@ -256,7 +256,6 @@ export async function setAvailability(
   request: FastifyRequest<{ Params: { id: string }; Body: { available: boolean } }>,
   reply: FastifyReply,
 ) {
-  const { prisma } = await import('../config/database');
   const { available } = request.body;
   if (typeof available !== 'boolean') throw new ValidationError('available (boolean) is required');
   await prisma.serviceAvailability.upsert({
@@ -271,7 +270,6 @@ export async function getAvailability(
   request: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,
 ) {
-  const { prisma } = await import('../config/database');
   const rows = await prisma.serviceAvailability.findMany({
     where: { serviceId: request.params.id },
     include: { user: { select: { id: true, displayName: true, avatarUrl: true } } },
@@ -285,7 +283,6 @@ export async function respondToAssignment(
   request: FastifyRequest<{ Params: { assignmentId: string }; Body: { accept: boolean } }>,
   reply: FastifyReply,
 ) {
-  const { prisma } = await import('../config/database');
   const { accept } = request.body;
   if (typeof accept !== 'boolean') throw new ValidationError('accept (boolean) is required');
   const assignment = await prisma.shiftAssignment.findUnique({ where: { id: request.params.assignmentId } });
@@ -303,7 +300,6 @@ export async function registerPushToken(
   request: FastifyRequest<{ Body: { token: string } }>,
   reply: FastifyReply,
 ) {
-  const { prisma } = await import('../config/database');
   const { token } = request.body;
   if (!token) throw new ValidationError('token is required');
   await prisma.user.update({ where: { id: request.userId }, data: { pushToken: token } });
