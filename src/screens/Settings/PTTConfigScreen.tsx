@@ -3,6 +3,7 @@ import {
   View,
   Text,
   TouchableOpacity,
+  Switch,
   StyleSheet,
   ScrollView,
   Alert,
@@ -233,6 +234,29 @@ export function PTTConfigScreen({ navigation }: Props) {
           </TouchableOpacity>
         ))}
 
+        {Platform.OS === 'ios' && (
+          <>
+            <Text style={[styles.sectionTitle, { marginTop: SPACING.lg }]}>Live Activity</Text>
+            <Text style={styles.sectionDesc}>
+              Show a Dynamic Island pill and Lock Screen widget while a PTT channel is active.
+            </Text>
+            <View style={styles.toggleCard}>
+              <View style={styles.toggleText}>
+                <Text style={styles.optionLabel}>Show in Dynamic Island</Text>
+                <Text style={styles.optionDesc}>
+                  Displays channel name, who is speaking, and member count on your Lock Screen and Dynamic Island.
+                </Text>
+              </View>
+              <Switch
+                value={config.showLiveActivity}
+                onValueChange={(val) => updateConfig({ showLiveActivity: val })}
+                trackColor={{ false: COLORS.gray600, true: COLORS.accent }}
+                thumbColor={COLORS.white}
+              />
+            </View>
+          </>
+        )}
+
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle}>Background Operation</Text>
           <Text style={styles.infoBody}>
@@ -337,6 +361,19 @@ const styles = StyleSheet.create({
   deviceId: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, marginTop: 1 },
   connectText: { ...TYPOGRAPHY.bodySmall, color: COLORS.accent, fontWeight: '600' },
   scanHint: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, marginTop: SPACING.md, textAlign: 'center', lineHeight: 17 },
+  toggleCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.gray700,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    ...SHADOWS.sm,
+  },
+  toggleText: { flex: 1 },
   infoCard: {
     backgroundColor: COLORS.surface,
     borderRadius: BORDER_RADIUS.md,

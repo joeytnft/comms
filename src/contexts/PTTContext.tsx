@@ -136,6 +136,9 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       nativePTTChannelIdRef.current = null;
       usePTTStore.getState().disconnect();
       AudioSession?.stopAudioSession();
+      // Dismiss the Live Activity when the system closes the channel
+      liveActivityService.end(liveActivityIdRef.current);
+      liveActivityIdRef.current = null;
     });
 
     return () => {
@@ -314,11 +317,13 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       const response = await usePTTStore.getState().fetchToken(groupId);
       usePTTStore.getState().setCurrentGroup(groupId, response.groupName);
 
-      // Start the Live Activity pill (iOS 16.2+, no-op elsewhere)
-      const orgName = useAuthStore.getState().organization?.name ?? 'GatherSafe';
-      liveActivityService.start(response.groupName, orgName)
-        .then((id) => { liveActivityIdRef.current = id; })
-        .catch(() => null);
+      // Start the Live Activity pill (iOS 16.2+, no-op elsewhere; respects user preference)
+      if (usePTTStore.getState().config.showLiveActivity) {
+        const orgName = useAuthStore.getState().organization?.name ?? 'GatherSafe';
+        liveActivityService.start(response.groupName, orgName)
+          .then((id) => { liveActivityIdRef.current = id; })
+          .catch(() => null);
+      }
 
       if (Platform.OS === 'web') {
         try {

@@ -6,25 +6,23 @@
  *  Main app target
  *  ───────────────
  *  1. Adds NSSupportsLiveActivities + NSSupportsLiveActivitiesFrequentUpdates
- *     to the main app's Info.plist.
- *  2. Adds the App Group entitlement (group.<bundleId>.liveactivity) to the
- *     main app — required for the widget extension to read shared data.
- *  3. Writes LiveActivityModule.m, LiveActivityModule.swift, and
+ *     to the main app's Info.plist. That is the only entitlement needed —
+ *     there is no "Live Activities" capability in Xcode; the plist key is enough.
+ *  2. Writes LiveActivityModule.m, LiveActivityModule.swift, and
  *     GatherSafeActivityAttributes.swift into ios/<AppName>/LiveActivity/
  *     and registers them in the main target's build phases.
- *  4. Patches the auto-generated <AppName>-Bridging-Header.h so the Swift
+ *  3. Patches the auto-generated <AppName>-Bridging-Header.h so the Swift
  *     module can see React Native's ObjC headers (needed for RCT_EXTERN_MODULE).
  *
  *  GatherSafeWidget extension target
  *  ──────────────────────────────────
- *  5. Creates the GatherSafeWidget Xcode target (WidgetKit extension type).
- *  6. Writes GatherSafeActivityAttributes.swift, GatherSafeLiveActivity.swift,
+ *  4. Creates the GatherSafeWidget Xcode target (WidgetKit extension type).
+ *  5. Writes GatherSafeActivityAttributes.swift, GatherSafeLiveActivity.swift,
  *     GatherSafeLiveActivityBundle.swift, and Info.plist into
  *     ios/GatherSafeWidget/ and registers them with the widget target.
- *  7. Adds the App Group entitlement to the widget target's .entitlements file.
- *  8. Adds the "Embed App Extensions" build phase to the main target so the
+ *  6. Adds the "Embed App Extensions" build phase to the main target so the
  *     widget .appex is packaged inside the main .ipa.
- *  9. Weak-links ActivityKit.framework to both targets.
+ *  7. Weak-links ActivityKit.framework to both targets.
  *
  * Requires iOS 16.2+ for Live Activities; the app still runs on older devices,
  * the activity just silently never starts (the JS service guards on isAvailable).
@@ -32,7 +30,6 @@
 
 const {
   withXcodeProject,
-  withEntitlementsPlist,
   withInfoPlist,
   withDangerousMod,
 } = require('@expo/config-plugins');
@@ -328,26 +325,14 @@ const addInfoPlistKeys = (config) =>
     return mod;
   });
 
-// ─── 2. Main app entitlement (App Group) ─────────────────────────────────────
-const addMainEntitlement = (config) =>
-  withEntitlementsPlist(config, (mod) => {
-    const bundleId  = config.ios?.bundleIdentifier ?? 'com.gathersafeapp.app';
-    const groupId   = `group.${bundleId}.liveactivity`;
-    const existing  = mod.modResults['com.apple.security.application-groups'] ?? [];
-    if (!existing.includes(groupId)) {
-      mod.modResults['com.apple.security.application-groups'] = [...existing, groupId];
-    }
-    return mod;
-  });
 
-// ─── 3 & 4. Xcode project manipulation ───────────────────────────────────────
+// ─── 2 & 3. Xcode project manipulation ───────────────────────────────────────
 const addXcodeTargets = (config) =>
   withXcodeProject(config, (mod) => {
     const { platformProjectRoot, projectName } = mod.modRequest;
     const xcodeProject  = mod.modResults;
     const bundleId      = config.ios?.bundleIdentifier ?? 'com.gathersafeapp.app';
     const widgetBundleId = `${bundleId}.${WIDGET_NAME}`;
-    const groupId       = `group.${bundleId}.liveactivity`;
     const mainTargetUUID = xcodeProject.getFirstTarget().uuid;
 
     // ── Write main-app native files ─────────────────────────────────────────
@@ -398,18 +383,6 @@ const addXcodeTargets = (config) =>
     }
     fs.writeFileSync(path.join(widgetDir, 'Info.plist'), WIDGET_INFO_PLIST_CONTENT, 'utf8');
 
-    // Write widget entitlements file
-    const widgetEntitlements = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>com.apple.security.application-groups</key>
-  <array><string>${groupId}</string></array>
-</dict>
-</plist>
-`;
-    fs.writeFileSync(path.join(widgetDir, `${WIDGET_NAME}.entitlements`), widgetEntitlements, 'utf8');
-
     // ── Create widget Xcode target (idempotent) ─────────────────────────────
     const existingTargets = xcodeProject.pbxNativeTargetSection();
     const widgetAlreadyExists = Object.values(existingTargets).some(
@@ -442,8 +415,6 @@ const addXcodeTargets = (config) =>
           cfg.buildSettings['IPHONEOS_DEPLOYMENT_TARGET']        = '16.2';
           cfg.buildSettings['TARGETED_DEVICE_FAMILY']            = '"1,2"';
           cfg.buildSettings['SKIP_INSTALL']                      = 'YES';
-          cfg.buildSettings['CODE_SIGN_ENTITLEMENTS']            =
-            `${WIDGET_NAME}/${WIDGET_NAME}.entitlements`;
           cfg.buildSettings['INFOPLIST_FILE']                    = `${WIDGET_NAME}/Info.plist`;
           cfg.buildSettings['MARKETING_VERSION']                 =
             config.version ?? '0.1.0';
@@ -482,7 +453,7 @@ const addXcodeTargets = (config) =>
     return mod;
   });
 
-// ─── 4. Patch bridging header so Swift sees RCT ObjC headers ─────────────────
+// ─── 3. Patch bridging header so Swift sees RCT ObjC headers ─────────────────
 const patchBridgingHeader = (config) =>
   withDangerousMod(config, [
     'ios',
@@ -511,7 +482,6 @@ const patchBridgingHeader = (config) =>
 // ─── Compose ──────────────────────────────────────────────────────────────────
 const withLiveActivity = (config) => {
   config = addInfoPlistKeys(config);
-  config = addMainEntitlement(config);
   config = addXcodeTargets(config);
   config = patchBridgingHeader(config);
   return config;
