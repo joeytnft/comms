@@ -14,6 +14,17 @@ export function Hero() {
       />
 
       <div className="relative mx-auto max-w-6xl px-6 text-center">
+        {/* Logo mark */}
+        <div className="mb-8 flex justify-center">
+          <div className="overflow-hidden rounded-2xl bg-white p-2 shadow-lg shadow-black/30">
+            <img
+              src="/logo.png"
+              alt="GatherSafe Church Security"
+              className="h-24 w-24 object-cover object-top sm:h-28 sm:w-28"
+            />
+          </div>
+        </div>
+
         {/* Badge */}
         <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-1.5 text-sm text-emerald-300">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
