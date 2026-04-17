@@ -10,7 +10,6 @@ Notifications.setNotificationHandler({
     const data = notification.request.content.data as Record<string, unknown>;
     const isAlert = data?.type === 'alert';
     return {
-      shouldShowAlert: true,
       shouldShowBanner: true,
       shouldShowList: true,
       shouldPlaySound: isAlert,
