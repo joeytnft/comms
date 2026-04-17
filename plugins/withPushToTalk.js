@@ -187,12 +187,17 @@ class PushToTalkModule: RCTEventEmitter {
         )
         handler.channelManager = manager
         let descriptor = PTTChannelDescriptor(name: channelName, image: nil)
-        try await manager.joinChannel(
-          channelId: channelId,
-          descriptor: descriptor,
-          token: nil,
-          serviceType: .channelService
-        )
+        // iOS 17 deprecated the token/serviceType overload; use the simpler API when available.
+        if #available(iOS 17.0, *) {
+          try await manager.joinChannel(channelId: channelId, descriptor: descriptor)
+        } else {
+          try await manager.joinChannel(
+            channelId: channelId,
+            descriptor: descriptor,
+            token: nil,
+            serviceType: .channelService
+          )
+        }
         resolver(nil)
       } catch {
         rejecter("PTT_INIT_ERROR", error.localizedDescription, error)
@@ -324,42 +329,25 @@ const addNativeFiles = (config) =>
     const targetUUID = xcodeProject.getFirstTarget().uuid;
 
     // ── Create PushToTalkModule PBX group ──────────────────────────────────
-    // We must attach it as a child of the app source group (GatherSafe), NOT
-    // the root main group. That way Xcode stacks paths correctly:
-    //   ios/ (SRCROOT) + GatherSafe/ + PushToTalkModule/ + filename
+    // Use a fully-qualified path relative to ios/ (SRCROOT) so Xcode always
+    // resolves the file at ios/GatherSafe/PushToTalkModule/<file>.
     //
-    // If we attached to mainGroup the stacking would be wrong because
-    // mainGroup has no path, so the group path becomes root-relative:
-    //   ios/PushToTalkModule/filename  (missing the GatherSafe/ component)
-
-    // Find the GatherSafe group by walking mainGroup's children.
+    // The previous approach walked mainGroup's children to find the GatherSafe
+    // group and then attached the PTT group as a child (path "PushToTalkModule",
+    // resolved relative to GatherSafe). When that lookup failed it fell back to
+    // mainGroup, producing ios/PushToTalkModule/<file> — missing the app-name
+    // component — which caused "Build input file cannot be found" at archive time.
     const mainGroupKey = xcodeProject.getFirstProject().firstProject.mainGroup;
     const mainGroup    = xcodeProject.getPBXGroupByKey(mainGroupKey);
 
-    let appGroupKey = null;
-    if (mainGroup && Array.isArray(mainGroup.children)) {
-      for (const child of mainGroup.children) {
-        const g = xcodeProject.getPBXGroupByKey(child.value);
-        if (g) {
-          // pbxproj values may be quoted ("GatherSafe") — strip quotes.
-          const p = (g.path || '').replace(/^"(.*)"$/, '$1');
-          if (p === projectName) {
-            appGroupKey = child.value;
-            break;
-          }
-        }
-      }
-    }
+    const { uuid: pttGroupUUID } = xcodeProject.addPbxGroup(
+      [],
+      PTT_GROUP,
+      `${projectName}/${PTT_GROUP}`
+    );
 
-    // Create the PushToTalkModule group with path "PushToTalkModule"
-    // (relative to its GatherSafe parent → ios/GatherSafe/PushToTalkModule/).
-    const { uuid: pttGroupUUID } = xcodeProject.addPbxGroup([], PTT_GROUP, PTT_GROUP);
-
-    // Attach to GatherSafe (preferred) or fall back to mainGroup.
-    const parentGroupKey = appGroupKey || mainGroupKey;
-    const parentGroup    = xcodeProject.getPBXGroupByKey(parentGroupKey);
-    if (parentGroup && !parentGroup.children.find((c) => c.comment === PTT_GROUP)) {
-      parentGroup.children.push({ value: pttGroupUUID, comment: PTT_GROUP });
+    if (mainGroup && !mainGroup.children.find((c) => c.comment === PTT_GROUP)) {
+      mainGroup.children.push({ value: pttGroupUUID, comment: PTT_GROUP });
     }
 
     // Register each source file inside the PushToTalkModule group.
