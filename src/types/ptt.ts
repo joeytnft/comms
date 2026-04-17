@@ -8,6 +8,7 @@ export interface PTTConfig {
   beepOnReceive: boolean;
   vibrateOnReceive: boolean;
   backgroundEnabled: boolean;
+  showLiveActivity: boolean; // iOS: show Dynamic Island / Lock Screen pill while PTT is active
 }
 
 export interface PTTSession {
@@ -59,4 +60,5 @@ export const DEFAULT_PTT_CONFIG: PTTConfig = {
   beepOnReceive: true,
   vibrateOnReceive: true,
   backgroundEnabled: true,
+  showLiveActivity: true,
 };
