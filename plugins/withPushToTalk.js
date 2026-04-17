@@ -2,11 +2,17 @@
  * Expo config plugin — Apple Push To Talk framework integration.
  *
  * What this does during `expo prebuild` / EAS Build:
- *  1. Writes the Swift + ObjC bridge files into the Xcode project directory.
- *  2. Registers them in the .pbxproj under a PushToTalkModule group.
+ *  1. Writes a single ObjC implementation file into the Xcode project directory.
+ *  2. Registers it in the .pbxproj under a PushToTalkModule group.
  *  3. Adds PushToTalk.framework (weak-linked for iOS <16 safety).
  *  4. Sets the `push-to-talk` UIBackgroundMode.
  *  5. Adds the `com.apple.developer.push-to-talk` entitlement.
+ *
+ * Why ObjC instead of Swift:
+ *   iPhoneOS26.0.sdk removed the Swift module overlay for PushToTalk.framework
+ *   while keeping the ObjC headers. Swift's canImport() returned true (binary
+ *   present) but all PTT* types were missing. ObjC uses __has_include() to check
+ *   for the actual header file, bypassing the Swift overlay entirely.
  *
  * File content is embedded directly here so EAS Build always has it,
  * regardless of .gitignore patterns that might exclude src/native/ios/.
@@ -25,100 +31,291 @@ const fs   = require('fs');
 
 const PTT_GROUP = 'PushToTalkModule';
 
-// ─── Embedded native file contents ───────────────────────────────────────────
-// Keep in sync with src/native/ios/PushToTalkModule.swift
-const SWIFT_CONTENT = `import Foundation
-import React
-
-// PushToTalk.framework is weak-linked (iOS 16+). On iPhoneOS26.0.sdk, Apple
-// removed the Swift type definitions while leaving the binary present, so
-// canImport(PushToTalk) evaluates true but all PTT* types are absent.
-// Neither canImport nor hasSymbol (unsupported in the iOS 26 toolchain) can
-// guard against this at compile time. This module is therefore a compile-safe
-// stub; the app falls back to LiveKit-based PTT when native PTT is unavailable.
-
-@objc(PushToTalkModule)
-class PushToTalkModule: RCTEventEmitter {
-
-  private var hasListeners = false
-
-  override static func requiresMainQueueSetup() -> Bool { return false }
-
-  override func supportedEvents() -> [String] {
-    return [
-      "onPTTChannelJoined",
-      "onPTTChannelLeft",
-      "onPTTTransmitStart",
-      "onPTTTransmitStop",
-      "onPTTReceiveStart",
-      "onPTTReceiveStop",
-      "onPTTPushToken",
-      "onPTTError",
-    ]
-  }
-
-  override func startObserving() { hasListeners = true }
-  override func stopObserving() { hasListeners = false }
-
-  @objc func initialize(_ channelId: String,
-                        channelName: String,
-                        resolver: @escaping RCTPromiseResolveBlock,
-                        rejecter: @escaping RCTPromiseRejectBlock) {
-    rejecter("UNSUPPORTED", "Push To Talk native framework not available on this platform", nil)
-  }
-
-  @objc func startTransmitting(_ channelId: String,
-                                resolver: @escaping RCTPromiseResolveBlock,
-                                rejecter: @escaping RCTPromiseRejectBlock) {
-    rejecter("UNSUPPORTED", "Push To Talk native framework not available on this platform", nil)
-  }
-
-  @objc func stopTransmitting(_ channelId: String,
-                               resolver: @escaping RCTPromiseResolveBlock,
-                               rejecter: @escaping RCTPromiseRejectBlock) {
-    rejecter("UNSUPPORTED", "Push To Talk native framework not available on this platform", nil)
-  }
-
-  @objc func leaveChannel(_ channelId: String,
-                           resolver: @escaping RCTPromiseResolveBlock,
-                           rejecter: @escaping RCTPromiseRejectBlock) {
-    rejecter("UNSUPPORTED", "Push To Talk native framework not available on this platform", nil)
-  }
-}
-`;
-
+// ─── Embedded native file content ────────────────────────────────────────────
 // Keep in sync with src/native/ios/PushToTalkModule.m
-const OBJC_BRIDGE_CONTENT = `#import <React/RCTBridgeModule.h>
+const OBJC_IMPL_CONTENT = `#import <React/RCTBridgeModule.h>
 #import <React/RCTEventEmitter.h>
 
-// RCT_EXTERN_MODULE / RCT_EXTERN_METHOD rely on RCTRegisterModule, which is
-// compiled out when the New Architecture is enabled. Guard accordingly so this
-// file is a no-op in New Arch builds (the Swift @objc class self-registers).
-#if !RCT_NEW_ARCH_ENABLED
-RCT_EXTERN_MODULE(PushToTalkModule, RCTEventEmitter)
-
-RCT_EXTERN_METHOD(initialize:(NSString *)channelId
-                  channelName:(NSString *)channelName
-                  resolver:(RCTPromiseResolveBlock)resolver
-                  rejecter:(RCTPromiseRejectBlock)rejecter)
-
-RCT_EXTERN_METHOD(startTransmitting:(NSString *)channelId
-                  resolver:(RCTPromiseResolveBlock)resolver
-                  rejecter:(RCTPromiseRejectBlock)rejecter)
-
-RCT_EXTERN_METHOD(stopTransmitting:(NSString *)channelId
-                  resolver:(RCTPromiseResolveBlock)resolver
-                  rejecter:(RCTPromiseRejectBlock)rejecter)
-
-RCT_EXTERN_METHOD(leaveChannel:(NSString *)channelId
-                  resolver:(RCTPromiseResolveBlock)resolver
-                  rejecter:(RCTPromiseRejectBlock)rejecter)
+// Import PushToTalk ObjC headers when present in the SDK.
+// __has_include checks the .h file — not the Swift module overlay — so this
+// evaluates correctly on iPhoneOS26.0.sdk where Apple removed the overlay but
+// kept the framework binary and headers.
+#if __has_include(<PushToTalk/PushToTalk.h>)
+#import <PushToTalk/PushToTalk.h>
+#import <AVFoundation/AVFoundation.h>
+#define PTTM_HAS_FRAMEWORK 1
 #endif
+
+// ─── Interface ────────────────────────────────────────────────────────────────
+
+@interface PushToTalkModule : RCTEventEmitter <RCTBridgeModule>
+@end
+
+#ifdef PTTM_HAS_FRAMEWORK
+// Declare PTT delegate conformances in a conditional category so they are
+// only visible to the compiler when the framework headers are available.
+@interface PushToTalkModule (PTTDelegates) <PTChannelManagerDelegate,
+                                            PTChannelRestorationDelegate>
+@end
+#endif
+
+// ─── Implementation ───────────────────────────────────────────────────────────
+
+@implementation PushToTalkModule {
+#ifdef PTTM_HAS_FRAMEWORK
+    PTChannelManager    *_channelManager;
+    NSUUID              *_channelUUID;
+    PTChannelDescriptor *_channelDescriptor;
+#endif
+    BOOL _hasListeners;
+}
+
+RCT_EXPORT_MODULE(PushToTalkModule)
+
++ (BOOL)requiresMainQueueSetup { return NO; }
+
+- (NSArray<NSString *> *)supportedEvents {
+    return @[
+        @"onPTTChannelJoined", @"onPTTChannelLeft",
+        @"onPTTTransmitStart", @"onPTTTransmitStop",
+        @"onPTTReceiveStart",  @"onPTTReceiveStop",
+        @"onPTTPushToken",     @"onPTTError",
+    ];
+}
+
+- (void)startObserving { _hasListeners = YES; }
+- (void)stopObserving  { _hasListeners = NO;  }
+
+- (void)emit:(NSString *)name body:(id)body {
+    if (_hasListeners) [self sendEventWithName:name body:body];
+}
+
+// ─── JS-facing methods ────────────────────────────────────────────────────────
+
+RCT_EXPORT_METHOD(initialize:(NSString *)channelId
+                  channelName:(NSString *)channelName
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+{
+#ifdef PTTM_HAS_FRAMEWORK
+    if (@available(iOS 16.0, *)) {
+        _channelUUID       = [[NSUUID alloc] initWithUUIDString:channelId] ?: [NSUUID UUID];
+        _channelDescriptor = [[PTChannelDescriptor alloc] initWithName:channelName image:nil];
+        __weak typeof(self) weak = self;
+        [PTChannelManager channelManagerWithDelegate:self
+                                restorationDelegate:self
+                                  completionHandler:^(PTChannelManager *mgr, NSError *err) {
+            if (err) { reject(@"PTT_INIT_ERROR", err.localizedDescription, err); return; }
+            weak->_channelManager = mgr;
+            [mgr requestJoinChannelWithUUID:weak->_channelUUID
+                                 descriptor:weak->_channelDescriptor];
+            resolve(nil);
+        }];
+        return;
+    }
+#endif
+    reject(@"UNSUPPORTED", @"Push To Talk requires iOS 16 or later", nil);
+}
+
+RCT_EXPORT_METHOD(startTransmitting:(NSString *)channelId
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+{
+#ifdef PTTM_HAS_FRAMEWORK
+    if (@available(iOS 16.0, *)) {
+        if (!_channelManager || !_channelUUID) {
+            reject(@"PTT_NOT_INITIALIZED", @"PTT channel not initialized", nil);
+            return;
+        }
+        [_channelManager requestBeginTransmittingWithChannelUUID:_channelUUID];
+        resolve(nil);
+        return;
+    }
+#endif
+    reject(@"UNSUPPORTED", @"Push To Talk requires iOS 16 or later", nil);
+}
+
+RCT_EXPORT_METHOD(stopTransmitting:(NSString *)channelId
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+{
+#ifdef PTTM_HAS_FRAMEWORK
+    if (@available(iOS 16.0, *)) {
+        if (!_channelManager || !_channelUUID) {
+            reject(@"PTT_NOT_INITIALIZED", @"PTT channel not initialized", nil);
+            return;
+        }
+        [_channelManager stopTransmittingWithChannelUUID:_channelUUID];
+        resolve(nil);
+        return;
+    }
+#endif
+    reject(@"UNSUPPORTED", @"Push To Talk requires iOS 16 or later", nil);
+}
+
+RCT_EXPORT_METHOD(leaveChannel:(NSString *)channelId
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+{
+#ifdef PTTM_HAS_FRAMEWORK
+    if (@available(iOS 16.0, *)) {
+        if (!_channelManager || !_channelUUID) {
+            reject(@"PTT_NOT_INITIALIZED", @"PTT channel not initialized", nil);
+            return;
+        }
+        [_channelManager leaveChannelWithUUID:_channelUUID];
+        _channelManager = nil;
+        _channelUUID    = nil;
+        resolve(nil);
+        return;
+    }
+#endif
+    reject(@"UNSUPPORTED", @"Push To Talk requires iOS 16 or later", nil);
+}
+
+// ─── PTChannelManagerDelegate ─────────────────────────────────────────────────
+
+#ifdef PTTM_HAS_FRAMEWORK
+
+- (void)channelManager:(PTChannelManager *)channelManager
+    didJoinChannelWithUUID:(NSUUID *)channelUUID
+                    reason:(PTChannelJoinReason)reason API_AVAILABLE(ios(16.0))
+{
+    [self emit:@"onPTTChannelJoined" body:@{@"channelId": channelUUID.UUIDString}];
+}
+
+- (void)channelManager:(PTChannelManager *)channelManager
+    didLeaveChannelWithUUID:(NSUUID *)channelUUID
+                     reason:(PTChannelLeaveReason)reason API_AVAILABLE(ios(16.0))
+{
+    _channelUUID = nil;
+    [self emit:@"onPTTChannelLeft" body:@{@"channelId": channelUUID.UUIDString}];
+}
+
+- (void)channelManager:(PTChannelManager *)channelManager
+           channelUUID:(NSUUID *)channelUUID
+    didBeginTransmittingFromSource:(PTChannelTransmitRequestSource)source API_AVAILABLE(ios(16.0))
+{
+    [self emit:@"onPTTTransmitStart" body:@{@"channelId": channelUUID.UUIDString}];
+}
+
+- (void)channelManager:(PTChannelManager *)channelManager
+           channelUUID:(NSUUID *)channelUUID
+    didEndTransmittingFromSource:(PTChannelTransmitRequestSource)source API_AVAILABLE(ios(16.0))
+{
+    [self emit:@"onPTTTransmitStop" body:@{@"channelId": channelUUID.UUIDString}];
+}
+
+- (void)channelManager:(PTChannelManager *)channelManager
+           channelUUID:(NSUUID *)channelUUID
+    receivedEphemeralPushToken:(NSData *)pushToken API_AVAILABLE(ios(16.0))
+{
+    NSMutableString *hex = [NSMutableString stringWithCapacity:pushToken.length * 2];
+    const unsigned char *b = (const unsigned char *)pushToken.bytes;
+    for (NSUInteger i = 0; i < pushToken.length; i++) [hex appendFormat:@"%02x", b[i]];
+    [self emit:@"onPTTPushToken" body:@{
+        @"channelId": channelUUID.UUIDString,
+        @"token": hex,
+    }];
+}
+
+- (PTPushResult *)incomingPushResultForChannelManager:(PTChannelManager *)channelManager
+                                          channelUUID:(NSUUID *)channelUUID
+                                          pushPayload:(NSDictionary *)pushPayload API_AVAILABLE(ios(16.0))
+{
+    NSString *sender = pushPayload[@"senderName"];
+    if (!sender) return [PTPushResult leaveChannel];
+    PTParticipant *participant = [[PTParticipant alloc] initWithName:sender image:nil];
+    return [PTPushResult activeRemoteParticipant:participant];
+}
+
+- (void)channelManager:(PTChannelManager *)channelManager
+           channelUUID:(NSUUID *)channelUUID
+    activeRemoteParticipantDidChange:(PTParticipant *)participant API_AVAILABLE(ios(16.0))
+{
+    if (participant) {
+        [self emit:@"onPTTReceiveStart" body:@{
+            @"channelId": channelUUID.UUIDString,
+            @"participantName": participant.name ?: [NSNull null],
+        }];
+    } else {
+        [self emit:@"onPTTReceiveStop" body:@{@"channelId": channelUUID.UUIDString}];
+    }
+}
+
+- (void)channelManager:(PTChannelManager *)channelManager
+    failedToJoinChannelWithUUID:(NSUUID *)channelUUID
+                          error:(NSError *)error API_AVAILABLE(ios(16.0))
+{
+    [self emit:@"onPTTError" body:@{
+        @"channelId": channelUUID.UUIDString,
+        @"error": error.localizedDescription,
+    }];
+}
+
+- (void)channelManager:(PTChannelManager *)channelManager
+    failedToLeaveChannelWithUUID:(NSUUID *)channelUUID
+                           error:(NSError *)error API_AVAILABLE(ios(16.0))
+{
+    [self emit:@"onPTTError" body:@{
+        @"channelId": channelUUID.UUIDString,
+        @"error": error.localizedDescription,
+    }];
+}
+
+- (void)channelManager:(PTChannelManager *)channelManager
+    failedToBeginTransmittingInChannelWithUUID:(NSUUID *)channelUUID
+                                         error:(NSError *)error API_AVAILABLE(ios(16.0))
+{
+    [self emit:@"onPTTError" body:@{
+        @"channelId": channelUUID.UUIDString,
+        @"error": error.localizedDescription,
+    }];
+}
+
+- (void)channelManager:(PTChannelManager *)channelManager
+    failedToStopTransmittingInChannelWithUUID:(NSUUID *)channelUUID
+                                        error:(NSError *)error API_AVAILABLE(ios(16.0))
+{
+    [self emit:@"onPTTError" body:@{
+        @"channelId": channelUUID.UUIDString,
+        @"error": error.localizedDescription,
+    }];
+}
+
+- (void)channelManager:(PTChannelManager *)channelManager
+    didActivateAudioSession:(AVAudioSession *)audioSession API_AVAILABLE(ios(16.0))
+{
+    // The PTT framework activated the audio session. Begin recording or
+    // playback via the app's audio layer (LiveKit/WebRTC) here.
+    // The framework manages audio session priority — do not activate it manually.
+}
+
+- (void)channelManager:(PTChannelManager *)channelManager
+    didDeactivateAudioSession:(AVAudioSession *)audioSession API_AVAILABLE(ios(16.0))
+{
+    // Audio session deactivated — stop recording or playback.
+}
+
+// ─── PTChannelRestorationDelegate ────────────────────────────────────────────
+
+- (PTChannelDescriptor *)channelDescriptorForRestoredChannelUUID:(NSUUID *)channelUUID API_AVAILABLE(ios(16.0))
+{
+    // Return the cached descriptor when UUIDs match; otherwise a placeholder
+    // so the system can restore the channel after a relaunch or device reboot.
+    if (_channelDescriptor && [channelUUID isEqual:_channelUUID]) {
+        return _channelDescriptor;
+    }
+    return [[PTChannelDescriptor alloc] initWithName:@"GatherSafe PTT" image:nil];
+}
+
+#endif // PTTM_HAS_FRAMEWORK
+
+@end
 `;
 
 const SOURCES = [
-  { name: 'PushToTalkModule.swift', content: SWIFT_CONTENT },
-  { name: 'PushToTalkModule.m',     content: OBJC_BRIDGE_CONTENT },
+  { name: 'PushToTalkModule.m', content: OBJC_IMPL_CONTENT },
 ];
 
 // ─── 1. Entitlement ──────────────────────────────────────────────────────────
