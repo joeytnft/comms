@@ -1,17 +1,18 @@
 import Foundation
 import React
 
-// PushToTalk.framework is weak-linked (iOS 16+). In iPhoneOS26.0.sdk Apple
-// restructured the module and removed PTTChannelManager / related types.
-// Conditional import keeps us from "No such module" on platforms where the
-// Swift overlay is absent; standalone #if hasSymbol(...) checks below then
-// gate every type reference — this separation is required because Swift does
-// not allow canImport(X) && hasSymbol(Y) in a single #if expression.
+// PushToTalk.framework is weak-linked (iOS 16+).
+// In iPhoneOS26.0.sdk Apple removed the Swift module overlay for this
+// framework, so canImport(PushToTalk) evaluates false and every block
+// below is compiled out. On iOS 16-25 the module is present, canImport
+// is true, and the full implementation is used.
+//
+// Note: #if hasSymbol is rejected as an invalid directive in the Swift
+// version bundled with the iOS 26 SDK toolchain, so we rely solely on
+// canImport here.
 #if canImport(PushToTalk)
 import PushToTalk
-#endif
 
-#if hasSymbol(PTTChannelManagerDelegate)
 @available(iOS 16.0, *)
 private class PTTChannelHandler: NSObject, PTTChannelManagerDelegate {
   weak var emitter: PushToTalkModule?
@@ -116,7 +117,7 @@ private class PTTChannelHandler: NSObject, PTTChannelManagerDelegate {
     ])
   }
 }
-#endif // hasSymbol(PTTChannelManagerDelegate)
+#endif // canImport(PushToTalk)
 
 // MARK: - React Native Module
 
@@ -150,7 +151,7 @@ class PushToTalkModule: RCTEventEmitter {
                         channelName: String,
                         resolver: @escaping RCTPromiseResolveBlock,
                         rejecter: @escaping RCTPromiseRejectBlock) {
-#if hasSymbol(PTTChannelManager)
+#if canImport(PushToTalk)
     guard #available(iOS 16.0, *) else {
       rejecter("UNSUPPORTED", "Push To Talk requires iOS 16 or later", nil)
       return
@@ -189,7 +190,7 @@ class PushToTalkModule: RCTEventEmitter {
   @objc func startTransmitting(_ channelId: String,
                                 resolver: @escaping RCTPromiseResolveBlock,
                                 rejecter: @escaping RCTPromiseRejectBlock) {
-#if hasSymbol(PTTChannelManager)
+#if canImport(PushToTalk)
     guard #available(iOS 16.0, *),
           let handler = pttHandler as? PTTChannelHandler,
           let manager = handler.channelManager else {
@@ -212,7 +213,7 @@ class PushToTalkModule: RCTEventEmitter {
   @objc func stopTransmitting(_ channelId: String,
                                resolver: @escaping RCTPromiseResolveBlock,
                                rejecter: @escaping RCTPromiseRejectBlock) {
-#if hasSymbol(PTTChannelManager)
+#if canImport(PushToTalk)
     guard #available(iOS 16.0, *),
           let handler = pttHandler as? PTTChannelHandler,
           let manager = handler.channelManager else {
@@ -235,7 +236,7 @@ class PushToTalkModule: RCTEventEmitter {
   @objc func leaveChannel(_ channelId: String,
                            resolver: @escaping RCTPromiseResolveBlock,
                            rejecter: @escaping RCTPromiseRejectBlock) {
-#if hasSymbol(PTTChannelManager)
+#if canImport(PushToTalk)
     guard #available(iOS 16.0, *),
           let handler = pttHandler as? PTTChannelHandler,
           let manager = handler.channelManager else {
