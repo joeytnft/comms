@@ -147,7 +147,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
   // ─── Android: CallKit / ConnectionService setup ─────────────────────────────
   useEffect(() => {
-    if (Platform.OS === 'web' || USE_NATIVE_PTT) return;
+    if (Platform.OS !== 'android') return;
     callKitService.setup();
     callKitService.onEndCall(() => {
       intentionalLeaveRef.current = true;
@@ -333,8 +333,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           // Report service as "ready" in system UI
           nativePTTService.setServiceStatus(resolvedId, 'ready').catch(() => null);
 
-        } else {
-          // ── Android: CallKit / ConnectionService ──────────────────────────
+        } else if (Platform.OS === 'android') {
+          // ── Android: ConnectionService keeps audio alive in background ────
           await new Promise<void>((resolve) => {
             const uuid = callKitService.startCall(response.groupName, () => resolve());
             callUUIDRef.current = uuid;
@@ -348,7 +348,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           if (USE_NATIVE_PTT && nativePTTChannelIdRef.current) {
             await nativePTTService.leaveChannel(nativePTTChannelIdRef.current);
             nativePTTChannelIdRef.current = null;
-          } else if (callUUIDRef.current) {
+          } else if (Platform.OS === 'android' && callUUIDRef.current) {
             callKitService.endCall(callUUIDRef.current);
             callUUIDRef.current = null;
           }
@@ -435,7 +435,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           nativePTTService.leaveChannel(nativePTTChannelIdRef.current).catch(() => null);
           nativePTTChannelIdRef.current = null;
         }
-      } else {
+      } else if (Platform.OS === 'android') {
         if (callUUIDRef.current) {
           callKitService.endCall(callUUIDRef.current);
           callUUIDRef.current = null;
@@ -479,12 +479,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         nativePTTService.beginTransmitting(nativePTTChannelIdRef.current).catch(() => null);
       }
     } else {
-      // Android CallKit path
+      // iOS (no PTT framework) or Android
       usePTTStore.getState().setTransmitting(true);
       transmitStartedAtRef.current = Date.now();
       socket.emit('ptt:start', { groupId: currentGroupId });
       roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null);
-      if (callUUIDRef.current) callKitService.setMuted(callUUIDRef.current, false);
+      if (Platform.OS === 'android' && callUUIDRef.current) callKitService.setMuted(callUUIDRef.current, false);
     }
   }, [socket]);
 
@@ -504,13 +504,13 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         nativePTTService.stopTransmitting(nativePTTChannelIdRef.current).catch(() => null);
       }
     } else {
-      // Android CallKit path
+      // iOS (no PTT framework) or Android
       const durationMs = Date.now() - transmitStartedAtRef.current;
       usePTTStore.getState().setTransmitting(false);
       socket.emit('ptt:stop', { groupId: currentGroupId });
       roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null);
-      if (callUUIDRef.current) callKitService.setMuted(callUUIDRef.current, true);
-      socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
+      if (Platform.OS === 'android' && callUUIDRef.current) callKitService.setMuted(callUUIDRef.current, true);
+      if (Platform.OS === 'android') socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
     }
   }, [socket]);
 
