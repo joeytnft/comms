@@ -1,11 +1,9 @@
 import { prisma } from '../../config/database';
 import { NotFoundError, AuthorizationError, ValidationError } from '../../utils/errors';
-import Expo from 'expo-server-sdk';
-
-const expo = new Expo();
-
 async function sendPushNotification(token: string, message: { title: string; body: string; data?: Record<string, unknown> }) {
+  const { default: Expo } = await import('expo-server-sdk');
   if (!Expo.isExpoPushToken(token)) return;
+  const expo = new Expo();
   await expo.sendPushNotificationsAsync([{ to: token, sound: 'default', ...message }]);
 }
 

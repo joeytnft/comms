@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { authenticate } from '../middleware/auth';
 import { createClient } from '@supabase/supabase-js';
-import { nanoid } from 'nanoid';
+import { randomUUID } from 'crypto';
 import { env } from '../config/env';
 
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
@@ -49,7 +49,7 @@ export async function uploadRoutes(app: FastifyInstance) {
         return reply.status(413).send({ error: 'File too large (max 8MB)' });
       }
 
-      const filename = `${nanoid()}.${ext}`;
+      const filename = `${randomUUID()}.${ext}`;
 
       const { error } = await supabase.storage
         .from(BUCKET)
