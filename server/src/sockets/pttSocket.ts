@@ -55,43 +55,53 @@ async function savePttLog(
   chunks: Buffer[],
   mimeType: string,
   startedAt: number,
-): Promise<{ audioUrl: string; durationMs: number; displayName: string } | null> {
+): Promise<{ audioUrl: string | null; durationMs: number; displayName: string } | null> {
   try {
     const durationMs = Date.now() - startedAt;
-    let audioBuffer: Uint8Array = Buffer.concat(chunks);
-    let ext = mimeType.includes('ogg') ? 'ogg' : 'webm';
-    let finalMime = mimeType;
+    let audioUrl: string | null = null;
 
     try {
-      audioBuffer = await transcodeToM4A(audioBuffer);
-      ext = 'm4a';
-      finalMime = 'audio/mp4';
-    } catch {
-      // ffmpeg unavailable — keep original format
+      let audioBuffer: Uint8Array = Buffer.concat(chunks);
+      let ext = mimeType.includes('ogg') ? 'ogg' : 'webm';
+      let finalMime = mimeType;
+
+      try {
+        audioBuffer = await transcodeToM4A(audioBuffer);
+        ext = 'm4a';
+        finalMime = 'audio/mp4';
+      } catch {
+        // ffmpeg unavailable — keep original format
+      }
+
+      const filename = `ptt/${groupId}/${userId}_${Date.now()}.${ext}`;
+      const { error: uploadErr } = await getSupabase()
+        .storage
+        .from(env.SUPABASE_STORAGE_BUCKET)
+        .upload(filename, audioBuffer, { contentType: finalMime, upsert: false });
+
+      if (uploadErr) {
+        logger.warn({ err: uploadErr }, '[PTT] Audio upload failed — logging call without recording');
+      } else {
+        const { data: { publicUrl } } = getSupabase()
+          .storage
+          .from(env.SUPABASE_STORAGE_BUCKET)
+          .getPublicUrl(filename);
+        audioUrl = publicUrl;
+      }
+    } catch (uploadErr) {
+      logger.warn({ err: uploadErr }, '[PTT] Audio upload failed — logging call without recording');
     }
-
-    const filename = `ptt/${groupId}/${userId}_${Date.now()}.${ext}`;
-    const { error: uploadErr } = await getSupabase()
-      .storage
-      .from(env.SUPABASE_STORAGE_BUCKET)
-      .upload(filename, audioBuffer, { contentType: finalMime, upsert: false });
-    if (uploadErr) throw uploadErr;
-
-    const { data: { publicUrl } } = getSupabase()
-      .storage
-      .from(env.SUPABASE_STORAGE_BUCKET)
-      .getPublicUrl(filename);
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { displayName: true },
     });
     await prisma.pttLog.create({
-      data: { groupId, senderId: userId, audioUrl: publicUrl, durationMs },
+      data: { groupId, senderId: userId, durationMs, ...(audioUrl ? { audioUrl } : {}) },
     });
 
-    logger.info(`[PTT] Saved voice log: ${filename} (${durationMs}ms)`);
-    return { audioUrl: publicUrl, durationMs, displayName: user?.displayName ?? 'Unknown' };
+    logger.info(`[PTT] Voice log saved (${durationMs}ms)${audioUrl ? '' : ' [no audio]'}`);
+    return { audioUrl, durationMs, displayName: user?.displayName ?? 'Unknown' };
   } catch (err) {
     logger.error({ err }, '[PTT] Failed to save voice log');
     return null;
@@ -290,7 +300,7 @@ export function setupPTTSocket(io: Server, socket: Socket) {
   });
 
   // Native client submits a completed recording after upload
-  socket.on('ptt:native_log', async (data: { groupId: string; audioUrl: string; durationMs: number }) => {
+  socket.on('ptt:native_log', async (data: { groupId: string; audioUrl?: string; durationMs: number }) => {
     if (!data || !isValidGroupId(data.groupId)) return;
     try {
       const user = await prisma.user.findUnique({
@@ -301,8 +311,8 @@ export function setupPTTSocket(io: Server, socket: Socket) {
         data: {
           groupId: data.groupId,
           senderId: userId,
-          audioUrl: data.audioUrl,
           durationMs: data.durationMs || 0,
+          ...(data.audioUrl ? { audioUrl: data.audioUrl } : {}),
         },
       });
       const room = `ptt:${data.groupId}`;
