@@ -64,26 +64,19 @@ const addNativeFiles = (config) =>
       }
     });
 
-    // ── Add a PBX group for the module files ──
-    // Group path must be relative to the ios/ directory so file references
-    // resolve to ios/<AppName>/PushToTalkModule/<file> without double-prefixing.
-    const groupPath = path.join(projectName, PTT_GROUP);
-    const pttGroup  = xcodeProject.addPbxGroup([], PTT_GROUP, groupPath);
-
-    // Attach the new group to the root "main group"
-    const mainGroupKey = xcodeProject.getFirstProject().firstProject.mainGroup;
-    const mainGroup    = xcodeProject.getPBXGroupByKey(mainGroupKey);
-    if (mainGroup && !mainGroup.children.find((c) => c.comment === PTT_GROUP)) {
-      mainGroup.children.push({ value: pttGroup.uuid, comment: PTT_GROUP });
-    }
-
     // Add each file as a source build file for the first (app) target.
-    // Paths are relative to the group directory (just the filename), so Xcode
-    // resolves them as <groupPath>/<file> — no double-prefix.
+    // Pass NO group so the PBXFileReference is anchored directly to the main
+    // project group (sourceTree = "<group>", no extra path prefix). The path
+    // is relative to ios/ (SRCROOT), so Xcode resolves it correctly to
+    // ios/<AppName>/PushToTalkModule/<file>.
     const targetUUID = xcodeProject.getFirstTarget().uuid;
     SOURCES.forEach((file) => {
-      // addSourceFile registers the file AND adds it to the PBXSourcesBuildPhase
-      xcodeProject.addSourceFile(file, { target: targetUUID }, pttGroup.uuid);
+      const relPath = path.join(projectName, PTT_GROUP, file);
+      // Skip if already registered (idempotent re-runs of prebuild)
+      const alreadyRegistered = xcodeProject.hasFile(relPath);
+      if (!alreadyRegistered) {
+        xcodeProject.addSourceFile(relPath, { target: targetUUID });
+      }
     });
 
     // ── Weak-link PushToTalk.framework (iOS 16+ only, app runs on 15+) ──
