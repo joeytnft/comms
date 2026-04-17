@@ -19,8 +19,12 @@ export function Nav() {
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         {/* Logo */}
         <a href="/" className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-emerald-500">
-            <ShieldIcon className="h-4 w-4 text-white" />
+          <div className="h-8 w-8 overflow-hidden rounded-lg bg-white p-0.5">
+            <img
+              src="/logo-mark.png"
+              alt="GatherSafe"
+              className="h-full w-full object-cover object-top"
+            />
           </div>
           <span className="text-lg font-semibold tracking-tight text-white">GatherSafe</span>
         </a>
@@ -74,14 +78,6 @@ export function Nav() {
         </div>
       )}
     </header>
-  );
-}
-
-function ShieldIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z" />
-    </svg>
   );
 }
 
