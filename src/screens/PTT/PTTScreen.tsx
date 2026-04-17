@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Audio, AVPlaybackStatus } from 'expo-av';
 import { usePTT } from '@/contexts/PTTContext';
 import { useGroupStore } from '@/store/useGroupStore';
 import { usePTTStore } from '@/store/usePTTStore';
@@ -9,7 +10,6 @@ import { PTTButton } from '@/components/ptt/PTTButton';
 import { VoiceIndicator } from '@/components/ptt/VoiceIndicator';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 import { Group, PttLog } from '@/types';
-import { ENV } from '@/config/env';
 
 export function PTTScreen() {
   const {
@@ -32,6 +32,7 @@ export function PTTScreen() {
   const [showGroupPicker, setShowGroupPicker] = useState(!isConnected);
   const [showLog, setShowLog] = useState(false);
   const [playingUrl, setPlayingUrl] = useState<string | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
   const groupLogs = currentGroupId ? (logs[currentGroupId] ?? []) : [];
 
   useEffect(() => {
@@ -50,20 +51,45 @@ export function PTTScreen() {
     }
   }, [currentGroupId, showLog]);
 
-  const handlePlayLog = useCallback((log: PttLog) => {
-    const url = `${ENV.apiUrl}${log.audioUrl}`;
+  const handlePlayLog = useCallback(async (log: PttLog) => {
+    if (!log.audioUrl) return;
+    // audioUrl from Supabase is already an absolute https:// URL
+    const url = log.audioUrl;
+
+    // Stop any currently playing sound
+    if (soundRef.current) {
+      await soundRef.current.unloadAsync();
+      soundRef.current = null;
+    }
+    if (playingUrl === url) {
+      setPlayingUrl(null);
+      return;
+    }
+
     if (Platform.OS === 'web') {
-      if (playingUrl === url) {
-        setPlayingUrl(null);
-      } else {
-        setPlayingUrl(url);
-        const audio = new window.Audio(url);
-        audio.play().catch(() => null);
-        audio.onended = () => setPlayingUrl(null);
-      }
+      setPlayingUrl(url);
+      const audio = new window.Audio(url);
+      audio.play().catch(() => null);
+      audio.onended = () => setPlayingUrl(null);
     } else {
-      // Native: open URL in system player or use expo-audio
-      Alert.alert('Play Recording', 'Open audio URL:\n' + url, [{ text: 'OK' }]);
+      try {
+        await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: url },
+          { shouldPlay: true },
+        );
+        soundRef.current = sound;
+        setPlayingUrl(url);
+        sound.setOnPlaybackStatusUpdate((status: AVPlaybackStatus) => {
+          if (status.isLoaded && status.didJustFinish) {
+            sound.unloadAsync();
+            soundRef.current = null;
+            setPlayingUrl(null);
+          }
+        });
+      } catch {
+        Alert.alert('Playback Error', 'Could not play this recording.');
+      }
     }
   }, [playingUrl]);
 
@@ -213,15 +239,15 @@ export function PTTScreen() {
             </Text>
           }
           renderItem={({ item }) => {
-            const url = `${ENV.apiUrl}${item.audioUrl}`;
-            const isPlaying = playingUrl === url;
+            const isPlaying = item.audioUrl ? playingUrl === item.audioUrl : false;
             const secs = Math.round(item.durationMs / 1000);
             return (
               <TouchableOpacity
                 style={styles.logItem}
-                onPress={() => handlePlayLog(item)}
+                onPress={() => item.audioUrl && handlePlayLog(item)}
+                disabled={!item.audioUrl}
               >
-                <View style={[styles.playIcon, isPlaying && styles.playIconActive]}>
+                <View style={[styles.playIcon, isPlaying && styles.playIconActive, !item.audioUrl && styles.playIconDisabled]}>
                   <Text style={styles.playIconText}>{isPlaying ? '■' : '▶'}</Text>
                 </View>
                 <View style={styles.logInfo}>
@@ -229,6 +255,7 @@ export function PTTScreen() {
                   <Text style={styles.logTime}>
                     {new Date(item.createdAt).toLocaleTimeString()}
                     {secs > 0 ? ` · ${secs}s` : ''}
+                    {!item.audioUrl ? ' · no recording' : ''}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -449,6 +476,9 @@ const styles = StyleSheet.create({
   },
   playIconActive: {
     backgroundColor: COLORS.danger,
+  },
+  playIconDisabled: {
+    backgroundColor: COLORS.gray700,
   },
   playIconText: {
     color: COLORS.white,
