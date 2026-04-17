@@ -2,10 +2,14 @@
  * Expo config plugin — Apple Push To Talk framework integration.
  *
  * What this does during `expo prebuild` / EAS Build:
- *  1. Copies the Swift + ObjC bridge files into the Xcode project.
- *  2. Adds PushToTalk.framework (weak-linked for iOS <16 safety).
- *  3. Sets the `push-to-talk` UIBackgroundMode.
- *  4. Adds the `com.apple.developer.push-to-talk` entitlement.
+ *  1. Writes the Swift + ObjC bridge files into the Xcode project directory.
+ *  2. Registers them in the .pbxproj under a PushToTalkModule group.
+ *  3. Adds PushToTalk.framework (weak-linked for iOS <16 safety).
+ *  4. Sets the `push-to-talk` UIBackgroundMode.
+ *  5. Adds the `com.apple.developer.push-to-talk` entitlement.
+ *
+ * File content is embedded directly here so EAS Build always has it,
+ * regardless of .gitignore patterns that might exclude src/native/ios/.
  *
  * Requires Apple entitlement approval before submission:
  *   https://developer.apple.com/contact/request/
@@ -20,7 +24,270 @@ const path = require('path');
 const fs   = require('fs');
 
 const PTT_GROUP = 'PushToTalkModule';
-const SOURCES   = ['PushToTalkModule.swift', 'PushToTalkModule.m'];
+
+// ─── Embedded native file contents ───────────────────────────────────────────
+// Keep in sync with src/native/ios/PushToTalkModule.swift
+const SWIFT_CONTENT = `import Foundation
+import PushToTalk
+import React
+
+// iOS 16+ PTT delegate — kept in a separate class so the RN module
+// itself remains loadable on iOS 15 (framework is weak-linked).
+@available(iOS 16.0, *)
+private class PTTChannelHandler: NSObject, PTTChannelManagerDelegate {
+  weak var emitter: PushToTalkModule?
+  var channelManager: PTTChannelManager?
+
+  init(emitter: PushToTalkModule) {
+    self.emitter = emitter
+  }
+
+  // MARK: - PTTChannelManagerDelegate
+
+  func channelManager(_ channelManager: PTTChannelManager,
+                      didJoinChannel channelId: String,
+                      with reason: PTTChannelJoinReason) {
+    emitter?.sendEvent(withName: "onPTTChannelJoined", body: ["channelId": channelId])
+  }
+
+  func channelManager(_ channelManager: PTTChannelManager,
+                      didLeaveChannel channelId: String,
+                      with reason: PTTChannelLeaveReason) {
+    emitter?.sendEvent(withName: "onPTTChannelLeft", body: ["channelId": channelId])
+  }
+
+  func channelManager(_ channelManager: PTTChannelManager,
+                      channelId: String,
+                      didBeginTransmittingFrom source: PTTTransmitRequestSource) {
+    emitter?.sendEvent(withName: "onPTTTransmitStart", body: ["channelId": channelId])
+  }
+
+  func channelManager(_ channelManager: PTTChannelManager,
+                      channelId: String,
+                      didEndTransmittingFrom source: PTTTransmitRequestSource) {
+    emitter?.sendEvent(withName: "onPTTTransmitStop", body: ["channelId": channelId])
+  }
+
+  func channelManager(_ channelManager: PTTChannelManager,
+                      channelId: String,
+                      receivedEphemeralPushToken pushToken: Data) {
+    let tokenHex = pushToken.map { String(format: "%02x", $0) }.joined()
+    emitter?.sendEvent(withName: "onPTTPushToken", body: [
+      "channelId": channelId,
+      "token": tokenHex
+    ])
+  }
+
+  func incomingPushResult(channelManager: PTTChannelManager,
+                          channelId: String,
+                          pushPayload: [String: Any]) -> PTTPushResult {
+    guard let senderName = pushPayload["senderName"] as? String else {
+      return .leaveChannel
+    }
+    let participant = PTTActiveRemoteParticipant(name: senderName, image: nil)
+    return .activeRemoteParticipant(participant)
+  }
+
+  func channelManager(_ channelManager: PTTChannelManager,
+                      channelId: String,
+                      activeRemoteParticipantDidChange participant: PTTActiveRemoteParticipant?) {
+    if let participant = participant {
+      emitter?.sendEvent(withName: "onPTTReceiveStart", body: [
+        "channelId": channelId,
+        "participantName": participant.name as Any
+      ])
+    } else {
+      emitter?.sendEvent(withName: "onPTTReceiveStop", body: ["channelId": channelId])
+    }
+  }
+
+  func channelManager(_ channelManager: PTTChannelManager,
+                      failedToJoinChannel channelId: String,
+                      error: Error) {
+    emitter?.sendEvent(withName: "onPTTError", body: [
+      "channelId": channelId,
+      "error": error.localizedDescription
+    ])
+  }
+
+  func channelManager(_ channelManager: PTTChannelManager,
+                      failedToLeaveChannel channelId: String,
+                      error: Error) {
+    emitter?.sendEvent(withName: "onPTTError", body: [
+      "channelId": channelId,
+      "error": error.localizedDescription
+    ])
+  }
+
+  func channelManager(_ channelManager: PTTChannelManager,
+                      failedToBeginTransmittingInChannel channelId: String,
+                      error: Error) {
+    emitter?.sendEvent(withName: "onPTTError", body: [
+      "channelId": channelId,
+      "error": error.localizedDescription
+    ])
+  }
+
+  func channelManager(_ channelManager: PTTChannelManager,
+                      failedToStopTransmittingInChannel channelId: String,
+                      error: Error) {
+    emitter?.sendEvent(withName: "onPTTError", body: [
+      "channelId": channelId,
+      "error": error.localizedDescription
+    ])
+  }
+}
+
+// MARK: - React Native Module
+
+@objc(PushToTalkModule)
+class PushToTalkModule: RCTEventEmitter {
+
+  // Stored as AnyObject so this class compiles cleanly on iOS 15.
+  private var pttHandler: AnyObject?
+  private var hasListeners = false
+
+  override static func requiresMainQueueSetup() -> Bool { return false }
+
+  override func supportedEvents() -> [String] {
+    return [
+      "onPTTChannelJoined",
+      "onPTTChannelLeft",
+      "onPTTTransmitStart",
+      "onPTTTransmitStop",
+      "onPTTReceiveStart",
+      "onPTTReceiveStop",
+      "onPTTPushToken",
+      "onPTTError",
+    ]
+  }
+
+  override func startObserving() { hasListeners = true }
+  override func stopObserving() { hasListeners = false }
+
+  // MARK: - JS-facing Methods
+
+  @objc func initialize(_ channelId: String,
+                        channelName: String,
+                        resolver: @escaping RCTPromiseResolveBlock,
+                        rejecter: @escaping RCTPromiseRejectBlock) {
+    guard #available(iOS 16.0, *) else {
+      rejecter("UNSUPPORTED", "Push To Talk requires iOS 16 or later", nil)
+      return
+    }
+
+    let handler = PTTChannelHandler(emitter: self)
+    self.pttHandler = handler
+
+    Task {
+      do {
+        let manager = try await PTTChannelManager.channelManager(
+          delegate: handler,
+          restorationDelegate: nil
+        )
+        handler.channelManager = manager
+        let descriptor = PTTChannelDescriptor(name: channelName, image: nil)
+        try await manager.joinChannel(
+          channelId: channelId,
+          descriptor: descriptor,
+          token: nil,
+          serviceType: .channelService
+        )
+        resolver(nil)
+      } catch {
+        rejecter("PTT_INIT_ERROR", error.localizedDescription, error)
+      }
+    }
+  }
+
+  @objc func startTransmitting(_ channelId: String,
+                                resolver: @escaping RCTPromiseResolveBlock,
+                                rejecter: @escaping RCTPromiseRejectBlock) {
+    guard #available(iOS 16.0, *),
+          let handler = pttHandler as? PTTChannelHandler,
+          let manager = handler.channelManager else {
+      rejecter("PTT_NOT_INITIALIZED", "PTT channel not initialized", nil)
+      return
+    }
+    Task {
+      do {
+        try await manager.requestBeginTransmitting(channelId: channelId)
+        resolver(nil)
+      } catch {
+        rejecter("PTT_TRANSMIT_ERROR", error.localizedDescription, error)
+      }
+    }
+  }
+
+  @objc func stopTransmitting(_ channelId: String,
+                               resolver: @escaping RCTPromiseResolveBlock,
+                               rejecter: @escaping RCTPromiseRejectBlock) {
+    guard #available(iOS 16.0, *),
+          let handler = pttHandler as? PTTChannelHandler,
+          let manager = handler.channelManager else {
+      rejecter("PTT_NOT_INITIALIZED", "PTT channel not initialized", nil)
+      return
+    }
+    Task {
+      do {
+        try await manager.stopTransmitting(channelId: channelId)
+        resolver(nil)
+      } catch {
+        rejecter("PTT_STOP_ERROR", error.localizedDescription, error)
+      }
+    }
+  }
+
+  @objc func leaveChannel(_ channelId: String,
+                           resolver: @escaping RCTPromiseResolveBlock,
+                           rejecter: @escaping RCTPromiseRejectBlock) {
+    guard #available(iOS 16.0, *),
+          let handler = pttHandler as? PTTChannelHandler,
+          let manager = handler.channelManager else {
+      rejecter("PTT_NOT_INITIALIZED", "PTT channel not initialized", nil)
+      return
+    }
+    Task {
+      do {
+        try await manager.leaveChannel(channelId: channelId)
+        self.pttHandler = nil
+        resolver(nil)
+      } catch {
+        rejecter("PTT_LEAVE_ERROR", error.localizedDescription, error)
+      }
+    }
+  }
+}
+`;
+
+// Keep in sync with src/native/ios/PushToTalkModule.m
+const OBJC_BRIDGE_CONTENT = `#import <React/RCTBridgeModule.h>
+#import <React/RCTEventEmitter.h>
+
+RCT_EXTERN_MODULE(PushToTalkModule, RCTEventEmitter)
+
+RCT_EXTERN_METHOD(initialize:(NSString *)channelId
+                  channelName:(NSString *)channelName
+                  resolver:(RCTPromiseResolveBlock)resolver
+                  rejecter:(RCTPromiseRejectBlock)rejecter)
+
+RCT_EXTERN_METHOD(startTransmitting:(NSString *)channelId
+                  resolver:(RCTPromiseResolveBlock)resolver
+                  rejecter:(RCTPromiseRejectBlock)rejecter)
+
+RCT_EXTERN_METHOD(stopTransmitting:(NSString *)channelId
+                  resolver:(RCTPromiseResolveBlock)resolver
+                  rejecter:(RCTPromiseRejectBlock)rejecter)
+
+RCT_EXTERN_METHOD(leaveChannel:(NSString *)channelId
+                  resolver:(RCTPromiseResolveBlock)resolver
+                  rejecter:(RCTPromiseRejectBlock)rejecter)
+`;
+
+const SOURCES = [
+  { name: 'PushToTalkModule.swift', content: SWIFT_CONTENT },
+  { name: 'PushToTalkModule.m',     content: OBJC_BRIDGE_CONTENT },
+];
 
 // ─── 1. Entitlement ──────────────────────────────────────────────────────────
 const addEntitlement = (config) =>
@@ -39,48 +306,74 @@ const addBackgroundMode = (config) =>
     return mod;
   });
 
-// ─── 3. Xcode project — copy files + add framework ───────────────────────────
+// ─── 3. Xcode project — write files + register in pbxproj + add framework ────
 const addNativeFiles = (config) =>
   withXcodeProject(config, (mod) => {
-    const { projectRoot, platformProjectRoot, projectName } = mod.modRequest;
+    const { platformProjectRoot, projectName } = mod.modRequest;
     const xcodeProject = mod.modResults;
 
-    // Source files live in src/native/ios/
-    const sourceDir = path.join(projectRoot, 'src', 'native', 'ios');
-    // Destination inside the generated ios/<AppName>/ directory
-    const destDir   = path.join(platformProjectRoot, projectName, PTT_GROUP);
-
+    // Write files to ios/<AppName>/PushToTalkModule/
+    const destDir = path.join(platformProjectRoot, projectName, PTT_GROUP);
     if (!fs.existsSync(destDir)) {
       fs.mkdirSync(destDir, { recursive: true });
     }
+    for (const { name, content } of SOURCES) {
+      fs.writeFileSync(path.join(destDir, name), content, 'utf8');
+    }
 
-    SOURCES.forEach((file) => {
-      const src  = path.join(sourceDir, file);
-      const dest = path.join(destDir,   file);
-      if (fs.existsSync(src)) {
-        fs.copyFileSync(src, dest);
-      } else {
-        console.warn(`[withPushToTalk] Source file not found: ${src}`);
-      }
-    });
-
-    // Add each file as a source build file for the first (app) target.
-    // Pass NO group so the PBXFileReference is anchored directly to the main
-    // project group (sourceTree = "<group>", no extra path prefix). The path
-    // is relative to ios/ (SRCROOT), so Xcode resolves it correctly to
-    // ios/<AppName>/PushToTalkModule/<file>.
     const targetUUID = xcodeProject.getFirstTarget().uuid;
-    SOURCES.forEach((file) => {
-      const relPath = path.join(projectName, PTT_GROUP, file);
-      // Skip if already registered (idempotent re-runs of prebuild)
-      const alreadyRegistered = xcodeProject.hasFile(relPath);
-      if (!alreadyRegistered) {
-        xcodeProject.addSourceFile(relPath, { target: targetUUID });
-      }
-    });
 
-    // ── Weak-link PushToTalk.framework (iOS 16+ only, app runs on 15+) ──
-    const existingFrameworks = Object.values(xcodeProject.pbxFrameworksBuildPhaseObj(targetUUID)?.files ?? {});
+    // ── Create PushToTalkModule PBX group ──────────────────────────────────
+    // We must attach it as a child of the app source group (GatherSafe), NOT
+    // the root main group. That way Xcode stacks paths correctly:
+    //   ios/ (SRCROOT) + GatherSafe/ + PushToTalkModule/ + filename
+    //
+    // If we attached to mainGroup the stacking would be wrong because
+    // mainGroup has no path, so the group path becomes root-relative:
+    //   ios/PushToTalkModule/filename  (missing the GatherSafe/ component)
+
+    // Find the GatherSafe group by walking mainGroup's children.
+    const mainGroupKey = xcodeProject.getFirstProject().firstProject.mainGroup;
+    const mainGroup    = xcodeProject.getPBXGroupByKey(mainGroupKey);
+
+    let appGroupKey = null;
+    if (mainGroup && Array.isArray(mainGroup.children)) {
+      for (const child of mainGroup.children) {
+        const g = xcodeProject.getPBXGroupByKey(child.value);
+        if (g) {
+          // pbxproj values may be quoted ("GatherSafe") — strip quotes.
+          const p = (g.path || '').replace(/^"(.*)"$/, '$1');
+          if (p === projectName) {
+            appGroupKey = child.value;
+            break;
+          }
+        }
+      }
+    }
+
+    // Create the PushToTalkModule group with path "PushToTalkModule"
+    // (relative to its GatherSafe parent → ios/GatherSafe/PushToTalkModule/).
+    const { uuid: pttGroupUUID } = xcodeProject.addPbxGroup([], PTT_GROUP, PTT_GROUP);
+
+    // Attach to GatherSafe (preferred) or fall back to mainGroup.
+    const parentGroupKey = appGroupKey || mainGroupKey;
+    const parentGroup    = xcodeProject.getPBXGroupByKey(parentGroupKey);
+    if (parentGroup && !parentGroup.children.find((c) => c.comment === PTT_GROUP)) {
+      parentGroup.children.push({ value: pttGroupUUID, comment: PTT_GROUP });
+    }
+
+    // Register each source file inside the PushToTalkModule group.
+    // Path is just the filename — resolved relative to the group chain above.
+    // Providing the group UUID bypasses addPluginFile's auto-detect (which
+    // crashes when the group isn't found yet).
+    for (const { name } of SOURCES) {
+      xcodeProject.addSourceFile(name, { target: targetUUID }, pttGroupUUID);
+    }
+
+    // ── Weak-link PushToTalk.framework (iOS 16+ only, app runs on 15+) ──────
+    const existingFrameworks = Object.values(
+      xcodeProject.pbxFrameworksBuildPhaseObj(targetUUID)?.files ?? {}
+    );
     const alreadyAdded = existingFrameworks.some(
       (f) => typeof f === 'object' && f?.comment?.includes('PushToTalk')
     );
