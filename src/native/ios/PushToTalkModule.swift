@@ -158,12 +158,17 @@ class PushToTalkModule: RCTEventEmitter {
         )
         handler.channelManager = manager
         let descriptor = PTTChannelDescriptor(name: channelName, image: nil)
-        try await manager.joinChannel(
-          channelId: channelId,
-          descriptor: descriptor,
-          token: nil,
-          serviceType: .channelService
-        )
+        // iOS 17 deprecated the token/serviceType overload; use the simpler API when available.
+        if #available(iOS 17.0, *) {
+          try await manager.joinChannel(channelId: channelId, descriptor: descriptor)
+        } else {
+          try await manager.joinChannel(
+            channelId: channelId,
+            descriptor: descriptor,
+            token: nil,
+            serviceType: .channelService
+          )
+        }
         resolver(nil)
       } catch {
         rejecter("PTT_INIT_ERROR", error.localizedDescription, error)
