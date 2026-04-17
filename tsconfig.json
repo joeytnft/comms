@@ -16,7 +16,6 @@
     "noEmit": true,
     "isolatedModules": true,
     "ignoreDeprecations": "5.0",
-    "baseUrl": ".",
     "forceConsistentCasingInFileNames": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,

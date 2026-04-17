@@ -10,7 +10,6 @@ import { useHardwareButton } from '@/hooks/useHardwareButton';
 import { nativePTTService } from '@/services/nativePTTService';
 import { callKitService } from '@/services/callKitService';
 import { bluetoothPTTService } from '@/services/bluetoothPTTService';
-import { authService } from '@/services/authService';
 import { secureStorage } from '@/utils/secureStorage';
 import { ACCESS_TOKEN_KEY } from '@/config/constants';
 import { ENV as AppEnv } from '@/config/env';
@@ -73,7 +72,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     if (!USE_NATIVE_PTT) return;
 
     // Transmission started from ANY source (screen, lock screen, Bluetooth accessory)
-    const unsubStart = nativePTTService.onTransmissionStarted(({ channelId, source }) => {
+    const unsubStart = nativePTTService.onTransmissionStarted(({ source }) => {
       const { currentGroupId, pttState } = usePTTStore.getState();
       if (pttState === 'transmitting') return;
       transmittingRef.current = true;
@@ -87,7 +86,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     });
 
     // Transmission ended from ANY source
-    const unsubEnd = nativePTTService.onTransmissionEnded(({ channelId }) => {
+    const unsubEnd = nativePTTService.onTransmissionEnded((_) => {
       const { currentGroupId, pttState } = usePTTStore.getState();
       transmittingRef.current = false;
       if (pttState !== 'transmitting') return;
@@ -101,7 +100,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     });
 
     // Transmission failed (e.g. active cellular call)
-    const unsubFail = nativePTTService.onTransmissionFailed((channelId, error) => {
+    const unsubFail = nativePTTService.onTransmissionFailed((_channelId, error) => {
       usePTTStore.getState().setTransmitting(false);
       transmittingRef.current = false;
       console.warn('[PTT] transmission failed:', error);
@@ -495,7 +494,6 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     if (!socket || !currentGroupId || pttState !== 'transmitting') return;
 
     if (Platform.OS === 'web') {
-      const durationMs = Date.now() - transmitStartedAtRef.current;
       usePTTStore.getState().setTransmitting(false);
       socket.emit('ptt:stop', { groupId: currentGroupId });
       mediaRecorderRef.current?.stop();
