@@ -409,6 +409,25 @@ const addXcodeTargets = (config) =>
         (configLists[widgetTargetObj?.buildConfigurationList]?.buildConfigurations ?? [])
           .map((c) => c.value)
       );
+
+      // Inherit signing from the main target so EAS managed credentials apply.
+      // Without DEVELOPMENT_TEAM / CODE_SIGN_STYLE on the widget, xcodebuild
+      // archive fails because the extension has nothing to sign with.
+      const mainTargetObj = xcodeProject.pbxNativeTargetSection()[mainTargetUUID];
+      const mainCfgKeys   = new Set(
+        (configLists[mainTargetObj?.buildConfigurationList]?.buildConfigurations ?? [])
+          .map((c) => c.value)
+      );
+      let developmentTeam = null;
+      let codeSignStyle   = 'Automatic';
+      Object.keys(buildConfigs).forEach((key) => {
+        if (!mainCfgKeys.has(key)) return;
+        const cfg = buildConfigs[key];
+        if (typeof cfg !== 'object' || !cfg.buildSettings) return;
+        if (cfg.buildSettings.DEVELOPMENT_TEAM)  developmentTeam = cfg.buildSettings.DEVELOPMENT_TEAM;
+        if (cfg.buildSettings.CODE_SIGN_STYLE)   codeSignStyle   = cfg.buildSettings.CODE_SIGN_STYLE;
+      });
+
       Object.keys(buildConfigs).forEach((key) => {
         const cfg = buildConfigs[key];
         if (typeof cfg === 'object' && cfg.buildSettings && widgetCfgKeys.has(key)) {
@@ -418,6 +437,16 @@ const addXcodeTargets = (config) =>
           cfg.buildSettings['SKIP_INSTALL']               = 'YES';
           cfg.buildSettings['INFOPLIST_FILE']             = `${WIDGET_NAME}/Info.plist`;
           cfg.buildSettings['MARKETING_VERSION']          = config.version ?? '0.1.0';
+          cfg.buildSettings['CURRENT_PROJECT_VERSION']    = '1';
+          cfg.buildSettings['PRODUCT_BUNDLE_IDENTIFIER']  = widgetBundleId;
+          cfg.buildSettings['PRODUCT_NAME']               = `"${WIDGET_NAME}"`;
+          cfg.buildSettings['CODE_SIGN_STYLE']            = codeSignStyle;
+          cfg.buildSettings['CODE_SIGN_IDENTITY']         = '"Apple Development"';
+          if (developmentTeam) cfg.buildSettings['DEVELOPMENT_TEAM'] = developmentTeam;
+          // Widget has no bridging header — explicitly clear to avoid inheriting
+          // the main target's bridging header path via xcconfig.
+          cfg.buildSettings['SWIFT_OBJC_BRIDGING_HEADER'] = '""';
+          cfg.buildSettings['LD_RUNPATH_SEARCH_PATHS']    = '"$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"';
         }
       });
 
