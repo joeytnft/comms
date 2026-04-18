@@ -484,11 +484,11 @@ const patchBridgingHeader = (config) =>
 // bundle targets have no team set, causing archive failure. Setting
 // CODE_SIGNING_ALLOWED=NO in post_install is the standard community fix.
 //
-// Strategy: insert our snippet before the very last `\nend` in the Podfile.
-// The Expo-generated Podfile always ends with the closing `end` of the
-// post_install block, so lastIndexOf('\nend') reliably targets it regardless
-// of whether __apply_Xcode_12_5_M1_post_install_workaround is present
-// (it was removed in RN 0.74 / Expo SDK 52+).
+// In Expo SDK 54 / RN 0.81, the Podfile nests post_install inside a target
+// block, so the file ends with TWO `end`s — an indented one closing
+// post_install and an unindented one closing the target. We need the indented
+// one; matching `\n\s+end` non-greedily after `post_install do |installer|`
+// targets it specifically.
 const patchPodfileCodesigning = (config) =>
   withDangerousMod(config, [
     'ios',
@@ -501,19 +501,21 @@ const patchPodfileCodesigning = (config) =>
 
       const snippet = [
         '',
-        '  # Disable code signing for CocoaPods resource bundle targets (Xcode 14+)',
-        "  installer.pods_project.targets.each do |target|",
-        "    if target.respond_to?(:product_type) && target.product_type == 'com.apple.product-type.bundle'",
-        "      target.build_configurations.each do |config|",
-        "        config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'",
+        '    # Disable code signing for CocoaPods resource bundle targets (Xcode 14+)',
+        "    installer.pods_project.targets.each do |target|",
+        "      if target.respond_to?(:product_type) && target.product_type == 'com.apple.product-type.bundle'",
+        "        target.build_configurations.each do |config|",
+        "          config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'",
+        "        end",
         "      end",
         "    end",
-        "  end",
       ].join('\n');
 
-      // Find the last `\nend` — the closing end of the post_install block.
-      const insertAt = podfile.lastIndexOf('\nend');
-      if (insertAt !== -1) {
+      // Insert before the post_install block's closing `end` (which is indented
+      // because post_install is nested inside a target block).
+      const match = podfile.match(/(post_install do \|installer\|[\s\S]*?)(\n[ \t]+end)/);
+      if (match && match.index !== undefined) {
+        const insertAt = match.index + match[1].length;
         podfile = podfile.slice(0, insertAt) + snippet + podfile.slice(insertAt);
         fs.writeFileSync(podfilePath, podfile, 'utf8');
       }
