@@ -101,7 +101,13 @@ class LiveActivityModule: NSObject {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         guard #available(iOS 16.2, *) else { resolve(nil); return }
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+        let activitiesEnabled: Bool
+        if #available(iOS 17.0, *) {
+            activitiesEnabled = Activity<GatherSafeActivityAttributes>.authorizationInfo.areActivitiesEnabled
+        } else {
+            activitiesEnabled = ActivityAuthorizationInfo().areActivitiesEnabled
+        }
+        guard activitiesEnabled else {
             reject("ACTIVITIES_DISABLED", "Live Activities are disabled on this device", nil)
             return
         }
@@ -198,12 +204,14 @@ private func alertLabel(_ level: String?) -> String {
     }
 }
 
+@available(iOS 16.2, *)
 private func micColor(state: GatherSafeActivityAttributes.ContentState) -> Color {
     if state.isTransmitting     { return .gsSuccess }
     if state.speakerName != nil { return .gsAccent  }
     return Color(.systemGray3)
 }
 
+@available(iOS 16.2, *)
 struct ExpandedView: View {
     let attributes: GatherSafeActivityAttributes
     let state: GatherSafeActivityAttributes.ContentState
@@ -219,23 +227,23 @@ struct ExpandedView: View {
             ZStack {
                 Circle().fill(micColor(state: state).opacity(0.18)).frame(width: 44, height: 44)
                 Image(systemName: state.isTransmitting ? "mic.fill" : "mic")
-                    .foregroundColor(micColor(state: state))
+                    .foregroundStyle(micColor(state: state))
                     .font(.system(size: 20, weight: .semibold))
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(attributes.orgName).font(.caption2).foregroundColor(.secondary).lineLimit(1)
-                Text(state.channelName).font(.subheadline.weight(.semibold)).foregroundColor(.primary).lineLimit(1)
-                Text(speakerText).font(.caption).foregroundColor(micColor(state: state)).lineLimit(1)
+                Text(attributes.orgName).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                Text(state.channelName).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).lineLimit(1)
+                Text(speakerText).font(.caption).foregroundStyle(micColor(state: state)).lineLimit(1)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
                 HStack(spacing: 3) {
                     Image(systemName: "person.2.fill").font(.caption2)
                     Text("\\(state.memberCount)").font(.caption2.monospacedDigit())
-                }.foregroundColor(.secondary)
+                }.foregroundStyle(.secondary)
                 if let level = state.alertLevel, !level.isEmpty {
                     Text(alertLabel(level))
-                        .font(.system(size: 9, weight: .bold)).foregroundColor(.white)
+                        .font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(alertColor(level)).clipShape(Capsule())
                 }
@@ -255,7 +263,7 @@ struct GatherSafeLiveActivity: Widget {
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     Image(systemName: context.state.isTransmitting ? "mic.fill" : "mic")
-                        .foregroundColor(micColor(state: context.state))
+                        .foregroundStyle(micColor(state: context.state))
                         .padding(.leading, 8)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
@@ -266,12 +274,12 @@ struct GatherSafeLiveActivity: Widget {
                 }
             } compactLeading: {
                 Image(systemName: context.state.isTransmitting ? "mic.fill" : "mic")
-                    .foregroundColor(micColor(state: context.state))
+                    .foregroundStyle(micColor(state: context.state))
                     .font(.system(size: 14, weight: .semibold))
             } compactTrailing: {
                 Text(context.state.channelName).font(.caption2.weight(.semibold)).lineLimit(1)
             } minimal: {
-                Image(systemName: "mic.fill").foregroundColor(micColor(state: context.state))
+                Image(systemName: "mic.fill").foregroundStyle(micColor(state: context.state))
                     .font(.system(size: 12, weight: .semibold))
             }
             .widgetURL(URL(string: "gathersafe://ptt"))
