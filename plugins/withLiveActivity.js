@@ -479,11 +479,47 @@ const patchBridgingHeader = (config) =>
     },
   ]);
 
+// ─── 4. Disable resource-bundle code signing (Xcode 14+ CocoaPods fix) ─────────
+// Xcode 14+ signs resource bundle targets by default. CocoaPods-generated
+// bundle targets have no team set, causing archive failure. Setting
+// CODE_SIGNING_ALLOWED=NO in post_install is the standard community fix.
+const patchPodfileCodesigning = (config) =>
+  withDangerousMod(config, [
+    'ios',
+    async (mod) => {
+      const podfilePath = path.join(mod.modRequest.platformProjectRoot, 'Podfile');
+      if (!fs.existsSync(podfilePath)) return mod;
+
+      let podfile = fs.readFileSync(podfilePath, 'utf8');
+
+      const snippet = `
+  # Disable code signing for CocoaPods resource bundle targets (Xcode 14+)
+  installer.pods_project.targets.each do |target|
+    if target.respond_to?(:product_type) && target.product_type == 'com.apple.product-type.bundle'
+      target.build_configurations.each do |config|
+        config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+      end
+    end
+  end`;
+
+      // Insert before the closing `end` of the post_install block
+      if (!podfile.includes('CODE_SIGNING_ALLOWED')) {
+        podfile = podfile.replace(
+          /^(post_install do \|installer\|[\s\S]*?)(^end)/m,
+          `$1${snippet}\n$2`
+        );
+        fs.writeFileSync(podfilePath, podfile, 'utf8');
+      }
+      return mod;
+    },
+  ]);
+
 // ─── Compose ──────────────────────────────────────────────────────────────────
 const withLiveActivity = (config) => {
   config = addInfoPlistKeys(config);
   config = addXcodeTargets(config);
   config = patchBridgingHeader(config);
+  config = patchPodfileCodesigning(config);
   return config;
 };
 
