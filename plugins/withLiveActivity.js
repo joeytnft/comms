@@ -101,13 +101,7 @@ class LiveActivityModule: NSObject {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         guard #available(iOS 16.2, *) else { resolve(nil); return }
-        let activitiesEnabled: Bool
-        if #available(iOS 17.0, *) {
-            activitiesEnabled = Activity<GatherSafeActivityAttributes>.authorizationInfo.areActivitiesEnabled
-        } else {
-            activitiesEnabled = ActivityAuthorizationInfo().areActivitiesEnabled
-        }
-        guard activitiesEnabled else {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
             reject("ACTIVITIES_DISABLED", "Live Activities are disabled on this device", nil)
             return
         }
@@ -599,29 +593,44 @@ const fixWidgetBuildPhases = (config) =>
     const mainSourcesUUID   = phaseUUIDOf(mainTarget);
     let   widgetSourcesUUID = phaseUUIDOf(widgetTarget);
 
-    // ── Collect build file UUIDs for widget-only source files ───────────────
-    // The xcode package stores comments as UUID_comment keys.
-    const buildFiles = objects['PBXBuildFile'] ?? {};
-    const widgetBuildFileUUIDs = new Set();
-    const widgetBuildFileEntries = []; // {value, comment} objects to add to widget phase
+    // ── Find fileRef UUIDs for widget-only source files ─────────────────────
+    // addSourceFile() may create two separate PBXBuildFile entries (different
+    // UUIDs) for the same source file when it adds to both targets. Deduplication
+    // must therefore be based on the underlying PBXFileReference UUID, not the
+    // PBXBuildFile UUID — otherwise the "already in widget" check misses the
+    // second UUID and the file gets compiled twice, causing a duplicate @main error.
+    const fileRefs   = objects['PBXFileReference'] ?? {};
+    const buildFiles = objects['PBXBuildFile']     ?? {};
 
-    for (const key of Object.keys(buildFiles)) {
-      if (key.endsWith('_comment')) continue;
-      const comment = buildFiles[`${key}_comment`] ?? '';
-      for (const name of WIDGET_ONLY_SOURCES) {
-        if (comment === `${name} in Sources`) {
-          widgetBuildFileUUIDs.add(key);
-          widgetBuildFileEntries.push({ value: key, comment });
-        }
-      }
+    const widgetOnlyFileRefUUIDs = new Set();
+    for (const [uuid, ref] of Object.entries(fileRefs)) {
+      if (uuid.endsWith('_comment') || typeof ref !== 'object') continue;
+      const name = (ref.path ?? ref.name ?? '').replace(/^"|"$/g, '');
+      if (WIDGET_ONLY_SOURCES.has(name)) widgetOnlyFileRefUUIDs.add(uuid);
     }
 
-    // ── Remove widget-only files from main target's Sources ──────────────────
+    // Map fileRefUUID → [{ value: buildFileUUID, comment }]
+    const buildFilesByFileRef = new Map();
+    for (const [key, bf] of Object.entries(buildFiles)) {
+      if (key.endsWith('_comment') || typeof bf !== 'object') continue;
+      const fileRef = (bf.fileRef ?? '').replace(/^"|"$/g, '');
+      if (!widgetOnlyFileRefUUIDs.has(fileRef)) continue;
+      const arr = buildFilesByFileRef.get(fileRef) ?? [];
+      arr.push({ value: key, comment: buildFiles[`${key}_comment`] ?? '' });
+      buildFilesByFileRef.set(fileRef, arr);
+    }
+
+    // All build file UUIDs for widget-only files (used to scrub all targets).
+    const allWidgetBuildFileUUIDs = new Set(
+      [...buildFilesByFileRef.values()].flat().map((e) => e.value)
+    );
+
+    // ── Remove ALL widget-only build file entries from main's Sources ────────
     if (mainSourcesUUID) {
       const phase = allSourcePhases[mainSourcesUUID];
       if (phase?.files) {
         phase.files = phase.files.filter(
-          (f) => typeof f !== 'object' || !widgetBuildFileUUIDs.has(f.value)
+          (f) => typeof f !== 'object' || !allWidgetBuildFileUUIDs.has(f.value)
         );
       }
     }
@@ -639,15 +648,25 @@ const fixWidgetBuildPhases = (config) =>
       widgetTarget.buildPhases.push({ value: widgetSourcesUUID, comment: 'Sources' });
     }
 
-    // ── Add widget-only files to widget Sources phase (idempotent) ───────────
+    // ── Ensure exactly ONE entry per widget-only file in widget's Sources ────
+    // First, remove any duplicates that may already exist there.
     const widgetPhase = allSourcePhases[widgetSourcesUUID];
-    const existing    = new Set(
-      (widgetPhase.files ?? []).filter((f) => typeof f === 'object').map((f) => f.value)
-    );
-    for (const entry of widgetBuildFileEntries) {
-      if (!existing.has(entry.value)) {
-        widgetPhase.files = widgetPhase.files ?? [];
-        widgetPhase.files.push(entry);
+    const seenFileRefs = new Set();
+    widgetPhase.files  = (widgetPhase.files ?? []).filter((f) => {
+      if (typeof f !== 'object') return true;
+      const bf      = buildFiles[f.value];
+      const fileRef = bf ? (bf.fileRef ?? '').replace(/^"|"$/g, '') : null;
+      if (!fileRef || !widgetOnlyFileRefUUIDs.has(fileRef)) return true; // keep non-widget files
+      if (seenFileRefs.has(fileRef)) return false; // drop duplicate
+      seenFileRefs.add(fileRef);
+      return true;
+    });
+
+    // Then add any widget-only files that are not yet represented.
+    for (const [fileRef, entries] of buildFilesByFileRef) {
+      if (!seenFileRefs.has(fileRef)) {
+        widgetPhase.files.push(entries[0]); // use the first available build file UUID
+        seenFileRefs.add(fileRef);
       }
     }
 

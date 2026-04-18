@@ -17,13 +17,7 @@ class LiveActivityModule: NSObject {
         rejecter reject: @escaping RCTPromiseRejectBlock
     ) {
         guard #available(iOS 16.2, *) else { resolve(nil); return }
-        let activitiesEnabled: Bool
-        if #available(iOS 17.0, *) {
-            activitiesEnabled = Activity<GatherSafeActivityAttributes>.authorizationInfo.areActivitiesEnabled
-        } else {
-            activitiesEnabled = ActivityAuthorizationInfo().areActivitiesEnabled
-        }
-        guard activitiesEnabled else {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
             reject("ACTIVITIES_DISABLED", "Live Activities are disabled on this device", nil)
             return
         }
