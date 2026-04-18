@@ -35,6 +35,7 @@ private func alertLabel(_ level: String?) -> String {
 
 // ── Mic icon coloured by PTT state ────────────────────────────────────────────
 
+@available(iOS 16.2, *)
 private func micColor(state: GatherSafeActivityAttributes.ContentState) -> Color {
     if state.isTransmitting       { return .gsSuccess }
     if state.speakerName != nil   { return .gsAccent  }
@@ -46,12 +47,13 @@ private func micColor(state: GatherSafeActivityAttributes.ContentState) -> Color
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Compact leading — mic icon, coloured by state.
+@available(iOS 16.2, *)
 struct CompactLeadingView: View {
     let state: GatherSafeActivityAttributes.ContentState
 
     var body: some View {
         Image(systemName: state.isTransmitting ? "mic.fill" : "mic")
-            .foregroundColor(micColor(state: state))
+            .foregroundStyle(micColor(state: state))
             .font(.system(size: 14, weight: .semibold))
     }
 }
@@ -70,24 +72,26 @@ struct CompactTrailingView: View {
             }
             Text(channelName)
                 .font(.caption2.weight(.semibold))
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
                 .lineLimit(1)
         }
     }
 }
 
 /// Minimal — just the mic icon.
+@available(iOS 16.2, *)
 struct MinimalView: View {
     let state: GatherSafeActivityAttributes.ContentState
 
     var body: some View {
         Image(systemName: "mic.fill")
-            .foregroundColor(micColor(state: state))
+            .foregroundStyle(micColor(state: state))
             .font(.system(size: 12, weight: .semibold))
     }
 }
 
 /// Expanded — full lock-screen / StandBy card.
+@available(iOS 16.2, *)
 struct ExpandedView: View {
     let attributes: GatherSafeActivityAttributes
     let state: GatherSafeActivityAttributes.ContentState
@@ -106,7 +110,7 @@ struct ExpandedView: View {
                     .fill(micColor(state: state).opacity(0.18))
                     .frame(width: 44, height: 44)
                 Image(systemName: state.isTransmitting ? "mic.fill" : "mic")
-                    .foregroundColor(micColor(state: state))
+                    .foregroundStyle(micColor(state: state))
                     .font(.system(size: 20, weight: .semibold))
             }
 
@@ -114,17 +118,17 @@ struct ExpandedView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(attributes.orgName)
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
 
                 Text(state.channelName)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
 
                 Text(speakerText)
                     .font(.caption)
-                    .foregroundColor(micColor(state: state))
+                    .foregroundStyle(micColor(state: state))
                     .lineLimit(1)
             }
 
@@ -138,12 +142,12 @@ struct ExpandedView: View {
                     Text("\(state.memberCount)")
                         .font(.caption2.monospacedDigit())
                 }
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
 
                 if let level = state.alertLevel, !level.isEmpty {
                     Text(alertLabel(level))
                         .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(.white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(alertColor(level))
