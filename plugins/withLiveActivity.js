@@ -399,25 +399,25 @@ const addXcodeTargets = (config) =>
       );
       const widgetTargetUUID = widgetTarget.uuid;
 
-      // Add build settings for Swift + WidgetKit
-      const buildConfigs = xcodeProject.pbxXCBuildConfigurationSection();
+      // Add build settings for Swift + WidgetKit.
+      // pbxXCConfigurationListSection() does not exist in the xcode npm package —
+      // read XCConfigurationList objects directly from the project hash instead.
+      const buildConfigs    = xcodeProject.pbxXCBuildConfigurationSection();
+      const configLists     = xcodeProject.hash.project.objects['XCConfigurationList'] ?? {};
+      const widgetTargetObj = xcodeProject.pbxNativeTargetSection()[widgetTargetUUID];
+      const widgetCfgKeys   = new Set(
+        (configLists[widgetTargetObj?.buildConfigurationList]?.buildConfigurations ?? [])
+          .map((c) => c.value)
+      );
       Object.keys(buildConfigs).forEach((key) => {
         const cfg = buildConfigs[key];
-        if (
-          typeof cfg === 'object' &&
-          cfg.buildSettings &&
-          // Only patch configs that belong to the widget target (via target reference)
-          xcodeProject.pbxXCConfigurationListSection()[
-            xcodeProject.pbxNativeTargetSection()[widgetTargetUUID]?.buildConfigurationList
-          ]?.buildConfigurations?.some((c) => c.value === key)
-        ) {
-          cfg.buildSettings['SWIFT_VERSION']                     = '5.0';
-          cfg.buildSettings['IPHONEOS_DEPLOYMENT_TARGET']        = '16.2';
-          cfg.buildSettings['TARGETED_DEVICE_FAMILY']            = '"1,2"';
-          cfg.buildSettings['SKIP_INSTALL']                      = 'YES';
-          cfg.buildSettings['INFOPLIST_FILE']                    = `${WIDGET_NAME}/Info.plist`;
-          cfg.buildSettings['MARKETING_VERSION']                 =
-            config.version ?? '0.1.0';
+        if (typeof cfg === 'object' && cfg.buildSettings && widgetCfgKeys.has(key)) {
+          cfg.buildSettings['SWIFT_VERSION']              = '5.0';
+          cfg.buildSettings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.2';
+          cfg.buildSettings['TARGETED_DEVICE_FAMILY']     = '"1,2"';
+          cfg.buildSettings['SKIP_INSTALL']               = 'YES';
+          cfg.buildSettings['INFOPLIST_FILE']             = `${WIDGET_NAME}/Info.plist`;
+          cfg.buildSettings['MARKETING_VERSION']          = config.version ?? '0.1.0';
         }
       });
 
