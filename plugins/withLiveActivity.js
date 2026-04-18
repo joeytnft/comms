@@ -560,10 +560,105 @@ const patchPodfileCodesigning = (config) =>
     },
   ]);
 
+// ─── 5. Fix widget build phases ───────────────────────────────────────────────
+// addSourceFile() with a specific target UUID can place files in the main app's
+// Sources phase instead of the widget's due to a bug in the xcode npm package.
+// This step runs after addXcodeTargets and enforces correct placement:
+//   • Removes GatherSafeLiveActivity.swift and GatherSafeLiveActivityBundle.swift
+//     from the main target's Sources phase.
+//   • Ensures those same build file entries are in the widget target's Sources phase.
+const WIDGET_ONLY_SOURCES = new Set([
+  'GatherSafeLiveActivity.swift',
+  'GatherSafeLiveActivityBundle.swift',
+]);
+
+const fixWidgetBuildPhases = (config) =>
+  withXcodeProject(config, (mod) => {
+    const proj    = mod.modResults;
+    const objects = proj.hash.project.objects;
+
+    // ── Locate targets ──────────────────────────────────────────────────────
+    const nativeTargets = objects['PBXNativeTarget'] ?? {};
+    const mainTargetUUID = proj.getFirstTarget().uuid;
+    let widgetTargetUUID = null;
+    for (const [uuid, t] of Object.entries(nativeTargets)) {
+      if (typeof t !== 'object') continue;
+      const name = (t.name ?? '').replace(/^"|"$/g, '');
+      if (name === WIDGET_NAME) { widgetTargetUUID = uuid; break; }
+    }
+    if (!widgetTargetUUID) return mod; // widget not created yet — nothing to fix
+
+    const mainTarget   = nativeTargets[mainTargetUUID];
+    const widgetTarget = nativeTargets[widgetTargetUUID];
+
+    // ── Find Sources build phase UUIDs for each target ──────────────────────
+    const allSourcePhases = objects['PBXSourcesBuildPhase'] ?? {};
+    const phaseUUIDOf = (target) =>
+      (target.buildPhases ?? []).map((p) => p.value).find((u) => allSourcePhases[u]);
+
+    const mainSourcesUUID   = phaseUUIDOf(mainTarget);
+    let   widgetSourcesUUID = phaseUUIDOf(widgetTarget);
+
+    // ── Collect build file UUIDs for widget-only source files ───────────────
+    // The xcode package stores comments as UUID_comment keys.
+    const buildFiles = objects['PBXBuildFile'] ?? {};
+    const widgetBuildFileUUIDs = new Set();
+    const widgetBuildFileEntries = []; // {value, comment} objects to add to widget phase
+
+    for (const key of Object.keys(buildFiles)) {
+      if (key.endsWith('_comment')) continue;
+      const comment = buildFiles[`${key}_comment`] ?? '';
+      for (const name of WIDGET_ONLY_SOURCES) {
+        if (comment === `${name} in Sources`) {
+          widgetBuildFileUUIDs.add(key);
+          widgetBuildFileEntries.push({ value: key, comment });
+        }
+      }
+    }
+
+    // ── Remove widget-only files from main target's Sources ──────────────────
+    if (mainSourcesUUID) {
+      const phase = allSourcePhases[mainSourcesUUID];
+      if (phase?.files) {
+        phase.files = phase.files.filter(
+          (f) => typeof f !== 'object' || !widgetBuildFileUUIDs.has(f.value)
+        );
+      }
+    }
+
+    // ── Create widget Sources phase if it doesn't exist ─────────────────────
+    if (!widgetSourcesUUID) {
+      widgetSourcesUUID = proj.generateUuid();
+      allSourcePhases[widgetSourcesUUID] = {
+        isa: 'PBXSourcesBuildPhase',
+        buildActionMask: 2147483647,
+        files: [],
+        runOnlyForDeploymentPostprocessing: 0,
+      };
+      widgetTarget.buildPhases = widgetTarget.buildPhases ?? [];
+      widgetTarget.buildPhases.push({ value: widgetSourcesUUID, comment: 'Sources' });
+    }
+
+    // ── Add widget-only files to widget Sources phase (idempotent) ───────────
+    const widgetPhase = allSourcePhases[widgetSourcesUUID];
+    const existing    = new Set(
+      (widgetPhase.files ?? []).filter((f) => typeof f === 'object').map((f) => f.value)
+    );
+    for (const entry of widgetBuildFileEntries) {
+      if (!existing.has(entry.value)) {
+        widgetPhase.files = widgetPhase.files ?? [];
+        widgetPhase.files.push(entry);
+      }
+    }
+
+    return mod;
+  });
+
 // ─── Compose ──────────────────────────────────────────────────────────────────
 const withLiveActivity = (config) => {
   config = addInfoPlistKeys(config);
   config = addXcodeTargets(config);
+  config = fixWidgetBuildPhases(config);
   config = patchBridgingHeader(config);
   config = patchPodfileCodesigning(config);
   return config;
