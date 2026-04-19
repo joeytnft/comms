@@ -4,7 +4,6 @@ const COMPARISON_ROWS: [string, string, CellValue, CellValue][] = [
   ['End-to-end encrypted text', 'Signal Protocol — server sees zero plaintext', true, false],
   ['Zero-knowledge server', 'We route encrypted blobs only', true, false],
   ['End-to-end encrypted voice', 'SRTP + LiveKit E2EE insertable streams', true, false],
-  ['Self-hosted / data sovereignty', 'Your server, your data, full control', true, false],
   ['Group hierarchy (lead + sub-teams)', 'Lead sees all sub-teams; sub-teams stay isolated', true, false],
   ['Panic button with GPS broadcast', 'One tap, instant location alert to all leads', true, false],
   ['Tiered alert levels', 'Attention / Warning / Emergency system', true, false],
@@ -45,9 +44,9 @@ const DEEP_DIVES = [
   },
   {
     icon: 'server',
-    label: 'Data Sovereignty',
-    title: 'Self-host on your own infrastructure',
-    body: 'Zello is SaaS-only. Your communication logs, member data, and incident history live on Zello\'s servers indefinitely under their privacy policy. GatherSafe ships as a fully self-hosted Docker stack. Deploy it to your church\'s server or any cloud provider you choose. You own the data, you control the retention policy, and there is no third-party company that can ever be compelled to hand over your congregation\'s security communications.',
+    label: 'Data Security',
+    title: 'Zero-knowledge architecture',
+    body: 'Zello encrypts data in transit with TLS — but Zello holds the keys. If their servers are breached or compelled by law enforcement, your communications are exposed. GatherSafe\'s server never holds a key that can decrypt a single message or audio stream. Messages are encrypted on-device before transmission using the Signal Protocol. Even if our servers were completely compromised, an attacker would find only unreadable ciphertext. Your congregation\'s security communications stay yours.',
     color: 'green' as const,
   },
 ];

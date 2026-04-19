@@ -57,8 +57,6 @@ const PLANS = [
       'Unlimited members',
       'Everything in Standard',
       'Multi-campus support',
-      'Dedicated onboarding',
-      'Custom integrations',
     ],
     cta: 'Contact Us',
   },
