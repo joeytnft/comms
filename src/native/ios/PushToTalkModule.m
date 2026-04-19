@@ -71,9 +71,11 @@ RCT_EXPORT_METHOD(initialize:(NSString *)channelId
                                 restorationDelegate:self
                                   completionHandler:^(PTChannelManager *mgr, NSError *err) {
             if (err) { reject(@"PTT_INIT_ERROR", err.localizedDescription, err); return; }
-            weak->_channelManager = mgr;
-            [mgr requestJoinChannelWithUUID:weak->_channelUUID
-                                 descriptor:weak->_channelDescriptor];
+            __strong typeof(weak) strong = weak;
+            if (!strong) { resolve(nil); return; }
+            strong->_channelManager = mgr;
+            [mgr requestJoinChannelWithUUID:strong->_channelUUID
+                                 descriptor:strong->_channelDescriptor];
             resolve(nil);
         }];
         return;
