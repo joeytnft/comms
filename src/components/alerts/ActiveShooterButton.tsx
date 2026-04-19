@@ -103,7 +103,7 @@ export function ActiveShooterButton() {
       setConfirmVisible(false);
       resetToIdle();
     }
-  }, [triggerAlert, myLocation, resetToIdle]);
+  }, [triggerAlert, resetToIdle]);
 
   const isPrimed = buttonState === 'primed';
 
