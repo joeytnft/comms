@@ -25,9 +25,6 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.gathersafeapp.app",
       "googleServicesFile": "./GoogleService-Info.plist",
-      "entitlements": {
-        "com.apple.developer.usernotifications.critical-alerts": true
-      },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "GatherSafe needs your location to share with your security team.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "GatherSafe needs background location to keep your team informed of your position.",
