@@ -8,12 +8,15 @@ import { ENDPOINTS } from '@/api/endpoints';
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const data = notification.request.content.data as Record<string, unknown>;
+    const isCritical = data?.alertType === 'ACTIVE_SHOOTER';
     const isAlert = data?.type === 'alert';
     return {
       shouldShowBanner: true,
       shouldShowList: true,
-      shouldPlaySound: isAlert,
+      shouldPlaySound: isAlert || isCritical,
       shouldSetBadge: false,
+      // Critical alerts override the app's own sound settings
+      ...(isCritical ? { shouldPlaySound: true } : {}),
     };
   },
 });
@@ -41,6 +44,26 @@ export const notificationService = {
 
     // Create notification channels on Android
     if (Platform.OS === 'android') {
+      // Critical safety alerts — bypasses Do Not Disturb
+      await Notifications.setNotificationChannelAsync('critical-alerts', {
+        name: 'Critical Safety Alerts',
+        description: 'Active shooter and other life-safety emergencies. Always audible.',
+        importance: Notifications.AndroidImportance.MAX,
+        sound: 'default',
+        enableVibrate: true,
+        vibrationPattern: [0, 500, 200, 500, 200, 500],
+        bypassDnd: true,
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+        audioAttributes: {
+          usage: Notifications.AndroidAudioUsage.ALARM,
+          contentType: Notifications.AndroidAudioContentType.SONIFICATION,
+          flags: {
+            enforceAudibility: true,
+            requestHardwareAv: false,
+          },
+        },
+      });
+
       await Notifications.setNotificationChannelAsync('alerts', {
         name: 'Alerts',
         importance: Notifications.AndroidImportance.MAX,
@@ -53,6 +76,18 @@ export const notificationService = {
         name: 'Messages',
         importance: Notifications.AndroidImportance.DEFAULT,
         sound: 'default',
+      });
+    }
+
+    // Request iOS Critical Alert permission (requires Apple entitlement approval)
+    if (Platform.OS === 'ios') {
+      await Notifications.requestPermissionsAsync({
+        ios: {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+          allowCriticalAlerts: true,
+        },
       });
     }
 

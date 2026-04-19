@@ -6,12 +6,15 @@ import { logger } from '../../utils/logger';
 type ExpoPushToken = string;
 interface ExpoPushMessage {
   to: string | string[];
-  sound?: 'default' | null;
+  // 'default' for standard alerts; critical object for life-safety emergencies
+  sound?: 'default' | null | { critical: boolean; volume: number; name: string };
   title?: string;
   body?: string;
   priority?: 'default' | 'normal' | 'high';
   data?: Record<string, unknown>;
   channelId?: string;
+  // iOS: ttl in seconds; 0 = discard if undeliverable
+  expiration?: number;
 }
 
 // expo-server-sdk is ESM-only; use dynamic import to avoid CJS interop error
@@ -25,6 +28,55 @@ function getExpo() {
     }));
   }
   return _expoCache;
+}
+
+// ── Critical Alert (Active Shooter) ──────────────────────────────────────────
+// iOS: requires com.apple.developer.usernotifications.critical-alerts entitlement
+// from Apple (must be manually requested at developer.apple.com/contact/request/).
+// The `sound.critical: true` field bypasses mute switch and Do Not Disturb.
+// Android: routes to the `critical-alerts` channel which has bypassDnd + ALARM usage.
+export async function sendCriticalAlertPushNotification(
+  organizationId: string,
+  alertId: string,
+  triggeredByName: string,
+): Promise<void> {
+  const { expo, Expo } = await getExpo();
+
+  const users = await prisma.user.findMany({
+    where: { organizationId, expoPushToken: { not: null } },
+    select: { expoPushToken: true },
+  });
+
+  const tokens = users
+    .map((u) => u.expoPushToken!)
+    .filter((t) => Expo.isExpoPushToken(t));
+
+  if (tokens.length === 0) return;
+
+  const messages: ExpoPushMessage[] = tokens.map((token) => ({
+    to: token as ExpoPushToken,
+    // iOS Critical Alert — bypasses mute and Do Not Disturb at full volume
+    sound: { critical: true, volume: 1.0, name: 'default' },
+    title: '🚨 ACTIVE SHOOTER',
+    body: `${triggeredByName} has reported an active shooter. Respond immediately.`,
+    priority: 'high',
+    // Expire quickly — a stale active-shooter alert is worse than none
+    expiration: Math.floor(Date.now() / 1000) + 300, // 5 minutes
+    data: { alertId, level: 'EMERGENCY', alertType: 'ACTIVE_SHOOTER', type: 'alert' },
+    // Android: routes to the bypassDnd critical-alerts channel
+    channelId: 'critical-alerts',
+  }));
+
+  const chunks = expo.chunkPushNotifications(messages);
+  for (const chunk of chunks) {
+    try {
+      await expo.sendPushNotificationsAsync(chunk);
+    } catch (err) {
+      logger.error({ err }, '[Push] Failed to send critical alert notifications chunk');
+    }
+  }
+
+  logger.info(`[Push] Sent CRITICAL ALERT to ${tokens.length} devices`);
 }
 
 export async function sendAlertPushNotifications(

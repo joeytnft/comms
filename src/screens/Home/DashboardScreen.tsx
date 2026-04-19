@@ -11,6 +11,7 @@ import { useAlertStore } from '@/store/useAlertStore';
 import { useIncidentStore } from '@/store/useIncidentStore';
 import { MainTabParamList } from '@/navigation/MainTabNavigator';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
+import { ActiveShooterButton } from '@/components/alerts/ActiveShooterButton';
 
 type DashboardNav = BottomTabNavigationProp<MainTabParamList>;
 
@@ -83,6 +84,11 @@ export function DashboardScreen() {
         <View style={styles.statusCard}>
           <View style={styles.statusDot} />
           <Text style={styles.statusText}>System Active</Text>
+        </View>
+
+        {/* Active Shooter emergency button */}
+        <View style={styles.criticalSection}>
+          <ActiveShooterButton />
         </View>
 
         {/* Quick actions grid */}
@@ -268,5 +274,8 @@ const styles = StyleSheet.create({
     color: COLORS.textInverse,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  criticalSection: {
+    marginBottom: SPACING.lg,
   },
 });

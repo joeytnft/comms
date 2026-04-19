@@ -25,6 +25,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.gathersafeapp.app",
       "googleServicesFile": "./GoogleService-Info.plist",
+      "entitlements": {
+        "com.apple.developer.usernotifications.critical-alerts": true
+      },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "GatherSafe needs your location to share with your security team.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "GatherSafe needs background location to keep your team informed of your position.",
@@ -59,7 +62,8 @@
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_ADMIN",
-        "android.permission.BLUETOOTH_CONNECT"
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_NOTIFICATION_POLICY"
       ]
     },
     "plugins": [
