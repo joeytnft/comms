@@ -465,6 +465,28 @@ const addXcodeTargets = (config) =>
         xcodeProject.addSourceFile(name, { target: widgetTargetUUID }, widgetGroupUUID);
       }
 
+      // addSourceFile() ignores the { target } option in some versions of the
+      // xcode npm package and falls back to the first (main app) target's Sources
+      // phase. In Expo SDK 53+ the generated AppDelegate.swift is annotated with
+      // @main/@UIApplicationMain, so compiling GatherSafeLiveActivityBundle.swift
+      // (also @main) in the same module produces "'main' attribute can only apply
+      // to one type in a module".
+      // Purge ONLY the widget-exclusive files from the main target's Sources.
+      // GatherSafeActivityAttributes.swift is intentionally in BOTH targets and
+      // must not be removed from main (LiveActivityModule.swift depends on it).
+      const widgetOnlyNames  = new Set([
+        'GatherSafeLiveActivity.swift',
+        'GatherSafeLiveActivityBundle.swift',
+      ]);
+      const allBuildFiles    = xcodeProject.pbxBuildFileSection();
+      const mainSourcesPhase = xcodeProject.pbxSourcesBuildPhaseObj(mainTargetUUID);
+      if (mainSourcesPhase?.files) {
+        mainSourcesPhase.files = mainSourcesPhase.files.filter((f) => {
+          const name = (allBuildFiles[`${f.value}_comment`] ?? '').replace(/ in Sources$/, '');
+          return !widgetOnlyNames.has(name);
+        });
+      }
+
       // Weak-link WidgetKit + ActivityKit to widget target
       xcodeProject.addFramework('WidgetKit.framework',  { weak: false, target: widgetTargetUUID });
       xcodeProject.addFramework('SwiftUI.framework',    { weak: false, target: widgetTargetUUID });
