@@ -278,6 +278,22 @@ export function MembersScreen() {
                 />
               </View>
             )}
+
+            {isAdmin && editTarget && (
+              <TouchableOpacity
+                style={styles.qualificationsLink}
+                onPress={() => {
+                  closeEdit();
+                  navigation.navigate('Training', {
+                    screen: 'MemberQualifications',
+                    params: { userId: editTarget.id, memberName: editTarget.displayName },
+                  } as never);
+                }}
+              >
+                <Text style={styles.qualificationsLinkText}>View / Manage Qualifications</Text>
+                <Text style={styles.chevron}>{'>'}</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </SafeAreaView>
       </Modal>
@@ -414,4 +430,16 @@ const styles = StyleSheet.create({
   toggleInfo: { flex: 1, marginRight: SPACING.md },
   toggleLabel: { ...TYPOGRAPHY.body, color: COLORS.textPrimary, fontWeight: '600' },
   toggleSub: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, marginTop: 2 },
+  qualificationsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.surface,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.lg,
+    ...SHADOWS.sm,
+  },
+  qualificationsLinkText: { ...TYPOGRAPHY.body, color: COLORS.accent, fontWeight: '600' },
+  chevron: { ...TYPOGRAPHY.body, color: COLORS.textMuted },
 });

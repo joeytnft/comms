@@ -24,6 +24,8 @@ import { scheduleRoutes } from './routes/schedule';
 import { campusRoutes } from './routes/campuses';
 import { responsePlanRoutes } from './routes/responsePlans';
 import { integrationRoutes } from './routes/integrations';
+import { trainingRoutes } from './routes/training';
+import { qualificationRoutes } from './routes/qualifications';
 import { setupSocketHandlers } from './sockets/socketHandler';
 
 export async function buildApp() {
@@ -110,6 +112,8 @@ export async function buildApp() {
   app.register(campusRoutes, { prefix: '/campuses' });
   app.register(responsePlanRoutes, { prefix: '/response-plans' });
   app.register(integrationRoutes, { prefix: '/integrations' });
+  app.register(trainingRoutes, { prefix: '/training' });
+  app.register(qualificationRoutes, { prefix: '/qualifications' });
 
   // Socket.IO setup
   app.addHook('onReady', async () => {

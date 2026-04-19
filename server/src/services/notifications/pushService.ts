@@ -76,6 +76,55 @@ export async function sendAlertPushNotifications(
   logger.info(`[Push] Sent alert notifications to ${tokens.length} devices`);
 }
 
+export async function sendTrainingSignupNotification(
+  organizationId: string,
+  trainingEventId: string,
+  trainingTitle: string,
+  memberName: string,
+): Promise<void> {
+  const { expo, Expo } = await getExpo();
+
+  // Send only to org admins and group admins
+  const admins = await prisma.user.findMany({
+    where: {
+      organizationId,
+      OR: [
+        { isOrgAdmin: true },
+        { memberships: { some: { role: 'ADMIN' } } },
+      ],
+      expoPushToken: { not: null },
+    },
+    select: { expoPushToken: true },
+  });
+
+  const tokens = admins
+    .map((u) => u.expoPushToken!)
+    .filter((t) => Expo.isExpoPushToken(t));
+
+  if (tokens.length === 0) return;
+
+  const messages: ExpoPushMessage[] = tokens.map((token) => ({
+    to: token as ExpoPushToken,
+    sound: 'default',
+    title: 'New Training Signup',
+    body: `${memberName} signed up for "${trainingTitle}"`,
+    priority: 'normal',
+    data: { trainingEventId, type: 'training_signup' },
+    channelId: 'training',
+  }));
+
+  const chunks = expo.chunkPushNotifications(messages);
+  for (const chunk of chunks) {
+    try {
+      await expo.sendPushNotificationsAsync(chunk);
+    } catch (err) {
+      logger.error({ err }, '[Push] Failed to send training signup notifications chunk');
+    }
+  }
+
+  logger.info(`[Push] Sent training signup notifications to ${tokens.length} admins`);
+}
+
 export async function sendMessagePushNotification(
   recipientToken: string,
   senderName: string,

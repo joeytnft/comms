@@ -7,3 +7,5 @@ export * from './location';
 export * from './ptt';
 export * from './subscription';
 export * from './schedule';
+export * from './training';
+export * from './qualification';

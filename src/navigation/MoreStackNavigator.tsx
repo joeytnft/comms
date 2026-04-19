@@ -7,6 +7,7 @@ import { PTTConfigScreen } from '@/screens/Settings/PTTConfigScreen';
 import { TeamMapScreen } from '@/screens/Map/TeamMapScreen';
 import { IncidentStackNavigator } from './IncidentStackNavigator';
 import { ScheduleStackNavigator } from './ScheduleStackNavigator';
+import { TrainingStackNavigator } from './TrainingStackNavigator';
 import { CampusManagementScreen } from '@/screens/Settings/CampusManagementScreen';
 import { PinSetupScreen } from '@/screens/Auth/PinSetupScreen';
 import { EditProfileScreen } from '@/screens/Settings/EditProfileScreen';
@@ -27,6 +28,7 @@ export type MoreStackParamList = {
   PinSetup: undefined;
   Members: undefined;
   PlanningCenter: undefined;
+  Training: undefined;
 };
 
 const Stack = createNativeStackNavigator<MoreStackParamList>();
@@ -97,6 +99,11 @@ export function MoreStackNavigator() {
       <Stack.Screen
         name="PlanningCenter"
         component={PlanningCenterScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="Training"
+        component={TrainingStackNavigator}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>
