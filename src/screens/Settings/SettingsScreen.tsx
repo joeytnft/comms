@@ -179,6 +179,22 @@ export function SettingsScreen() {
               <Text style={styles.chevron}>{'>'}</Text>
             </Pressable>
           )}
+          <Pressable
+            style={styles.settingRow}
+            onPress={() => navigation.navigate('Training')}
+          >
+            <Text style={styles.settingLabel}>Training Events</Text>
+            <Text style={styles.chevron}>{'>'}</Text>
+          </Pressable>
+          {isOrgAdmin && (
+            <Pressable
+              style={styles.settingRow}
+              onPress={() => navigation.navigate('Training', { screen: 'QualificationTypes' })}
+            >
+              <Text style={styles.settingLabel}>Qualification Types</Text>
+              <Text style={styles.chevron}>{'>'}</Text>
+            </Pressable>
+          )}
         </View>
 
         {organization && (

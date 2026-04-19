@@ -137,4 +137,26 @@ export const ENDPOINTS = {
     UPDATE: (id: string) => `/response-plans/${id}`,
     DELETE: (id: string) => `/response-plans/${id}`,
   },
+
+  // Training Events
+  TRAINING: {
+    LIST: '/training',
+    CREATE: '/training',
+    GET: (id: string) => `/training/${id}`,
+    UPDATE: (id: string) => `/training/${id}`,
+    DELETE: (id: string) => `/training/${id}`,
+    SIGNUP: (id: string) => `/training/${id}/signup`,
+    CANCEL_SIGNUP: (id: string) => `/training/${id}/signup`,
+    LIST_SIGNUPS: (id: string) => `/training/${id}/signups`,
+  },
+
+  // Qualifications
+  QUALIFICATIONS: {
+    TYPES: '/qualifications/types',
+    TYPE: (id: string) => `/qualifications/types/${id}`,
+    SUMMARY: '/qualifications/summary',
+    MEMBER: (userId: string) => `/qualifications/members/${userId}`,
+    REVOKE: (userId: string, qualTypeId: string) =>
+      `/qualifications/members/${userId}/${qualTypeId}`,
+  },
 } as const;
