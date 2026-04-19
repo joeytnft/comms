@@ -4,7 +4,7 @@ import { ZelloComparison } from '@/components/ZelloComparison';
 export const metadata: Metadata = {
   title: 'GatherSafe vs. Zello – Church Security Communication Comparison',
   description:
-    'See why GatherSafe beats Zello for church security: end-to-end encryption, group hierarchy, panic alerts, incident logging, and full data sovereignty — all features Zello lacks.',
+    'See why GatherSafe beats Zello for church security: end-to-end encryption, group hierarchy, panic alerts, and incident logging — all features Zello lacks.',
   keywords: [
     'GatherSafe vs Zello',
     'Zello alternative for churches',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'GatherSafe vs. Zello – Why Purpose-Built Wins for Church Security',
     description:
-      'End-to-end encryption, command hierarchy, panic alerts, and full self-hosting. See every feature Zello is missing for church security teams.',
+      'End-to-end encryption, zero-knowledge server, command hierarchy, and panic alerts. See every feature Zello is missing for church security teams.',
     url: 'https://gathersafeapp.com/compare/zello',
     type: 'website',
   },
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'GatherSafe vs. Zello – Church Security PTT Comparison',
     description:
-      'End-to-end encryption, command hierarchy, panic alerts, and full self-hosting. See every feature Zello is missing.',
+      'End-to-end encryption, zero-knowledge server, command hierarchy, and panic alerts. See every feature Zello is missing.',
   },
 };
 

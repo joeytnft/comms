@@ -1,6 +1,6 @@
 import { prisma } from '../../config/database';
 import { NotFoundError, AuthorizationError } from '../../utils/errors';
-import { sendAlertPushNotifications } from '../notifications/pushService';
+import { sendAlertPushNotifications, sendCriticalAlertPushNotification } from '../notifications/pushService';
 
 const ALERT_SELECT = {
   id: true,
@@ -83,17 +83,21 @@ export async function createAlert(params: {
     return prisma.alert.findUniqueOrThrow({ where: { id: alert.id }, select: ALERT_SELECT });
   }
 
-  // Send push notifications to org members (fire-and-forget)
+  // Send push notifications — Critical Alert path for active shooter events
   const triggererName = alert.triggeredBy.displayName;
-  sendAlertPushNotifications(
-    params.organizationId,
-    alert.id,
-    alert.level,
-    alert.message ?? null,
-    triggererName,
-  ).catch(() => {
-    // Push notifications are best-effort; don't block the response
-  });
+  if (params.alertType === 'ACTIVE_SHOOTER') {
+    sendCriticalAlertPushNotification(params.organizationId, alert.id, triggererName).catch(
+      () => {},
+    );
+  } else {
+    sendAlertPushNotifications(
+      params.organizationId,
+      alert.id,
+      alert.level,
+      alert.message ?? null,
+      triggererName,
+    ).catch(() => {});
+  }
 
   return alert;
 }
