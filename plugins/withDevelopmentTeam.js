@@ -8,8 +8,9 @@ module.exports = function withDevelopmentTeam(config, { developmentTeam }) {
       const buildConfig = configurations[key];
       if (buildConfig && buildConfig.buildSettings) {
         buildConfig.buildSettings.DEVELOPMENT_TEAM = developmentTeam;
-        buildConfig.buildSettings.ARCHS = 'arm64';
-        buildConfig.buildSettings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64';
+        if (buildConfig.buildSettings.PRODUCT_NAME !== undefined) {
+          buildConfig.buildSettings.ARCHS = 'arm64';
+        }
       }
     }
     return mod;
