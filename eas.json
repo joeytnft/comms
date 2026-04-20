@@ -36,7 +36,8 @@
       "channel": "production",
       "ios": {
         "buildConfiguration": "Release",
-        "credentialsSource": "local"
+        "credentialsSource": "local",
+        "image": "macos-sonoma-14.4-xcode-15.4"
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.gathersafeapp.com",
