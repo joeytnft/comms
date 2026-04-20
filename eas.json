@@ -10,7 +10,7 @@
       "channel": "development",
       "ios": {
         "simulator": false,
-        "credentialsSource": "local"
+        "credentialsSource": "remote"
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.gathersafeapp.com",
