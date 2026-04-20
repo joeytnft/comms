@@ -5,9 +5,11 @@ module.exports = function withDevelopmentTeam(config, { developmentTeam }) {
     const xcodeProject = mod.modResults;
     const configurations = xcodeProject.pbxXCBuildConfigurationSection();
     for (const key of Object.keys(configurations)) {
-      const config = configurations[key];
-      if (config && config.buildSettings) {
-        config.buildSettings.DEVELOPMENT_TEAM = developmentTeam;
+      const buildConfig = configurations[key];
+      if (buildConfig && buildConfig.buildSettings) {
+        buildConfig.buildSettings.DEVELOPMENT_TEAM = developmentTeam;
+        buildConfig.buildSettings.ARCHS = 'arm64';
+        buildConfig.buildSettings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64';
       }
     }
     return mod;
