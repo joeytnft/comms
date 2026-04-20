@@ -5,7 +5,7 @@
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "sh -c 'npx prisma migrate deploy && node dist/index.js'",
+    "startCommand": "sh -c 'npx prisma migrate resolve --rolled-back 20260420000001_migrate_subscription_tier_data 2>/dev/null; npx prisma migrate deploy && node dist/index.js'",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE",
