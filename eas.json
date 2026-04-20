@@ -15,7 +15,7 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.gathersafeapp.com",
         "EXPO_PUBLIC_SOCKET_URL": "wss://api.gathersafeapp.com",
-        "EXPO_PUBLIC_LIVEKIT_URL": "wss://livekit.gathersafeapp.com"
+        "EXPO_PUBLIC_LIVEKIT_URL": "wss://guardian-comms-kumpwnje.livekit.cloud"
       }
     },
     "preview": {
@@ -28,7 +28,7 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.gathersafeapp.com",
         "EXPO_PUBLIC_SOCKET_URL": "wss://api.gathersafeapp.com",
-        "EXPO_PUBLIC_LIVEKIT_URL": "wss://livekit.gathersafeapp.com"
+        "EXPO_PUBLIC_LIVEKIT_URL": "wss://guardian-comms-kumpwnje.livekit.cloud"
       }
     },
     "production": {
@@ -41,7 +41,7 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.gathersafeapp.com",
         "EXPO_PUBLIC_SOCKET_URL": "wss://api.gathersafeapp.com",
-        "EXPO_PUBLIC_LIVEKIT_URL": "wss://livekit.gathersafeapp.com"
+        "EXPO_PUBLIC_LIVEKIT_URL": "wss://guardian-comms-kumpwnje.livekit.cloud"
       }
     }
   },

@@ -439,7 +439,7 @@ const addXcodeTargets = (config) =>
           cfg.buildSettings['SKIP_INSTALL']               = 'YES';
           cfg.buildSettings['INFOPLIST_FILE']             = `${WIDGET_NAME}/Info.plist`;
           cfg.buildSettings['MARKETING_VERSION']          = config.version ?? '0.1.0';
-          cfg.buildSettings['CURRENT_PROJECT_VERSION']    = '1';
+          cfg.buildSettings['CURRENT_PROJECT_VERSION']    = String(config.ios?.buildNumber ?? config.android?.versionCode ?? '1');
           cfg.buildSettings['PRODUCT_BUNDLE_IDENTIFIER']  = widgetBundleId;
           cfg.buildSettings['PRODUCT_NAME']               = `"${WIDGET_NAME}"`;
           cfg.buildSettings['CODE_SIGN_STYLE']            = codeSignStyle;
