@@ -71,6 +71,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   fetchCustomerInfo: async () => {
     try {
       const customerInfo = await revenueCatService.getCustomerInfo();
+      if (!customerInfo) return;
       set({
         customerInfo,
         isPro: revenueCatService.hasAnyPaidEntitlement(customerInfo),
@@ -86,10 +87,12 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
       const purchased = await revenueCatService.presentPaywall();
       if (purchased) {
         const customerInfo = await revenueCatService.getCustomerInfo();
-        set({
-          customerInfo,
-          isPro: revenueCatService.hasAnyPaidEntitlement(customerInfo),
-        });
+        if (customerInfo) {
+          set({
+            customerInfo,
+            isPro: revenueCatService.hasAnyPaidEntitlement(customerInfo),
+          });
+        }
       }
       return purchased;
     } finally {
@@ -101,15 +104,18 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
     await revenueCatService.presentCustomerCenter();
     // Refresh customer info after Customer Center is dismissed (user may have changed plan)
     const customerInfo = await revenueCatService.getCustomerInfo();
-    set({
-      customerInfo,
-      isPro: revenueCatService.hasAnyPaidEntitlement(customerInfo),
-    });
+    if (customerInfo) {
+      set({
+        customerInfo,
+        isPro: revenueCatService.hasAnyPaidEntitlement(customerInfo),
+      });
+    }
   },
 
   restorePurchases: async () => {
     try {
       const customerInfo = await revenueCatService.restorePurchases();
+      if (!customerInfo) return false;
       const isPro = revenueCatService.hasAnyPaidEntitlement(customerInfo);
       set({ customerInfo, isPro });
       return isPro;

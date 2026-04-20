@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { Platform, NativeModules } from 'react-native';
 import Purchases, {
   LOG_LEVEL,
   CustomerInfo,
@@ -19,8 +19,19 @@ const PAID_ENTITLEMENTS = [
   REVENUECAT_ENTITLEMENT_STARTER,
 ] as const;
 
+function isNativeModuleAvailable(): boolean {
+  return Boolean(NativeModules.RNPurchases);
+}
+
 export const revenueCatService = {
   configure(userId?: string): void {
+    if (!isNativeModuleAvailable()) {
+      if (__DEV__) {
+        console.warn('[RevenueCat] Native module unavailable — skipping configure (use a dev build, not Expo Go)');
+      }
+      return;
+    }
+
     if (__DEV__) {
       Purchases.setLogLevel(LOG_LEVEL.VERBOSE);
     }
@@ -31,20 +42,24 @@ export const revenueCatService = {
     Purchases.configure({ apiKey, appUserID: userId ?? null });
   },
 
-  async identify(userId: string): Promise<CustomerInfo> {
+  async identify(userId: string): Promise<CustomerInfo | null> {
+    if (!isNativeModuleAvailable()) return null;
     const { customerInfo } = await Purchases.logIn(userId);
     return customerInfo;
   },
 
-  async logOut(): Promise<CustomerInfo> {
+  async logOut(): Promise<CustomerInfo | null> {
+    if (!isNativeModuleAvailable()) return null;
     return Purchases.logOut();
   },
 
-  async getCustomerInfo(): Promise<CustomerInfo> {
+  async getCustomerInfo(): Promise<CustomerInfo | null> {
+    if (!isNativeModuleAvailable()) return null;
     return Purchases.getCustomerInfo();
   },
 
-  async getOfferings(): Promise<PurchasesOfferings> {
+  async getOfferings(): Promise<PurchasesOfferings | null> {
+    if (!isNativeModuleAvailable()) return null;
     return Purchases.getOfferings();
   },
 
@@ -60,11 +75,13 @@ export const revenueCatService = {
     return typeof customerInfo.entitlements.active[entitlementId] !== 'undefined';
   },
 
-  async restorePurchases(): Promise<CustomerInfo> {
+  async restorePurchases(): Promise<CustomerInfo | null> {
+    if (!isNativeModuleAvailable()) return null;
     return Purchases.restorePurchases();
   },
 
   async presentPaywall(): Promise<boolean> {
+    if (!isNativeModuleAvailable()) return false;
     const result: PAYWALL_RESULT = await RevenueCatUI.presentPaywall();
     switch (result) {
       case PAYWALL_RESULT.PURCHASED:
@@ -76,6 +93,7 @@ export const revenueCatService = {
   },
 
   async presentCustomerCenter(): Promise<void> {
+    if (!isNativeModuleAvailable()) return;
     await RevenueCatUI.presentCustomerCenter();
   },
 };
