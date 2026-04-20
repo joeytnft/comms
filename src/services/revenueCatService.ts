@@ -21,23 +21,30 @@ const PAID_ENTITLEMENTS = [
   REVENUECAT_ENTITLEMENT_STARTER,
 ] as const;
 
-// Dynamic requires prevent a crash when the native module isn't linked (e.g. Expo Go).
-// We cache after the first successful load.
-let _Purchases: (typeof Purchases & { LOG_LEVEL: Record<string, string> }) | null = null;
-let _RevenueCatUI: typeof RevenueCatUI | null = null;
-let _PAYWALL_RESULT: typeof PAYWALL_RESULT | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnySDK = any;
 
-function loadSDK(): (typeof Purchases & { LOG_LEVEL: Record<string, string> }) | null {
-  if (_Purchases) return _Purchases;
+// Dynamic requires prevent a crash when the native module isn't linked (e.g. Expo Go).
+// NativeModules.RNPurchases is present in both old-arch and new-arch interop mode.
+let _sdk: AnySDK = null;
+let _sdkChecked = false;
+let _RevenueCatUI: AnySDK = null;
+let _PAYWALL_RESULT: AnySDK = null;
+
+function loadSDK(): AnySDK {
+  if (_sdkChecked) return _sdk;
+  _sdkChecked = true;
   if (!NativeModules.RNPurchases) return null;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mod = require('react-native-purchases') as any;
-    _Purchases = mod.default ?? mod;
-    return _Purchases;
+    const mod = require('react-native-purchases');
+    // LOG_LEVEL is a named export, not a property of the default Purchases class.
+    // Merge it onto the SDK reference so callers can do sdk.LOG_LEVEL.
+    const PurchasesClass = mod.default ?? mod;
+    _sdk = Object.assign(PurchasesClass, { LOG_LEVEL: mod.LOG_LEVEL ?? PurchasesClass.LOG_LEVEL });
   } catch {
-    return null;
+    _sdk = null;
   }
+  return _sdk;
 }
 
 function loadUI(): { sdk: typeof RevenueCatUI; PAYWALL_RESULT: typeof PAYWALL_RESULT } | null {
@@ -46,11 +53,10 @@ function loadUI(): { sdk: typeof RevenueCatUI; PAYWALL_RESULT: typeof PAYWALL_RE
   }
   if (!NativeModules.RNPurchases) return null;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mod = require('react-native-purchases-ui') as any;
+    const mod = require('react-native-purchases-ui');
     _RevenueCatUI = mod.default ?? mod;
     _PAYWALL_RESULT = mod.PAYWALL_RESULT;
-    return { sdk: _RevenueCatUI!, PAYWALL_RESULT: _PAYWALL_RESULT! };
+    return { sdk: _RevenueCatUI, PAYWALL_RESULT: _PAYWALL_RESULT };
   } catch {
     return null;
   }
@@ -69,14 +75,18 @@ export const revenueCatService = {
       return;
     }
 
-    if (__DEV__) {
-      sdk.setLogLevel(sdk.LOG_LEVEL.VERBOSE);
+    try {
+      if (__DEV__ && sdk.LOG_LEVEL) {
+        sdk.setLogLevel(sdk.LOG_LEVEL.VERBOSE);
+      }
+      const apiKey =
+        Platform.OS === 'ios' ? REVENUECAT_IOS_API_KEY : REVENUECAT_ANDROID_API_KEY;
+      sdk.configure({ apiKey, appUserID: userId ?? null });
+    } catch (e) {
+      if (__DEV__) {
+        console.warn('[RevenueCat] configure() failed:', e);
+      }
     }
-
-    const apiKey =
-      Platform.OS === 'ios' ? REVENUECAT_IOS_API_KEY : REVENUECAT_ANDROID_API_KEY;
-
-    sdk.configure({ apiKey, appUserID: userId ?? null });
   },
 
   async identify(userId: string): Promise<CustomerInfo | null> {
