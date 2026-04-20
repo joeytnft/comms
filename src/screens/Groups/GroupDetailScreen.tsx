@@ -24,7 +24,7 @@ export function GroupDetailScreen({ navigation, route }: Props) {
   const { currentGroup, isLoading, fetchGroup, addMember, removeMember, deleteGroup, updateGroup, generateInvite, revokeInvite, clearCurrentGroup, assignGroupCampus } = useGroupStore();
   const { campuses, fetchCampuses } = useCampusStore();
   const { subscription } = useSubscriptionStore();
-  const isEnterprise = subscription?.tier === 'ENTERPRISE';
+  const isEnterprise = subscription?.tier === 'PRO';
   const [showAddMember, setShowAddMember] = useState(false);
   const [memberEmail, setMemberEmail] = useState('');
   const [isAdding, setIsAdding] = useState(false);

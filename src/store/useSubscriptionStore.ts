@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { CustomerInfo } from 'react-native-purchases';
 import { subscriptionService } from '@/services/subscriptionService';
-import { revenueCatService, REVENUECAT_ENTITLEMENT_ID } from '@/services/revenueCatService';
+import { revenueCatService } from '@/services/revenueCatService';
 import { OrganizationSubscription, SubscriptionPlan, SubscriptionTier } from '@/types/subscription';
 
 interface SubscriptionState {
@@ -34,9 +34,9 @@ interface SubscriptionState {
 
 const TIER_LABELS: Record<SubscriptionTier, string> = {
   FREE: 'Free',
-  BASIC: 'Basic',
-  STANDARD: 'Standard',
-  ENTERPRISE: 'Enterprise',
+  STARTER: 'Starter',
+  TEAM: 'Team',
+  PRO: 'Ministry Pro',
 };
 
 export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
@@ -73,7 +73,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
       const customerInfo = await revenueCatService.getCustomerInfo();
       set({
         customerInfo,
-        isPro: revenueCatService.hasEntitlement(customerInfo, REVENUECAT_ENTITLEMENT_ID),
+        isPro: revenueCatService.hasAnyPaidEntitlement(customerInfo),
       });
     } catch {
       // Non-critical — user may be offline or SDK not yet configured
@@ -88,7 +88,7 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
         const customerInfo = await revenueCatService.getCustomerInfo();
         set({
           customerInfo,
-          isPro: revenueCatService.hasEntitlement(customerInfo, REVENUECAT_ENTITLEMENT_ID),
+          isPro: revenueCatService.hasAnyPaidEntitlement(customerInfo),
         });
       }
       return purchased;
@@ -103,14 +103,14 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
     const customerInfo = await revenueCatService.getCustomerInfo();
     set({
       customerInfo,
-      isPro: revenueCatService.hasEntitlement(customerInfo, REVENUECAT_ENTITLEMENT_ID),
+      isPro: revenueCatService.hasAnyPaidEntitlement(customerInfo),
     });
   },
 
   restorePurchases: async () => {
     try {
       const customerInfo = await revenueCatService.restorePurchases();
-      const isPro = revenueCatService.hasEntitlement(customerInfo, REVENUECAT_ENTITLEMENT_ID);
+      const isPro = revenueCatService.hasAnyPaidEntitlement(customerInfo);
       set({ customerInfo, isPro });
       return isPro;
     } catch {

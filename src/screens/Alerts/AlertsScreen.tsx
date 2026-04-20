@@ -109,7 +109,7 @@ export function AlertsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (subscription?.tier === 'ENTERPRISE') fetchCampuses();
+      if (subscription?.tier === 'PRO') fetchCampuses();
       fetchAlerts({ active: true, campusId: activeCampusId });
       if (groups.length === 0) fetchGroups(activeCampusId);
     }, [activeCampusId]),

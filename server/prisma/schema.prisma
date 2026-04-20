@@ -77,9 +77,9 @@ model Campus {
 
 enum SubscriptionTier {
   FREE
-  BASIC
-  STANDARD
-  ENTERPRISE
+  STARTER
+  TEAM
+  PRO
 }
 
 enum SubscriptionStatus {

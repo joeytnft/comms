@@ -8,10 +8,16 @@ import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
 import {
   REVENUECAT_IOS_API_KEY,
   REVENUECAT_ANDROID_API_KEY,
-  REVENUECAT_ENTITLEMENT_ID,
+  REVENUECAT_ENTITLEMENT_STARTER,
+  REVENUECAT_ENTITLEMENT_TEAM,
+  REVENUECAT_ENTITLEMENT_PRO,
 } from '@/config/constants';
 
-export { REVENUECAT_ENTITLEMENT_ID };
+const PAID_ENTITLEMENTS = [
+  REVENUECAT_ENTITLEMENT_PRO,
+  REVENUECAT_ENTITLEMENT_TEAM,
+  REVENUECAT_ENTITLEMENT_STARTER,
+] as const;
 
 export const revenueCatService = {
   configure(userId?: string): void {
@@ -42,10 +48,15 @@ export const revenueCatService = {
     return Purchases.getOfferings();
   },
 
-  hasEntitlement(
-    customerInfo: CustomerInfo,
-    entitlementId: string = REVENUECAT_ENTITLEMENT_ID,
-  ): boolean {
+  /** Returns true if the customer has any active paid entitlement. */
+  hasAnyPaidEntitlement(customerInfo: CustomerInfo): boolean {
+    return PAID_ENTITLEMENTS.some(
+      (id) => typeof customerInfo.entitlements.active[id] !== 'undefined',
+    );
+  },
+
+  /** Returns true if the customer has a specific entitlement active. */
+  hasEntitlement(customerInfo: CustomerInfo, entitlementId: string): boolean {
     return typeof customerInfo.entitlements.active[entitlementId] !== 'undefined';
   },
 

@@ -18,7 +18,7 @@ export function CampusSwitcher() {
   const [open, setOpen] = useState(false);
 
   // Visible to org-level users (owner or admin) with no campus assignment on Enterprise
-  const isEnterprise = subscription?.tier === 'ENTERPRISE';
+  const isEnterprise = subscription?.tier === 'PRO';
   const isOrgLevel = (user?.role === 'owner' || user?.role === 'admin') && !user?.campusId;
   if (!isEnterprise || !isOrgLevel || campuses.length === 0) return null;
 

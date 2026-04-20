@@ -56,7 +56,13 @@ export const CHECKIN_REMINDER_BEFORE_SERVICE = 30; // minutes
 // RevenueCat
 export const REVENUECAT_IOS_API_KEY = 'test_xsolHNSukYwvkgubKXAEXEIoveT';
 export const REVENUECAT_ANDROID_API_KEY = 'test_xsolHNSukYwvkgubKXAEXEIoveT';
-export const REVENUECAT_ENTITLEMENT_ID = 'GatherSafe Pro';
-export const REVENUECAT_PRODUCT_MONTHLY = 'monthly';
-export const REVENUECAT_PRODUCT_YEARLY = 'yearly';
-export const REVENUECAT_PRODUCT_LIFETIME = 'lifetime';
+
+// One entitlement per paid tier — names must match RevenueCat dashboard exactly
+export const REVENUECAT_ENTITLEMENT_STARTER = 'starter';
+export const REVENUECAT_ENTITLEMENT_TEAM = 'team';
+export const REVENUECAT_ENTITLEMENT_PRO = 'pro';
+
+// RevenueCat product identifiers — must match App Store Connect / Google Play product IDs
+export const REVENUECAT_PRODUCT_STARTER = 'starter_monthly';
+export const REVENUECAT_PRODUCT_TEAM = 'team_monthly';
+export const REVENUECAT_PRODUCT_PRO = 'pro_monthly';
