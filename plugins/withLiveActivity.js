@@ -333,7 +333,7 @@ const addXcodeTargets = (config) =>
   withXcodeProject(config, (mod) => {
     const { platformProjectRoot, projectName } = mod.modRequest;
     const xcodeProject  = mod.modResults;
-    const bundleId      = config.ios?.bundleIdentifier ?? 'com.gathersafeapp.app';
+    const bundleId      = config.ios?.bundleIdentifier ?? 'com.gathersafe2.www';
     const widgetBundleId = `${bundleId}.${WIDGET_NAME}`;
     const mainTargetUUID = xcodeProject.getFirstTarget().uuid;
 

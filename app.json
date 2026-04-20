@@ -23,7 +23,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.gathersafeapp.app",
+      "bundleIdentifier": "com.gathersafe2.www",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "GatherSafe needs your location to share with your security team.",
@@ -41,7 +41,7 @@
       }
     },
     "android": {
-      "package": "com.gathersafeapp.app",
+      "package": "com.gathersafe2.www",
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.RECORD_AUDIO",

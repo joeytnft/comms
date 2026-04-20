@@ -52,7 +52,7 @@ const envSchema = z.object({
   APNS_KEY_ID:     z.string().optional(),   // 10-char key ID
   APNS_TEAM_ID:    z.string().optional(),   // 10-char team ID
   APNS_KEY:        z.string().optional(),   // P8 private key contents (newlines as \n)
-  APNS_BUNDLE_ID:  z.string().optional().default('com.gathersafeapp.app'),
+  APNS_BUNDLE_ID:  z.string().optional().default('com.gathersafe2.www'),
   APNS_PRODUCTION: z.string().optional(),   // "true" for production APNs endpoint
 
   // Server
