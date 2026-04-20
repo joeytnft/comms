@@ -39,7 +39,7 @@
         ],
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "6"
+      "buildNumber": "7"
     },
     "android": {
       "package": "com.gathersafe2.www",
@@ -89,7 +89,8 @@
             "minSdkVersion": 26
           },
           "ios": {
-            "deploymentTarget": "15.1"
+            "deploymentTarget": "15.1",
+            "extraPodfileContent": "post_install do |installer|\n  installer.pods_project.targets.each do |target|\n    target.build_configurations.each do |config|\n      config.build_settings['ONLY_ACTIVE_ARCH'] = 'NO'\n    end\n  end\nend"
           }
         }
       ],

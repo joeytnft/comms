@@ -8,9 +8,6 @@ module.exports = function withDevelopmentTeam(config, { developmentTeam }) {
       const buildConfig = configurations[key];
       if (buildConfig && buildConfig.buildSettings) {
         buildConfig.buildSettings.DEVELOPMENT_TEAM = developmentTeam;
-        if (buildConfig.buildSettings.PRODUCT_NAME !== undefined) {
-          buildConfig.buildSettings.ARCHS = 'arm64';
-        }
       }
     }
     return mod;
