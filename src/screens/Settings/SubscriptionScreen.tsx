@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSubscriptionStore } from '@/store/useSubscriptionStore';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/common';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 import { SubscriptionTier } from '@/types/subscription';
@@ -34,6 +35,9 @@ function formatLimit(value: number, label: string): string {
 }
 
 export function SubscriptionScreen() {
+  const { user } = useAuth();
+  const isOrgAdmin = user?.role === 'owner' || user?.role === 'admin';
+
   const {
     subscription,
     plans,
@@ -126,23 +130,31 @@ export function SubscriptionScreen() {
           Only the account creator is billed. Invited members join for free.
         </Text>
 
-        {/* Upgrade / manage CTA */}
-        {isPro ? (
-          <Button
-            title="Manage Subscription"
-            variant="secondary"
-            onPress={handleManageSubscription}
-            style={styles.ctaButton}
-          />
-        ) : (
-          <Button
-            title={isPaywallLoading ? 'Loading…' : 'Upgrade to GatherSafe Pro'}
-            variant="primary"
-            onPress={handleUpgrade}
-            disabled={isPaywallLoading}
-            style={styles.ctaButton}
-          />
-        )}
+        {/* Upgrade / manage CTA — only org owners and admins can purchase */}
+        {isOrgAdmin ? (
+          isPro ? (
+            <Button
+              title="Manage Subscription"
+              variant="secondary"
+              onPress={handleManageSubscription}
+              style={styles.ctaButton}
+            />
+          ) : (
+            <Button
+              title={isPaywallLoading ? 'Loading…' : 'Upgrade to GatherSafe Pro'}
+              variant="primary"
+              onPress={handleUpgrade}
+              disabled={isPaywallLoading}
+              style={styles.ctaButton}
+            />
+          )
+        ) : isPro ? (
+          <View style={styles.memberNotice}>
+            <Text style={styles.memberNoticeText}>
+              Your organization's subscription covers your access.
+            </Text>
+          </View>
+        ) : null}
 
         {/* Plan comparison */}
         <Text style={styles.sectionTitle}>Plans</Text>
@@ -177,7 +189,7 @@ export function SubscriptionScreen() {
                   </Text>
                 ))}
               </View>
-              {!isCurrent && plan.priceMonthly > 0 && !isPro && (
+              {!isCurrent && plan.priceMonthly > 0 && !isPro && isOrgAdmin && (
                 <Button
                   title={`Upgrade to ${plan.name}`}
                   variant="primary"
@@ -201,23 +213,25 @@ export function SubscriptionScreen() {
           />
         )}
 
-        {/* Restore purchases + Customer Center links */}
-        <View style={styles.footer}>
-          <Button
-            title="Restore Purchases"
-            variant="ghost"
-            onPress={handleRestorePurchases}
-            style={styles.footerButton}
-          />
-          {isPro && (
+        {/* Restore purchases + Customer Center links — admin only */}
+        {isOrgAdmin && (
+          <View style={styles.footer}>
             <Button
-              title="Customer Center"
+              title="Restore Purchases"
               variant="ghost"
-              onPress={handleManageSubscription}
+              onPress={handleRestorePurchases}
               style={styles.footerButton}
             />
-          )}
-        </View>
+            {isPro && (
+              <Button
+                title="Customer Center"
+                variant="ghost"
+                onPress={handleManageSubscription}
+                style={styles.footerButton}
+              />
+            )}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -353,5 +367,18 @@ const styles = StyleSheet.create({
   },
   footerButton: {
     alignSelf: 'center',
+  },
+  memberNotice: {
+    backgroundColor: COLORS.surface,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.lg,
+    borderWidth: 1,
+    borderColor: COLORS.gray700,
+  },
+  memberNoticeText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
   },
 });

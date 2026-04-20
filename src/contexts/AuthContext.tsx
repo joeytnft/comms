@@ -36,7 +36,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Identify RevenueCat customer, fetch subscription and register push token on login
   useEffect(() => {
     if (isAuthenticated && user) {
-      revenueCatService.identify(user.id).catch(() => {
+      // Use the organization ID so all org members share the same RevenueCat
+      // customer record — the org owner's purchase covers the whole team.
+      revenueCatService.identify(user.organizationId).catch(() => {
         // Non-fatal — SDK will continue in anonymous mode
       });
       fetchSubscription();
