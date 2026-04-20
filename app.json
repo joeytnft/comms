@@ -38,7 +38,8 @@
           "remote-notification"
         ],
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "buildNumber": "2"
     },
     "android": {
       "package": "com.gathersafe2.www",
@@ -64,6 +65,7 @@
       ]
     },
     "plugins": [
+      ["./plugins/withDevelopmentTeam", { "developmentTeam": "VXK7V8D63S" }],
       "./plugins/withPushToTalk",
       "./plugins/withLiveActivity",
       "expo-location",
