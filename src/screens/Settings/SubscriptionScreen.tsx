@@ -1,5 +1,12 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSubscriptionStore } from '@/store/useSubscriptionStore';
 import { Button } from '@/components/common';
@@ -27,20 +34,63 @@ function formatLimit(value: number, label: string): string {
 }
 
 export function SubscriptionScreen() {
-  const { subscription, plans, isLoading, fetchSubscription, fetchPlans, daysLeftInTrial, tierLabel } = useSubscriptionStore();
+  const {
+    subscription,
+    plans,
+    isLoading,
+    isPro,
+    isPaywallLoading,
+    fetchSubscription,
+    fetchPlans,
+    fetchCustomerInfo,
+    presentPaywall,
+    presentCustomerCenter,
+    restorePurchases,
+    daysLeftInTrial,
+    tierLabel,
+  } = useSubscriptionStore();
 
   useEffect(() => {
     fetchSubscription();
     fetchPlans();
+    fetchCustomerInfo();
   }, []);
 
   const currentTier = subscription?.tier || 'FREE';
   const trialDays = daysLeftInTrial();
 
+  const handleUpgrade = async () => {
+    const purchased = await presentPaywall();
+    if (purchased) {
+      fetchSubscription();
+    }
+  };
+
+  const handleRestorePurchases = async () => {
+    const restored = await restorePurchases();
+    if (restored) {
+      Alert.alert('Purchases Restored', 'Your GatherSafe Pro access has been restored.');
+      fetchSubscription();
+    } else {
+      Alert.alert('No Purchases Found', 'No previous purchases were found for this account.');
+    }
+  };
+
+  const handleManageSubscription = async () => {
+    await presentCustomerCenter();
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Subscription</Text>
+
+        {/* GatherSafe Pro entitlement banner */}
+        {isPro && (
+          <View style={styles.proBanner}>
+            <Text style={styles.proBannerText}>GatherSafe Pro — Active</Text>
+          </View>
+        )}
 
         {/* Current plan card */}
         <View style={[styles.currentPlan, { borderColor: TIER_COLORS[currentTier] }]}>
@@ -76,6 +126,24 @@ export function SubscriptionScreen() {
           Only the account creator is billed. Invited members join for free.
         </Text>
 
+        {/* Upgrade / manage CTA */}
+        {isPro ? (
+          <Button
+            title="Manage Subscription"
+            variant="secondary"
+            onPress={handleManageSubscription}
+            style={styles.ctaButton}
+          />
+        ) : (
+          <Button
+            title={isPaywallLoading ? 'Loading…' : 'Upgrade to GatherSafe Pro'}
+            variant="primary"
+            onPress={handleUpgrade}
+            disabled={isPaywallLoading}
+            style={styles.ctaButton}
+          />
+        )}
+
         {/* Plan comparison */}
         <Text style={styles.sectionTitle}>Plans</Text>
         {plans.map((plan) => {
@@ -109,13 +177,12 @@ export function SubscriptionScreen() {
                   </Text>
                 ))}
               </View>
-              {!isCurrent && plan.priceMonthly > 0 && (
+              {!isCurrent && plan.priceMonthly > 0 && !isPro && (
                 <Button
                   title={`Upgrade to ${plan.name}`}
                   variant="primary"
-                  onPress={() => {
-                    // RevenueCat purchase flow will be integrated here
-                  }}
+                  onPress={handleUpgrade}
+                  disabled={isPaywallLoading}
                   style={styles.upgradeButton}
                 />
               )}
@@ -127,8 +194,30 @@ export function SubscriptionScreen() {
         })}
 
         {isLoading && (
-          <Text style={styles.loadingText}>Loading...</Text>
+          <ActivityIndicator
+            color={COLORS.accent}
+            size="small"
+            style={styles.loader}
+          />
         )}
+
+        {/* Restore purchases + Customer Center links */}
+        <View style={styles.footer}>
+          <Button
+            title="Restore Purchases"
+            variant="ghost"
+            onPress={handleRestorePurchases}
+            style={styles.footerButton}
+          />
+          {isPro && (
+            <Button
+              title="Customer Center"
+              variant="ghost"
+              onPress={handleManageSubscription}
+              style={styles.footerButton}
+            />
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -147,6 +236,19 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.heading2,
     color: COLORS.textPrimary,
     marginBottom: SPACING.lg,
+  },
+  proBanner: {
+    backgroundColor: COLORS.accent,
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    marginBottom: SPACING.md,
+    alignItems: 'center',
+  },
+  proBannerText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.white,
+    fontWeight: '700',
   },
   currentPlan: {
     backgroundColor: COLORS.surface,
@@ -186,6 +288,9 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.caption,
     color: COLORS.textMuted,
     textAlign: 'center',
+    marginBottom: SPACING.md,
+  },
+  ctaButton: {
     marginBottom: SPACING.lg,
   },
   sectionTitle: {
@@ -239,10 +344,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: SPACING.sm,
   },
-  loadingText: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.textMuted,
-    textAlign: 'center',
+  loader: {
     marginTop: SPACING.lg,
+  },
+  footer: {
+    marginTop: SPACING.lg,
+    gap: SPACING.sm,
+  },
+  footerButton: {
+    alignSelf: 'center',
   },
 });

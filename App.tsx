@@ -3,6 +3,10 @@ import { registerGlobals } from '@livekit/react-native';
 registerGlobals();
 // Register background tasks before any component renders
 import '@/services/geofenceService';
+// Initialize RevenueCat in anonymous mode — user identity is set on login
+import { revenueCatService } from '@/services/revenueCatService';
+revenueCatService.configure();
+
 import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
