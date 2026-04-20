@@ -23,7 +23,7 @@
       "channel": "preview",
       "ios": {
         "buildConfiguration": "Release",
-        "credentialsSource": "local"
+        "credentialsSource": "remote"
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.gathersafeapp.com",
@@ -36,7 +36,7 @@
       "channel": "production",
       "ios": {
         "buildConfiguration": "Release",
-        "credentialsSource": "local"
+        "credentialsSource": "remote"
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.gathersafeapp.com",
