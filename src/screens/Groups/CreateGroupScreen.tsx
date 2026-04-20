@@ -21,7 +21,7 @@ export function CreateGroupScreen({ navigation, route }: Props) {
   const { groups, createGroup, fetchGroups, isLoading } = useGroupStore();
   const { campuses, fetchCampuses } = useCampusStore();
   const { subscription } = useSubscriptionStore();
-  const isEnterprise = subscription?.tier === 'ENTERPRISE';
+  const isEnterprise = subscription?.tier === 'PRO';
   const defaultType = route.params?.defaultType ?? 'lead';
   const defaultParentGroupId = route.params?.defaultParentGroupId;
 

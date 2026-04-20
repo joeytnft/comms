@@ -18,47 +18,34 @@ const PLANS = [
     cta: 'Start Free Trial',
   },
   {
-    name: 'Basic',
-    price: 20,
+    name: 'Team',
+    price: 29,
     description: 'More groups and members as your team grows.',
     color: 'blue',
-    highlighted: false,
+    highlighted: true,
     features: [
       '2 lead groups + unlimited sub-groups',
-      'Up to 50 members',
+      'Up to 100 members',
       'Everything in Starter',
       'Service scheduling & check-in',
       'Response plan broadcasting',
-    ],
-    cta: 'Start Free Trial',
-  },
-  {
-    name: 'Standard',
-    price: 40,
-    description: 'Unlimited scale for larger security teams.',
-    color: 'green',
-    highlighted: true,
-    features: [
-      '5 lead groups + unlimited sub-groups',
-      'Unlimited members',
-      'Everything in Basic',
       'Priority support',
     ],
     cta: 'Start Free Trial',
   },
   {
-    name: 'Enterprise',
-    price: 60,
-    description: 'Multi-campus organizations and large ministries.',
-    color: 'default',
+    name: 'Ministry Pro',
+    price: 59,
+    description: 'Unlimited scale for multi-campus ministries.',
+    color: 'green',
     highlighted: false,
     features: [
-      'Unlimited lead groups',
+      'Unlimited lead groups & sub-groups',
       'Unlimited members',
-      'Everything in Standard',
+      'Everything in Team',
       'Multi-campus support',
     ],
-    cta: 'Contact Us',
+    cta: 'Start Free Trial',
   },
 ];
 
@@ -78,7 +65,7 @@ export function Pricing() {
           </p>
         </div>
 
-        <div className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {PLANS.map((plan) => (
             <div
               key={plan.name}

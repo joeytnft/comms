@@ -66,7 +66,7 @@ export function TeamMapScreen() {
   // One-time setup on focus: campuses, alerts
   useFocusEffect(
     useCallback(() => {
-      if (subscription?.tier === 'ENTERPRISE') fetchCampuses();
+      if (subscription?.tier === 'PRO') fetchCampuses();
       fetchAlerts({ active: true });
 
       return () => {

@@ -83,10 +83,10 @@ interface WebhookBody {
  * RevenueCat webhook handler.
  * RevenueCat sends events when subscription status changes.
  * We map RevenueCat entitlements to our tier system:
- *   - "enterprise" entitlement → ENTERPRISE tier
- *   - "standard" entitlement   → STANDARD tier
- *   - "basic" entitlement      → BASIC tier
- *   - no active entitlement    → FREE tier
+ *   - "pro"      entitlement → PRO tier      (pro_monthly product)
+ *   - "team"     entitlement → TEAM tier     (team_monthly product)
+ *   - "starter"  entitlement → STARTER tier  (starter_monthly product)
+ *   - no active entitlement  → FREE tier
  */
 export async function handleWebhook(
   request: FastifyRequest<{ Body: WebhookBody }>,
@@ -133,12 +133,12 @@ export async function handleWebhook(
   let newTier: SubscriptionTier = 'FREE';
   let newStatus: SubscriptionStatus = org.subscriptionStatus;
 
-  if (event.entitlement_ids?.includes('enterprise')) {
-    newTier = 'ENTERPRISE';
-  } else if (event.entitlement_ids?.includes('standard')) {
-    newTier = 'STANDARD';
-  } else if (event.entitlement_ids?.includes('basic')) {
-    newTier = 'BASIC';
+  if (event.entitlement_ids?.includes('pro')) {
+    newTier = 'PRO';
+  } else if (event.entitlement_ids?.includes('team')) {
+    newTier = 'TEAM';
+  } else if (event.entitlement_ids?.includes('starter')) {
+    newTier = 'STARTER';
   }
 
   // Map RevenueCat event types to subscription status

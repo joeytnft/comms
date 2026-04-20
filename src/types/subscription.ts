@@ -1,4 +1,4 @@
-export type SubscriptionTier = 'FREE' | 'BASIC' | 'STANDARD' | 'ENTERPRISE';
+export type SubscriptionTier = 'FREE' | 'STARTER' | 'TEAM' | 'PRO';
 export type SubscriptionStatus = 'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'CANCELED' | 'EXPIRED';
 
 export interface PlanLimits {

@@ -16,9 +16,9 @@ import { SubscriptionTier } from '@/types/subscription';
 
 const TIER_COLORS: Record<SubscriptionTier, string> = {
   FREE: COLORS.gray500,
-  BASIC: COLORS.info,
-  STANDARD: COLORS.warning,
-  ENTERPRISE: COLORS.accent,
+  STARTER: COLORS.info,
+  TEAM: COLORS.warning,
+  PRO: COLORS.accent,
 };
 
 const FEATURE_LABELS: Record<string, string> = {

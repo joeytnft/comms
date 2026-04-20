@@ -29,7 +29,7 @@ export function GroupListScreen({ navigation }: Props) {
 
   useFocusEffect(
     useCallback(() => {
-      if (subscription?.tier === 'ENTERPRISE') fetchCampuses();
+      if (subscription?.tier === 'PRO') fetchCampuses();
       fetchGroups(activeCampusId);
     }, [activeCampusId]),
   );

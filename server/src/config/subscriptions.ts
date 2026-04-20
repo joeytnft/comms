@@ -19,13 +19,28 @@ export interface PlanDefinition {
   tier: SubscriptionTier;
   name: string;
   priceMonthly: number; // cents
+  rcProductId: string;  // RevenueCat product identifier
   limits: PlanLimits;
 }
 
 export const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
   FREE: {
     maxLeadGroups: 1,
-    maxSubGroups: 1,
+    maxSubGroups: 3,
+    maxMembers: 15,
+    features: {
+      ptt: true,
+      alerts: true,
+      location: true,
+      incidents: true,
+      multiCampus: false,
+      scheduling: false,
+      planningCenter: false,
+    },
+  },
+  STARTER: {
+    maxLeadGroups: 1,
+    maxSubGroups: 5,
     maxMembers: 20,
     features: {
       ptt: true,
@@ -37,10 +52,10 @@ export const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
       planningCenter: false,
     },
   },
-  BASIC: {
+  TEAM: {
     maxLeadGroups: 2,
     maxSubGroups: -1,
-    maxMembers: 50,
+    maxMembers: 100,
     features: {
       ptt: true,
       alerts: true,
@@ -51,21 +66,7 @@ export const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
       planningCenter: false,
     },
   },
-  STANDARD: {
-    maxLeadGroups: 5,
-    maxSubGroups: -1,
-    maxMembers: -1,
-    features: {
-      ptt: true,
-      alerts: true,
-      location: true,
-      incidents: true,
-      multiCampus: false,
-      scheduling: true,
-      planningCenter: false,
-    },
-  },
-  ENTERPRISE: {
+  PRO: {
     maxLeadGroups: -1,
     maxSubGroups: -1,
     maxMembers: -1,
@@ -82,10 +83,34 @@ export const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
 };
 
 export const PLANS: PlanDefinition[] = [
-  { tier: 'FREE', name: 'Starter', priceMonthly: 800, limits: PLAN_LIMITS.FREE },
-  { tier: 'BASIC', name: 'Basic', priceMonthly: 2000, limits: PLAN_LIMITS.BASIC },
-  { tier: 'STANDARD', name: 'Standard', priceMonthly: 4000, limits: PLAN_LIMITS.STANDARD },
-  { tier: 'ENTERPRISE', name: 'Enterprise', priceMonthly: 6000, limits: PLAN_LIMITS.ENTERPRISE },
+  {
+    tier: 'FREE',
+    name: 'Free',
+    priceMonthly: 0,
+    rcProductId: '',
+    limits: PLAN_LIMITS.FREE,
+  },
+  {
+    tier: 'STARTER',
+    name: 'Starter',
+    priceMonthly: 800,
+    rcProductId: 'starter_monthly',
+    limits: PLAN_LIMITS.STARTER,
+  },
+  {
+    tier: 'TEAM',
+    name: 'Team',
+    priceMonthly: 2900,
+    rcProductId: 'team_monthly',
+    limits: PLAN_LIMITS.TEAM,
+  },
+  {
+    tier: 'PRO',
+    name: 'Ministry Pro',
+    priceMonthly: 5900,
+    rcProductId: 'pro_monthly',
+    limits: PLAN_LIMITS.PRO,
+  },
 ];
 
 export const FREE_TRIAL_DAYS = 14;
