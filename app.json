@@ -64,7 +64,6 @@
       ]
     },
     "plugins": [
-      "react-native-purchases",
       "./plugins/withPushToTalk",
       "./plugins/withLiveActivity",
       "expo-location",
