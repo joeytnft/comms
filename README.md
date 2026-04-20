@@ -2,6 +2,7 @@
 
 **Encrypted real-time communication for church security teams.**
 
+
 GatherSafe provides church security teams with encrypted text messaging, push-to-talk voice, hierarchical group management, panic alerts, location sharing, and incident logging — all in one cross-platform mobile app.
 
 ## Features
