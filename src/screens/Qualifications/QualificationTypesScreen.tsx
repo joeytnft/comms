@@ -11,6 +11,9 @@ import {
   Switch,
   RefreshControl,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -172,65 +175,70 @@ export function QualificationTypesScreen() {
       )}
 
       <Modal visible={modalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>
-              {editTarget ? 'Edit Qualification Type' : 'New Qualification Type'}
-            </Text>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <Text style={styles.modalTitle}>
+                {editTarget ? 'Edit Qualification Type' : 'New Qualification Type'}
+              </Text>
 
-            <Text style={styles.fieldLabel}>Name *</Text>
-            <TextInput
-              style={styles.input}
-              value={form.name}
-              onChangeText={(v) => setForm((f) => ({ ...f, name: v }))}
-              placeholder="e.g. CPR Certified"
-              placeholderTextColor={COLORS.textSecondary}
-            />
+              <Text style={styles.fieldLabel}>Name *</Text>
+              <TextInput
+                style={styles.input}
+                value={form.name}
+                onChangeText={(v) => setForm((f) => ({ ...f, name: v }))}
+                placeholder="e.g. CPR Certified"
+                placeholderTextColor={COLORS.textSecondary}
+              />
 
-            <Text style={styles.fieldLabel}>Description (optional)</Text>
-            <TextInput
-              style={[styles.input, styles.textarea]}
-              value={form.description}
-              onChangeText={(v) => setForm((f) => ({ ...f, description: v }))}
-              placeholder="Brief description of this certification"
-              placeholderTextColor={COLORS.textSecondary}
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
+              <Text style={[styles.fieldLabel, { marginTop: SPACING.xs }]}>Description (optional)</Text>
+              <TextInput
+                style={[styles.input, styles.textarea]}
+                value={form.description}
+                onChangeText={(v) => setForm((f) => ({ ...f, description: v }))}
+                placeholder="Brief description of this certification"
+                placeholderTextColor={COLORS.textSecondary}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
 
-            <Text style={styles.fieldLabel}>Validity Period (days)</Text>
-            <TextInput
-              style={styles.input}
-              value={form.validityDays}
-              onChangeText={(v) => setForm((f) => ({ ...f, validityDays: v }))}
-              placeholder="Leave blank = never expires  (e.g. 730 = 2 years)"
-              placeholderTextColor={COLORS.textSecondary}
-              keyboardType="number-pad"
-            />
-            <Text style={styles.hint}>Common: 365 (1 yr), 730 (2 yr), 1095 (3 yr)</Text>
+              <Text style={[styles.fieldLabel, { marginTop: SPACING.xs }]}>Validity Period (days)</Text>
+              <TextInput
+                style={styles.input}
+                value={form.validityDays}
+                onChangeText={(v) => setForm((f) => ({ ...f, validityDays: v }))}
+                placeholder="Leave blank = never expires  (e.g. 730 = 2 years)"
+                placeholderTextColor={COLORS.textSecondary}
+                keyboardType="number-pad"
+              />
+              <Text style={styles.hint}>Common: 365 (1 yr), 730 (2 yr), 1095 (3 yr)</Text>
 
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalSaveBtn}
-                onPress={handleSave}
-                disabled={isSaving}
-              >
-                {isSaving ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.modalSaveText}>Save</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setModalVisible(false)}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.modalSaveBtn}
+                  onPress={handleSave}
+                  disabled={isSaving}
+                >
+                  {isSaving ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.modalSaveText}>Save</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -300,7 +308,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: BORDER_RADIUS.lg,
     borderTopRightRadius: BORDER_RADIUS.lg,
     padding: SPACING.lg,
-    gap: SPACING.xs,
+    maxHeight: '85%',
   },
   modalTitle: { ...TYPOGRAPHY.h2, color: COLORS.textPrimary, marginBottom: SPACING.sm },
   fieldLabel: { ...TYPOGRAPHY.body, fontWeight: '600', color: COLORS.textPrimary },

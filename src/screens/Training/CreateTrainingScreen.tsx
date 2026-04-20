@@ -11,6 +11,9 @@ import {
   Switch,
   Modal,
   FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -144,6 +147,10 @@ export function CreateTrainingScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.cancelBtn}>
           <Text style={styles.cancelText}>Cancel</Text>
@@ -258,11 +265,12 @@ export function CreateTrainingScreen() {
           </TouchableOpacity>
         </FormField>
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Group picker modal */}
       <Modal visible={showGroupPicker} transparent animationType="slide">
-        <View style={styles.pickerOverlay}>
-          <View style={styles.pickerCard}>
+        <Pressable style={styles.pickerOverlay} onPress={() => setShowGroupPicker(false)}>
+          <Pressable style={styles.pickerCard} onPress={(e) => e.stopPropagation()}>
             <View style={styles.pickerHeader}>
               <Text style={styles.pickerTitle}>Select Teams</Text>
               <TouchableOpacity onPress={() => setShowGroupPicker(false)}>
@@ -275,6 +283,7 @@ export function CreateTrainingScreen() {
             <FlatList
               data={groups}
               keyExtractor={(g) => g.id}
+              keyboardShouldPersistTaps="handled"
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.pickerRow}
@@ -295,8 +304,8 @@ export function CreateTrainingScreen() {
                 </TouchableOpacity>
               )}
             />
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </SafeAreaView>
   );
@@ -318,7 +327,7 @@ const styles = StyleSheet.create({
   headerTitle: { ...TYPOGRAPHY.h3, color: COLORS.textPrimary },
   saveBtn: { minWidth: 60, alignItems: 'flex-end' },
   saveText: { ...TYPOGRAPHY.body, color: COLORS.primary, fontWeight: '700' },
-  form: { padding: SPACING.md, gap: SPACING.sm },
+  form: { padding: SPACING.md, gap: SPACING.sm, paddingBottom: SPACING.xl },
   field: { gap: 6 },
   row: { flexDirection: 'row', gap: SPACING.sm },
   label: { ...TYPOGRAPHY.body, color: COLORS.textPrimary, fontWeight: '600' },
