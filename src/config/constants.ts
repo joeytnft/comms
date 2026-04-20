@@ -52,3 +52,11 @@ export const PANIC_BUTTON_HOLD_DURATION = 1500; // 1.5s hold to trigger
 
 // Check-in
 export const CHECKIN_REMINDER_BEFORE_SERVICE = 30; // minutes
+
+// RevenueCat
+export const REVENUECAT_IOS_API_KEY = 'test_xsolHNSukYwvkgubKXAEXEIoveT';
+export const REVENUECAT_ANDROID_API_KEY = 'test_xsolHNSukYwvkgubKXAEXEIoveT';
+export const REVENUECAT_ENTITLEMENT_ID = 'GatherSafe Pro';
+export const REVENUECAT_PRODUCT_MONTHLY = 'monthly';
+export const REVENUECAT_PRODUCT_YEARLY = 'yearly';
+export const REVENUECAT_PRODUCT_LIFETIME = 'lifetime';

@@ -1,0 +1,70 @@
+import { Platform } from 'react-native';
+import Purchases, {
+  LOG_LEVEL,
+  CustomerInfo,
+  PurchasesOfferings,
+} from 'react-native-purchases';
+import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
+import {
+  REVENUECAT_IOS_API_KEY,
+  REVENUECAT_ANDROID_API_KEY,
+  REVENUECAT_ENTITLEMENT_ID,
+} from '@/config/constants';
+
+export { REVENUECAT_ENTITLEMENT_ID };
+
+export const revenueCatService = {
+  configure(userId?: string): void {
+    if (__DEV__) {
+      Purchases.setLogLevel(LOG_LEVEL.VERBOSE);
+    }
+
+    const apiKey =
+      Platform.OS === 'ios' ? REVENUECAT_IOS_API_KEY : REVENUECAT_ANDROID_API_KEY;
+
+    Purchases.configure({ apiKey, appUserID: userId ?? null });
+  },
+
+  async identify(userId: string): Promise<CustomerInfo> {
+    const { customerInfo } = await Purchases.logIn(userId);
+    return customerInfo;
+  },
+
+  async logOut(): Promise<CustomerInfo> {
+    return Purchases.logOut();
+  },
+
+  async getCustomerInfo(): Promise<CustomerInfo> {
+    return Purchases.getCustomerInfo();
+  },
+
+  async getOfferings(): Promise<PurchasesOfferings> {
+    return Purchases.getOfferings();
+  },
+
+  hasEntitlement(
+    customerInfo: CustomerInfo,
+    entitlementId: string = REVENUECAT_ENTITLEMENT_ID,
+  ): boolean {
+    return typeof customerInfo.entitlements.active[entitlementId] !== 'undefined';
+  },
+
+  async restorePurchases(): Promise<CustomerInfo> {
+    return Purchases.restorePurchases();
+  },
+
+  async presentPaywall(): Promise<boolean> {
+    const result: PAYWALL_RESULT = await RevenueCatUI.presentPaywall();
+    switch (result) {
+      case PAYWALL_RESULT.PURCHASED:
+      case PAYWALL_RESULT.RESTORED:
+        return true;
+      default:
+        return false;
+    }
+  },
+
+  async presentCustomerCenter(): Promise<void> {
+    await RevenueCatUI.presentCustomerCenter();
+  },
+};
