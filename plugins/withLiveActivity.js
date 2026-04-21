@@ -579,92 +579,53 @@ const patchPodfileCodesigning = (config) =>
   ]);
 
 // ─── 5. Fix widget build phases ───────────────────────────────────────────────
-// addSourceFile() with a specific target UUID can place files in the main app's
-// Sources phase instead of the widget's due to a bug in the xcode npm package.
+// addSourceFile() with a specific target UUID is unreliable in the xcode npm
+// package — it may place files in the main app's Sources phase or not create
+// PBXBuildFile entries at all.
 //
-// This step uses PBX group membership (not filename matching) to identify widget
-// source files. That correctly handles GatherSafeActivityAttributes.swift, which
-// exists in both the widget group (GatherSafeWidget/) and the main LiveActivity
-// group (GatherSafe/LiveActivity/). Filename matching would miss the widget copy;
-// group-based matching routes each copy to the right target:
-//   • GatherSafeWidget group copy  → widget Sources
-//   • LiveActivity group copy      → main Sources (untouched)
+// This step bypasses group-membership lookup (which was unreliable) and instead
+// directly finds PBXFileReferences by filename. For each widget source file it:
+//   1. Removes any build file entries from the main Sources phase (widget-only)
+//   2. Ensures a build file entry exists in the widget Sources phase
 //
-// Without GatherSafeActivityAttributes.swift in the widget's Sources phase, the
-// widget Swift compilation silently fails and produces no executable, causing
-// App Store error 90085 ("No architectures in the binary").
+// GatherSafeActivityAttributes.swift is shared — it stays in main Sources and
+// is also added to widget Sources (each target gets its own PBXBuildFile entry
+// pointing to the same PBXFileReference; Xcode compiles it independently).
+//
+// Without all three Swift files in the widget's Sources phase, Swift produces no
+// executable, causing App Store error ITMS-90085.
 const fixWidgetBuildPhases = (config) =>
   withXcodeProject(config, (mod) => {
     const proj    = mod.modResults;
     const objects = proj.hash.project.objects;
 
     // ── Locate targets ──────────────────────────────────────────────────────
-    const nativeTargets = objects['PBXNativeTarget'] ?? {};
+    const nativeTargets  = objects['PBXNativeTarget'] ?? {};
     const mainTargetUUID = proj.getFirstTarget().uuid;
-    let widgetTargetUUID = null;
+    let   widgetTargetUUID = null;
     for (const [uuid, t] of Object.entries(nativeTargets)) {
       if (typeof t !== 'object') continue;
-      const name = (t.name ?? '').replace(/^"|"$/g, '');
-      if (name === WIDGET_NAME) { widgetTargetUUID = uuid; break; }
+      if ((t.name ?? '').replace(/^"|"$/g, '') === WIDGET_NAME) {
+        widgetTargetUUID = uuid; break;
+      }
     }
-    if (!widgetTargetUUID) return mod; // widget not created yet — nothing to fix
+    if (!widgetTargetUUID) return mod;
 
     const mainTarget   = nativeTargets[mainTargetUUID];
     const widgetTarget = nativeTargets[widgetTargetUUID];
 
-    // ── Find Sources build phase UUIDs for each target ──────────────────────
     const allSourcePhases = objects['PBXSourcesBuildPhase'] ?? {};
+    const buildFiles      = objects['PBXBuildFile']         ?? {};
+    const pbxFileRefs     = objects['PBXFileReference']     ?? {};
+
+    // ── Find Sources phase UUIDs ─────────────────────────────────────────────
     const phaseUUIDOf = (target) =>
       (target.buildPhases ?? []).map((p) => p.value).find((u) => allSourcePhases[u]);
 
-    const mainSourcesUUID   = phaseUUIDOf(mainTarget);
+    const mainSourcesUUID = phaseUUIDOf(mainTarget);
     let   widgetSourcesUUID = phaseUUIDOf(widgetTarget);
 
-    // ── Collect file ref UUIDs that belong to the widget's PBX group ────────
-    // Identify by group membership so shared filenames across groups are handled
-    // correctly — only refs that are children of the GatherSafeWidget group are
-    // considered widget files.
-    const pbxGroups = objects['PBXGroup'] ?? {};
-    const widgetChildFileRefs = new Set();
-    for (const [uuid, group] of Object.entries(pbxGroups)) {
-      if (uuid.endsWith('_comment') || typeof group !== 'object') continue;
-      const groupPath = (group.path ?? group.name ?? '').replace(/^"|"$/g, '');
-      if (groupPath !== WIDGET_NAME) continue;
-      for (const child of (group.children ?? [])) {
-        widgetChildFileRefs.add(child.value);
-      }
-    }
-
-    const buildFiles = objects['PBXBuildFile'] ?? {};
-
-    // Map fileRefUUID → [{ value: buildFileUUID, comment }]
-    // addSourceFile() may produce multiple PBXBuildFile entries for the same
-    // file ref; deduplication by fileRef UUID avoids compiling a file twice.
-    const buildFilesByFileRef = new Map();
-    for (const [key, bf] of Object.entries(buildFiles)) {
-      if (key.endsWith('_comment') || typeof bf !== 'object') continue;
-      const fileRef = (bf.fileRef ?? '').replace(/^"|"$/g, '');
-      if (!widgetChildFileRefs.has(fileRef)) continue;
-      const arr = buildFilesByFileRef.get(fileRef) ?? [];
-      arr.push({ value: key, comment: buildFiles[`${key}_comment`] ?? '' });
-      buildFilesByFileRef.set(fileRef, arr);
-    }
-
-    const allWidgetBuildFileUUIDs = new Set(
-      [...buildFilesByFileRef.values()].flat().map((e) => e.value)
-    );
-
-    // ── Remove ALL widget-group build file entries from main's Sources ────────
-    if (mainSourcesUUID) {
-      const phase = allSourcePhases[mainSourcesUUID];
-      if (phase?.files) {
-        phase.files = phase.files.filter(
-          (f) => typeof f !== 'object' || !allWidgetBuildFileUUIDs.has(f.value)
-        );
-      }
-    }
-
-    // ── Create widget Sources phase if it doesn't exist ─────────────────────
+    // ── Create widget Sources phase if missing ───────────────────────────────
     if (!widgetSourcesUUID) {
       widgetSourcesUUID = proj.generateUuid();
       allSourcePhases[widgetSourcesUUID] = {
@@ -677,65 +638,78 @@ const fixWidgetBuildPhases = (config) =>
       widgetTarget.buildPhases.push({ value: widgetSourcesUUID, comment: 'Sources' });
     }
 
-    // ── Ensure exactly ONE entry per widget file in widget's Sources ─────────
     const widgetPhase = allSourcePhases[widgetSourcesUUID];
-    const seenFileRefs = new Set();
-    widgetPhase.files = (widgetPhase.files ?? []).filter((f) => {
-      if (typeof f !== 'object') return true;
-      const bf      = buildFiles[f.value];
-      const fileRef = bf ? (bf.fileRef ?? '').replace(/^"|"$/g, '') : null;
-      if (!fileRef || !widgetChildFileRefs.has(fileRef)) return true; // keep non-widget files
-      if (seenFileRefs.has(fileRef)) return false; // drop duplicate
-      seenFileRefs.add(fileRef);
-      return true;
-    });
+    const mainPhase   = mainSourcesUUID ? allSourcePhases[mainSourcesUUID] : null;
 
-    for (const [fileRef, entries] of buildFilesByFileRef) {
-      if (!seenFileRefs.has(fileRef)) {
-        widgetPhase.files.push(entries[0]);
-        seenFileRefs.add(fileRef);
+    // ── Define which files go where ──────────────────────────────────────────
+    // widgetOnly: must be in widget Sources, must NOT be in main Sources
+    const widgetOnlyNames = new Set([
+      'GatherSafeLiveActivity.swift',
+      'GatherSafeLiveActivityBundle.swift',
+    ]);
+    // shared: stays in main Sources AND must also be in widget Sources
+    const sharedNames = new Set(['GatherSafeActivityAttributes.swift']);
+    const allWidgetNames = new Set([...widgetOnlyNames, ...sharedNames]);
+
+    // ── Build filename → first PBXFileReference UUID map ─────────────────────
+    const fileRefByName = new Map();
+    for (const [uuid, ref] of Object.entries(pbxFileRefs)) {
+      if (uuid.endsWith('_comment') || typeof ref !== 'object') continue;
+      const refPath = (ref.path ?? ref.name ?? '').replace(/^"|"$/g, '');
+      const name = refPath.split('/').pop();
+      if (allWidgetNames.has(name) && !fileRefByName.has(name)) {
+        fileRefByName.set(name, uuid);
       }
     }
 
-    // ── Ensure GatherSafeActivityAttributes.swift is in widget Sources ────────
-    // This file lives in the main app's LiveActivity group (not the widget group)
-    // so group-based collection above misses it. Find it by filename and add a
-    // build file entry for it to the widget Sources phase if not already present.
-    const pbxFileRefs = objects['PBXFileReference'] ?? {};
-    const attrsFileName = 'GatherSafeActivityAttributes.swift';
-    const attrsInWidget = widgetPhase.files.some((f) => {
-      if (typeof f !== 'object') return false;
-      const bf = buildFiles[f.value];
-      if (!bf) return false;
+    // ── Helper: get filename for a PBXBuildFile UUID ─────────────────────────
+    const nameOfBF = (bfUUID) => {
+      const bf = buildFiles[bfUUID];
+      if (!bf || typeof bf !== 'object') return null;
       const refUUID = (bf.fileRef ?? '').replace(/^"|"$/g, '');
       const ref = pbxFileRefs[refUUID];
-      return ref && (ref.name ?? ref.path ?? '').replace(/^"|"$/g, '') === attrsFileName;
-    });
+      if (!ref || typeof ref !== 'object') return null;
+      return (ref.path ?? ref.name ?? '').replace(/^"|"$/g, '').split('/').pop();
+    };
 
-    if (!attrsInWidget) {
-      // Find any existing file ref for GatherSafeActivityAttributes.swift
-      const attrsRefUUID = Object.keys(pbxFileRefs).find((k) => {
-        if (k.endsWith('_comment')) return false;
-        const ref = pbxFileRefs[k];
-        return typeof ref === 'object' &&
-          (ref.name ?? ref.path ?? '').replace(/^"|"$/g, '') === attrsFileName;
+    // ── Remove widget-only files from main Sources ───────────────────────────
+    if (mainPhase?.files) {
+      mainPhase.files = mainPhase.files.filter((f) => {
+        if (typeof f !== 'object') return true;
+        return !widgetOnlyNames.has(nameOfBF(f.value));
       });
-      if (attrsRefUUID) {
-        const newBFUUID = proj.generateUuid();
-        buildFiles[newBFUUID] = { isa: 'PBXBuildFile', fileRef: attrsRefUUID };
-        buildFiles[`${newBFUUID}_comment`] = `${attrsFileName} in Sources`;
-        widgetPhase.files.push({ value: newBFUUID, comment: `${attrsFileName} in Sources` });
-      }
+    }
+
+    // ── Determine which widget files are already in widget Sources ────────────
+    const alreadyInWidget = new Set();
+    for (const f of (widgetPhase.files ?? [])) {
+      if (typeof f !== 'object') continue;
+      const name = nameOfBF(f.value);
+      if (name) alreadyInWidget.add(name);
+    }
+
+    // ── Add missing widget files to widget Sources phase ──────────────────────
+    for (const fileName of allWidgetNames) {
+      if (alreadyInWidget.has(fileName)) continue;
+      const refUUID = fileRefByName.get(fileName);
+      if (!refUUID) continue;
+      const newBFUUID = proj.generateUuid();
+      buildFiles[newBFUUID]                    = { isa: 'PBXBuildFile', fileRef: refUUID };
+      buildFiles[`${newBFUUID}_comment`]       = `${fileName} in Sources`;
+      widgetPhase.files.push({ value: newBFUUID, comment: `${fileName} in Sources` });
     }
 
     return mod;
   });
 
 // ─── Compose ──────────────────────────────────────────────────────────────────
+// withXcodeProject mods are applied in LIFO order by Expo's mod system, so
+// fixWidgetBuildPhases must be registered BEFORE addXcodeTargets so that it
+// runs AFTER addXcodeTargets has created the widget target.
 const withLiveActivity = (config) => {
   config = addInfoPlistKeys(config);
-  config = addXcodeTargets(config);
-  config = fixWidgetBuildPhases(config);
+  config = fixWidgetBuildPhases(config); // registered first → runs second
+  config = addXcodeTargets(config);      // registered last  → runs first
   config = patchBridgingHeader(config);
   config = patchPodfileCodesigning(config);
   return config;
