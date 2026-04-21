@@ -707,6 +707,37 @@ const fixWidgetBuildPhases = (config) =>
       }
     }
 
+    // ── Ensure GatherSafeActivityAttributes.swift is in widget Sources ────────
+    // This file lives in the main app's LiveActivity group (not the widget group)
+    // so group-based collection above misses it. Find it by filename and add a
+    // build file entry for it to the widget Sources phase if not already present.
+    const pbxFileRefs = objects['PBXFileReference'] ?? {};
+    const attrsFileName = 'GatherSafeActivityAttributes.swift';
+    const attrsInWidget = widgetPhase.files.some((f) => {
+      if (typeof f !== 'object') return false;
+      const bf = buildFiles[f.value];
+      if (!bf) return false;
+      const refUUID = (bf.fileRef ?? '').replace(/^"|"$/g, '');
+      const ref = pbxFileRefs[refUUID];
+      return ref && (ref.name ?? ref.path ?? '').replace(/^"|"$/g, '') === attrsFileName;
+    });
+
+    if (!attrsInWidget) {
+      // Find any existing file ref for GatherSafeActivityAttributes.swift
+      const attrsRefUUID = Object.keys(pbxFileRefs).find((k) => {
+        if (k.endsWith('_comment')) return false;
+        const ref = pbxFileRefs[k];
+        return typeof ref === 'object' &&
+          (ref.name ?? ref.path ?? '').replace(/^"|"$/g, '') === attrsFileName;
+      });
+      if (attrsRefUUID) {
+        const newBFUUID = proj.generateUuid();
+        buildFiles[newBFUUID] = { isa: 'PBXBuildFile', fileRef: attrsRefUUID };
+        buildFiles[`${newBFUUID}_comment`] = `${attrsFileName} in Sources`;
+        widgetPhase.files.push({ value: newBFUUID, comment: `${attrsFileName} in Sources` });
+      }
+    }
+
     return mod;
   });
 
