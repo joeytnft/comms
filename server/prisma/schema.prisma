@@ -139,6 +139,10 @@ model User {
   lastSeenAt      DateTime?
   pushToken       String?  // Expo push notification token
   isOrgAdmin      Boolean  @default(false)
+  accountStatus   String   @default("ACTIVE") // ACTIVE | INVITED
+  pcoPersonId     String?
+  inviteToken     String?  @unique
+  inviteExpiresAt DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -647,9 +651,12 @@ model PcoConnection {
   connectedAt    DateTime @default(now())
   lastSyncAt     DateTime?
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  people       PcoPerson[]
-  plans        PcoPlan[]
+  organization    Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  people          PcoPerson[]
+  plans           PcoPlan[]
+  teams           PcoTeam[]
+  teamMembers     PcoTeamMember[]
+  scheduledPeople PcoScheduledPerson[]
 
   @@map("pco_connections")
 }
@@ -691,6 +698,54 @@ model PcoPlan {
   @@unique([organizationId, pcoId])
   @@index([organizationId, sortDate])
   @@map("pco_plans")
+}
+
+model PcoTeam {
+  id              String   @id @default(cuid())
+  organizationId  String
+  pcoId           String
+  serviceTypeId   String
+  serviceTypeName String
+  name            String
+  groupId         String?  // linked GatherSafe group
+  syncedAt        DateTime @default(now()) @updatedAt
+
+  connection PcoConnection @relation(fields: [organizationId], references: [organizationId], onDelete: Cascade)
+
+  @@unique([organizationId, pcoId])
+  @@index([organizationId])
+  @@map("pco_teams")
+}
+
+model PcoTeamMember {
+  id             String   @id @default(cuid())
+  organizationId String
+  pcoTeamId      String
+  pcoPersonId    String
+  syncedAt       DateTime @default(now()) @updatedAt
+
+  connection PcoConnection @relation(fields: [organizationId], references: [organizationId], onDelete: Cascade)
+
+  @@unique([organizationId, pcoTeamId, pcoPersonId])
+  @@index([organizationId, pcoTeamId])
+  @@map("pco_team_members")
+}
+
+model PcoScheduledPerson {
+  id             String   @id @default(cuid())
+  organizationId String
+  pcoPlanId      String
+  pcoPersonId    String
+  pcoTeamId      String?
+  status         String   @default("U") // C=Confirmed D=Declined U=Unconfirmed
+  position       String?
+  syncedAt       DateTime @default(now()) @updatedAt
+
+  connection PcoConnection @relation(fields: [organizationId], references: [organizationId], onDelete: Cascade)
+
+  @@unique([organizationId, pcoPlanId, pcoPersonId])
+  @@index([organizationId, pcoPlanId])
+  @@map("pco_scheduled_people")
 }
 
 model Geofence {

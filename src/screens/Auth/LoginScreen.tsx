@@ -95,6 +95,16 @@ export function LoginScreen({ navigation }: { navigation: any }) {
               <Text style={styles.linkTextBold}>Register</Text>
             </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.linkButton}
+            onPress={() => navigation.navigate('AcceptInvite')}
+          >
+            <Text style={styles.linkText}>
+              Have an invite?{' '}
+              <Text style={styles.linkTextBold}>Activate Account</Text>
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
     </KeyboardAvoidingView>

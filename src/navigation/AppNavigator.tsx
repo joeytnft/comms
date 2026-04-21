@@ -10,6 +10,7 @@ import { LoginScreen } from '@/screens/Auth/LoginScreen';
 import { RegisterScreen } from '@/screens/Auth/RegisterScreen';
 import { ForgotPasswordScreen } from '@/screens/Auth/ForgotPasswordScreen';
 import { ResetPasswordScreen } from '@/screens/Auth/ResetPasswordScreen';
+import { AcceptInviteScreen } from '@/screens/Auth/AcceptInviteScreen';
 import { PinEntryScreen } from '@/screens/Auth/PinEntryScreen';
 import { MainTabNavigator } from './MainTabNavigator';
 
@@ -18,6 +19,7 @@ export type RootStackParamList = {
   Register: undefined;
   ForgotPassword: undefined;
   ResetPassword: { token?: string };
+  AcceptInvite: { token?: string };
   Main: undefined;
 };
 
@@ -40,8 +42,20 @@ export function AppNavigator() {
     return <PinEntryScreen onUnlock={unlock} />;
   }
 
+  const linking = {
+    prefixes: ['gathersafe://'],
+    config: {
+      screens: {
+        AcceptInvite: 'accept-invite',
+        ResetPassword: 'reset-password',
+        Login: 'login',
+      },
+    },
+  };
+
   return (
     <NavigationContainer
+      linking={linking}
       theme={{
         dark: true,
         colors: {
@@ -63,6 +77,7 @@ export function AppNavigator() {
             <Stack.Screen name="Register" component={RegisterScreen} />
             <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
             <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+            <Stack.Screen name="AcceptInvite" component={AcceptInviteScreen} />
           </>
         )}
       </Stack.Navigator>

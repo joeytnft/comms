@@ -14,6 +14,61 @@ function createTransport() {
   });
 }
 
+export async function sendInviteEmail(
+  email: string,
+  displayName: string,
+  orgName: string,
+  inviteToken: string,
+): Promise<void> {
+  const appLink = `gathersafe://accept-invite?token=${inviteToken}`;
+  const webLink = `${env.APP_URL}/accept-invite?token=${inviteToken}`;
+
+  const html = `
+    <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+      <h2 style="color: #1e293b; margin-bottom: 8px;">You've been added to ${orgName}</h2>
+      <p style="color: #475569; margin-bottom: 8px;">
+        Hi ${displayName}, your organization uses GatherSafe for security team communication.
+        You've been imported from Planning Center and your account is ready.
+      </p>
+      <p style="color: #475569; margin-bottom: 24px;">
+        Tap the button below to set your password and activate your account.
+        This link expires in 7 days.
+      </p>
+      <a href="${webLink}"
+         style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px;
+                border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">
+        Activate Your Account
+      </a>
+      <p style="color: #94a3b8; font-size: 13px; margin-top: 24px;">
+        If you already have GatherSafe installed, open the app and it will handle the link automatically.
+      </p>
+      <p style="color: #94a3b8; font-size: 12px; margin-top: 8px;">
+        If the button does not work, open the GatherSafe app and enter this token manually:<br/>
+        <code style="background:#f1f5f9; padding: 2px 6px; border-radius: 4px;">${inviteToken}</code>
+      </p>
+    </div>
+  `;
+
+  const transport = createTransport();
+
+  if (!transport) {
+    console.log('\n========== ACCOUNT INVITE ==========');
+    console.log(`To: ${email} (${displayName})`);
+    console.log(`Org: ${orgName}`);
+    console.log(`App deep link: ${appLink}`);
+    console.log(`Token: ${inviteToken}`);
+    console.log('=====================================\n');
+    return;
+  }
+
+  await transport.sendMail({
+    from: env.EMAIL_FROM,
+    to: email,
+    subject: `You've been added to ${orgName} on GatherSafe`,
+    html,
+  });
+}
+
 export async function sendPasswordResetEmail(email: string, resetToken: string): Promise<void> {
   const resetUrl = `gathersafe://reset-password?token=${resetToken}`;
   const webUrl = `${env.APP_URL}/reset-password?token=${resetToken}`;

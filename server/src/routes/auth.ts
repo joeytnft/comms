@@ -18,4 +18,5 @@ export async function authRoutes(app: FastifyInstance) {
   app.post('/logout', authController.logout);
   app.post('/forgot-password', AUTH_RATE_LIMIT, authController.forgotPassword);
   app.post('/reset-password', AUTH_RATE_LIMIT, authController.resetPassword);
+  app.post('/accept-invite', AUTH_RATE_LIMIT, authController.acceptInvite);
 }

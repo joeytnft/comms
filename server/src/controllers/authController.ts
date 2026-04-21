@@ -392,3 +392,64 @@ export async function resetPassword(
 
   reply.send({ message: 'Password updated successfully. Please sign in with your new password.' });
 }
+
+export async function acceptInvite(
+  request: FastifyRequest<{ Body: { token: string; password: string } }>,
+  reply: FastifyReply,
+) {
+  const { token, password } = request.body;
+
+  if (!token || !password) throw new ValidationError('Token and password are required');
+  if (password.length < 8) throw new ValidationError('Password must be at least 8 characters');
+
+  const user = await prisma.user.findUnique({
+    where: { inviteToken: token },
+    include: { organization: { select: { name: true } } },
+  });
+
+  if (!user || user.accountStatus !== 'INVITED') {
+    throw new AuthenticationError('This invite link is invalid or has already been used');
+  }
+
+  if (user.inviteExpiresAt && user.inviteExpiresAt < new Date()) {
+    throw new AuthenticationError('This invite link has expired — ask your admin to resend it');
+  }
+
+  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash,
+      accountStatus: 'ACTIVE',
+      inviteToken: null,
+      inviteExpiresAt: null,
+    },
+  });
+
+  const accessToken = request.server.jwt.sign({
+    userId: user.id,
+    organizationId: user.organizationId,
+    campusId: user.isOrgAdmin ? null : (user.campusId ?? null),
+  });
+
+  const refreshToken = generateRefreshToken();
+  await prisma.refreshToken.create({
+    data: {
+      token: hashToken(refreshToken),
+      userId: user.id,
+      expiresAt: getRefreshExpiry(),
+    },
+  });
+
+  reply.send({
+    user: {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      organizationId: user.organizationId,
+      campusId: user.campusId,
+    },
+    tokens: { accessToken, refreshToken },
+  });
+}

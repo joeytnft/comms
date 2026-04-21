@@ -11,6 +11,7 @@ export const ENDPOINTS = {
     VERIFY_PIN: '/auth/verify-pin',
     FORGOT_PASSWORD: '/auth/forgot-password',
     RESET_PASSWORD: '/auth/reset-password',
+    ACCEPT_INVITE: '/auth/accept-invite',
   },
 
   // Users

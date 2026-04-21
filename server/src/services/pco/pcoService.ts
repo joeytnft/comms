@@ -91,7 +91,6 @@ export async function refreshTokens(organizationId: string): Promise<PcoTokens> 
 export async function getValidToken(organizationId: string): Promise<string> {
   const conn = await prisma.pcoConnection.findUnique({ where: { organizationId } });
   if (!conn) throw new Error('No PCO connection');
-  // Refresh if within 5 min of expiry
   if (conn.tokenExpiresAt.getTime() - Date.now() < 5 * 60 * 1000) {
     const tokens = await refreshTokens(organizationId);
     return tokens.accessToken;
@@ -102,7 +101,6 @@ export async function getValidToken(organizationId: string): Promise<string> {
 export async function revokeConnection(organizationId: string): Promise<void> {
   const conn = await prisma.pcoConnection.findUnique({ where: { organizationId } });
   if (!conn) return;
-  // Best-effort revoke — ignore errors
   await fetch(PCO_REVOKE_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': USER_AGENT },
@@ -140,9 +138,16 @@ export interface PcoPerson {
   lastName: string;
   email: string | null;
   phone: string | null;
-  status: string; // 'active' | 'inactive'
+  status: string;
   avatarUrl: string | null;
 }
+
+type PcoJsonApiResource = {
+  type: string;
+  id: string;
+  attributes: Record<string, unknown>;
+  relationships?: Record<string, { data: { type: string; id: string } | Array<{ type: string; id: string }> }>;
+};
 
 export async function syncPeople(organizationId: string): Promise<PcoPerson[]> {
   const people: PcoPerson[] = [];
@@ -150,50 +155,65 @@ export async function syncPeople(organizationId: string): Promise<PcoPerson[]> {
 
   while (url) {
     const data = await pcoGet(organizationId, url) as {
-      data: Array<{
-        id: string;
-        attributes: {
-          name: string;
-          first_name: string;
-          last_name: string;
-          status: string;
-          avatar: string | null;
-        };
-      }>;
-      included: Array<{
-        type: string;
-        attributes: { address: string; primary: boolean; location: string };
-      }>;
+      data: PcoJsonApiResource[];
+      included: PcoJsonApiResource[];
       links: { next?: string };
     };
 
-    // Build email/phone maps from included resources (keyed by person id)
-    const emailMap: Record<string, string> = {};
-    const phoneMap: Record<string, string> = {};
+    // Build lookup maps for included resources by id
+    const includedById: Record<string, PcoJsonApiResource> = {};
     for (const inc of data.included ?? []) {
-      if (inc.type === 'Email' && inc.attributes.primary) {
-        // PCO includes don't link back easily without relationships — handled below
-        // This is a simplified pass
-      }
+      includedById[inc.id] = inc;
     }
 
     for (const person of data.data) {
+      // Extract primary email via relationships → included lookup
+      let email: string | null = null;
+      const emailRels = person.relationships?.emails?.data;
+      const emailIds = Array.isArray(emailRels) ? emailRels : (emailRels ? [emailRels] : []);
+      for (const ref of emailIds) {
+        const inc = includedById[ref.id];
+        if (inc?.type === 'Email' && inc.attributes.primary) {
+          email = inc.attributes.address as string;
+          break;
+        }
+      }
+      // Fall back to first email if none marked primary
+      if (!email && emailIds.length > 0) {
+        const inc = includedById[emailIds[0].id];
+        if (inc) email = inc.attributes.address as string ?? null;
+      }
+
+      // Extract primary phone
+      let phone: string | null = null;
+      const phoneRels = person.relationships?.phone_numbers?.data;
+      const phoneIds = Array.isArray(phoneRels) ? phoneRels : (phoneRels ? [phoneRels] : []);
+      for (const ref of phoneIds) {
+        const inc = includedById[ref.id];
+        if (inc?.type === 'PhoneNumber' && inc.attributes.primary) {
+          phone = inc.attributes.number as string;
+          break;
+        }
+      }
+      if (!phone && phoneIds.length > 0) {
+        const inc = includedById[phoneIds[0].id];
+        if (inc) phone = inc.attributes.number as string ?? null;
+      }
+
       people.push({
         id: person.id,
-        name: person.attributes.name,
-        firstName: person.attributes.first_name,
-        lastName: person.attributes.last_name,
-        email: emailMap[person.id] ?? null,
-        phone: phoneMap[person.id] ?? null,
-        status: person.attributes.status,
-        avatarUrl: person.attributes.avatar,
+        name: person.attributes.name as string,
+        firstName: person.attributes.first_name as string,
+        lastName: person.attributes.last_name as string,
+        email,
+        phone,
+        status: person.attributes.status as string,
+        avatarUrl: person.attributes.avatar as string | null,
       });
     }
 
-    // Follow pagination
     const nextLink = data.links?.next;
     if (nextLink) {
-      // Extract path from full URL
       url = new URL(nextLink).pathname + new URL(nextLink).search;
     } else {
       url = null;
@@ -201,6 +221,64 @@ export async function syncPeople(organizationId: string): Promise<PcoPerson[]> {
   }
 
   return people;
+}
+
+// ─── Sync: Teams ──────────────────────────────────────────────────────────────
+
+export interface PcoTeam {
+  id: string;
+  serviceTypeId: string;
+  serviceTypeName: string;
+  name: string;
+}
+
+export interface PcoTeamMember {
+  pcoTeamId: string;
+  pcoPersonId: string;
+}
+
+export async function syncTeams(
+  organizationId: string,
+  serviceTypeId: string,
+  serviceTypeName: string,
+): Promise<{ teams: PcoTeam[]; members: PcoTeamMember[] }> {
+  const data = await pcoGet(
+    organizationId,
+    `/services/v2/service_types/${serviceTypeId}/teams?per_page=100`,
+  ) as { data: PcoJsonApiResource[] };
+
+  const teams: PcoTeam[] = data.data.map((t) => ({
+    id: t.id,
+    serviceTypeId,
+    serviceTypeName,
+    name: t.attributes.name as string,
+  }));
+
+  const allMembers: PcoTeamMember[] = [];
+
+  for (const team of teams) {
+    let memberUrl: string | null =
+      `/services/v2/service_types/${serviceTypeId}/teams/${team.id}/team_members?per_page=100&include=person`;
+
+    while (memberUrl) {
+      const memberData = await pcoGet(organizationId, memberUrl) as {
+        data: PcoJsonApiResource[];
+        links: { next?: string };
+      };
+
+      for (const tm of memberData.data) {
+        const personRel = tm.relationships?.person?.data;
+        if (personRel && !Array.isArray(personRel)) {
+          allMembers.push({ pcoTeamId: team.id, pcoPersonId: personRel.id });
+        }
+      }
+
+      const next = (memberData as { links?: { next?: string } }).links?.next;
+      memberUrl = next ? new URL(next).pathname + new URL(next).search : null;
+    }
+  }
+
+  return { teams, members: allMembers };
 }
 
 // ─── Sync: Services ──────────────────────────────────────────────────────────
@@ -216,8 +294,8 @@ export interface PcoServicePlan {
   serviceTypeName: string;
   title: string | null;
   seriesTitle: string | null;
-  sortDate: string | null; // ISO date
-  totalLength: number; // seconds
+  sortDate: string | null;
+  totalLength: number;
 }
 
 export async function syncServiceTypes(organizationId: string): Promise<PcoServiceType[]> {
@@ -258,6 +336,52 @@ export async function syncUpcomingPlans(
   }));
 }
 
+// ─── Sync: Plan People (who is scheduled on a given service) ─────────────────
+
+export interface PcoScheduledPerson {
+  pcoPlanId: string;
+  pcoPersonId: string;
+  pcoTeamId: string | null;
+  status: string;
+  position: string | null;
+}
+
+export async function syncPlanPeople(
+  organizationId: string,
+  serviceTypeId: string,
+  planId: string,
+): Promise<PcoScheduledPerson[]> {
+  const scheduled: PcoScheduledPerson[] = [];
+  let url: string | null =
+    `/services/v2/service_types/${serviceTypeId}/plans/${planId}/plan_people?per_page=100`;
+
+  while (url) {
+    const data = await pcoGet(organizationId, url) as {
+      data: PcoJsonApiResource[];
+      links: { next?: string };
+    };
+
+    for (const pp of data.data) {
+      const personRel = pp.relationships?.person?.data;
+      const teamRel = pp.relationships?.team?.data;
+      if (!personRel || Array.isArray(personRel)) continue;
+
+      scheduled.push({
+        pcoPlanId: planId,
+        pcoPersonId: personRel.id,
+        pcoTeamId: teamRel && !Array.isArray(teamRel) ? teamRel.id : null,
+        status: (pp.attributes.status as string) ?? 'U',
+        position: (pp.attributes.position as string | null) ?? null,
+      });
+    }
+
+    const next = data.links?.next;
+    url = next ? new URL(next).pathname + new URL(next).search : null;
+  }
+
+  return scheduled;
+}
+
 // ─── Get connected org info ───────────────────────────────────────────────────
 
 export interface PcoOrgInfo {
@@ -274,7 +398,6 @@ export async function getPcoOrgInfo(accessToken: string): Promise<PcoOrgInfo> {
     data: { id: string };
     included?: Array<{ type: string; id: string; attributes: { name: string } }>;
   };
-  // org name comes from the organization included
   const orgIncluded = data.included?.find((i) => i.type === 'Organization');
   return {
     id: orgIncluded?.id ?? data.data.id,
