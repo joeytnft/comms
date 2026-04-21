@@ -54,8 +54,8 @@ export const PANIC_BUTTON_HOLD_DURATION = 1500; // 1.5s hold to trigger
 export const CHECKIN_REMINDER_BEFORE_SERVICE = 30; // minutes
 
 // RevenueCat
-export const REVENUECAT_IOS_API_KEY = 'test_xsolHNSukYwvkgubKXAEXEIoveT';
-export const REVENUECAT_ANDROID_API_KEY = 'test_xsolHNSukYwvkgubKXAEXEIoveT';
+export const REVENUECAT_IOS_API_KEY = 'sk_EpGhqDxUJGhOTcGrnuJHKAyQbooTe';
+export const REVENUECAT_ANDROID_API_KEY = 'sk_EpGhqDxUJGhOTcGrnuJHKAyQbooTe';
 
 // One entitlement per paid tier — names must match RevenueCat dashboard exactly
 export const REVENUECAT_ENTITLEMENT_STARTER = 'starter';
