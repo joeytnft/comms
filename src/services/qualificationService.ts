@@ -10,7 +10,7 @@ import {
 export const qualificationService = {
   async listTypes(): Promise<{ qualificationTypes: QualificationType[] }> {
     const response = await apiClient.get(ENDPOINTS.QUALIFICATIONS.TYPES);
-    return response.data;
+    return response;
   },
 
   async createType(data: {
@@ -19,7 +19,7 @@ export const qualificationService = {
     validityDays?: number;
   }): Promise<{ qualificationType: QualificationType }> {
     const response = await apiClient.post(ENDPOINTS.QUALIFICATIONS.TYPES, data);
-    return response.data;
+    return response;
   },
 
   async updateType(
@@ -27,7 +27,7 @@ export const qualificationService = {
     data: { name?: string; description?: string; validityDays?: number; isActive?: boolean },
   ): Promise<{ qualificationType: QualificationType }> {
     const response = await apiClient.put(ENDPOINTS.QUALIFICATIONS.TYPE(id), data);
-    return response.data;
+    return response;
   },
 
   async deleteType(id: string): Promise<void> {
@@ -38,7 +38,7 @@ export const qualificationService = {
     userId: string,
   ): Promise<{ user: { id: string; displayName: string; avatarUrl: string | null }; qualifications: MemberQualification[] }> {
     const response = await apiClient.get(ENDPOINTS.QUALIFICATIONS.MEMBER(userId));
-    return response.data;
+    return response;
   },
 
   async awardQualification(
@@ -46,7 +46,7 @@ export const qualificationService = {
     data: AwardQualificationData,
   ): Promise<{ qualification: MemberQualification }> {
     const response = await apiClient.post(ENDPOINTS.QUALIFICATIONS.MEMBER(userId), data);
-    return response.data;
+    return response;
   },
 
   async revokeQualification(userId: string, qualificationTypeId: string): Promise<void> {
@@ -55,6 +55,6 @@ export const qualificationService = {
 
   async getSummary(): Promise<{ members: QualifiedMember[] }> {
     const response = await apiClient.get(ENDPOINTS.QUALIFICATIONS.SUMMARY);
-    return response.data;
+    return response;
   },
 };
