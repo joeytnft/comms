@@ -580,15 +580,18 @@ const patchPodfileCodesigning = (config) =>
 // ─── 5. Fix widget build phases ───────────────────────────────────────────────
 // addSourceFile() with a specific target UUID can place files in the main app's
 // Sources phase instead of the widget's due to a bug in the xcode npm package.
-// This step runs after addXcodeTargets and enforces correct placement:
-//   • Removes GatherSafeLiveActivity.swift and GatherSafeLiveActivityBundle.swift
-//     from the main target's Sources phase.
-//   • Ensures those same build file entries are in the widget target's Sources phase.
-const WIDGET_ONLY_SOURCES = new Set([
-  'GatherSafeLiveActivity.swift',
-  'GatherSafeLiveActivityBundle.swift',
-]);
-
+//
+// This step uses PBX group membership (not filename matching) to identify widget
+// source files. That correctly handles GatherSafeActivityAttributes.swift, which
+// exists in both the widget group (GatherSafeWidget/) and the main LiveActivity
+// group (GatherSafe/LiveActivity/). Filename matching would miss the widget copy;
+// group-based matching routes each copy to the right target:
+//   • GatherSafeWidget group copy  → widget Sources
+//   • LiveActivity group copy      → main Sources (untouched)
+//
+// Without GatherSafeActivityAttributes.swift in the widget's Sources phase, the
+// widget Swift compilation silently fails and produces no executable, causing
+// App Store error 90085 ("No architectures in the binary").
 const fixWidgetBuildPhases = (config) =>
   withXcodeProject(config, (mod) => {
     const proj    = mod.modResults;
@@ -616,39 +619,41 @@ const fixWidgetBuildPhases = (config) =>
     const mainSourcesUUID   = phaseUUIDOf(mainTarget);
     let   widgetSourcesUUID = phaseUUIDOf(widgetTarget);
 
-    // ── Find fileRef UUIDs for widget-only source files ─────────────────────
-    // addSourceFile() may create two separate PBXBuildFile entries (different
-    // UUIDs) for the same source file when it adds to both targets. Deduplication
-    // must therefore be based on the underlying PBXFileReference UUID, not the
-    // PBXBuildFile UUID — otherwise the "already in widget" check misses the
-    // second UUID and the file gets compiled twice, causing a duplicate @main error.
-    const fileRefs   = objects['PBXFileReference'] ?? {};
-    const buildFiles = objects['PBXBuildFile']     ?? {};
-
-    const widgetOnlyFileRefUUIDs = new Set();
-    for (const [uuid, ref] of Object.entries(fileRefs)) {
-      if (uuid.endsWith('_comment') || typeof ref !== 'object') continue;
-      const name = (ref.path ?? ref.name ?? '').replace(/^"|"$/g, '');
-      if (WIDGET_ONLY_SOURCES.has(name)) widgetOnlyFileRefUUIDs.add(uuid);
+    // ── Collect file ref UUIDs that belong to the widget's PBX group ────────
+    // Identify by group membership so shared filenames across groups are handled
+    // correctly — only refs that are children of the GatherSafeWidget group are
+    // considered widget files.
+    const pbxGroups = objects['PBXGroup'] ?? {};
+    const widgetChildFileRefs = new Set();
+    for (const [uuid, group] of Object.entries(pbxGroups)) {
+      if (uuid.endsWith('_comment') || typeof group !== 'object') continue;
+      const groupPath = (group.path ?? group.name ?? '').replace(/^"|"$/g, '');
+      if (groupPath !== WIDGET_NAME) continue;
+      for (const child of (group.children ?? [])) {
+        widgetChildFileRefs.add(child.value);
+      }
     }
 
+    const buildFiles = objects['PBXBuildFile'] ?? {};
+
     // Map fileRefUUID → [{ value: buildFileUUID, comment }]
+    // addSourceFile() may produce multiple PBXBuildFile entries for the same
+    // file ref; deduplication by fileRef UUID avoids compiling a file twice.
     const buildFilesByFileRef = new Map();
     for (const [key, bf] of Object.entries(buildFiles)) {
       if (key.endsWith('_comment') || typeof bf !== 'object') continue;
       const fileRef = (bf.fileRef ?? '').replace(/^"|"$/g, '');
-      if (!widgetOnlyFileRefUUIDs.has(fileRef)) continue;
+      if (!widgetChildFileRefs.has(fileRef)) continue;
       const arr = buildFilesByFileRef.get(fileRef) ?? [];
       arr.push({ value: key, comment: buildFiles[`${key}_comment`] ?? '' });
       buildFilesByFileRef.set(fileRef, arr);
     }
 
-    // All build file UUIDs for widget-only files (used to scrub all targets).
     const allWidgetBuildFileUUIDs = new Set(
       [...buildFilesByFileRef.values()].flat().map((e) => e.value)
     );
 
-    // ── Remove ALL widget-only build file entries from main's Sources ────────
+    // ── Remove ALL widget-group build file entries from main's Sources ────────
     if (mainSourcesUUID) {
       const phase = allSourcePhases[mainSourcesUUID];
       if (phase?.files) {
@@ -671,24 +676,22 @@ const fixWidgetBuildPhases = (config) =>
       widgetTarget.buildPhases.push({ value: widgetSourcesUUID, comment: 'Sources' });
     }
 
-    // ── Ensure exactly ONE entry per widget-only file in widget's Sources ────
-    // First, remove any duplicates that may already exist there.
+    // ── Ensure exactly ONE entry per widget file in widget's Sources ─────────
     const widgetPhase = allSourcePhases[widgetSourcesUUID];
     const seenFileRefs = new Set();
-    widgetPhase.files  = (widgetPhase.files ?? []).filter((f) => {
+    widgetPhase.files = (widgetPhase.files ?? []).filter((f) => {
       if (typeof f !== 'object') return true;
       const bf      = buildFiles[f.value];
       const fileRef = bf ? (bf.fileRef ?? '').replace(/^"|"$/g, '') : null;
-      if (!fileRef || !widgetOnlyFileRefUUIDs.has(fileRef)) return true; // keep non-widget files
+      if (!fileRef || !widgetChildFileRefs.has(fileRef)) return true; // keep non-widget files
       if (seenFileRefs.has(fileRef)) return false; // drop duplicate
       seenFileRefs.add(fileRef);
       return true;
     });
 
-    // Then add any widget-only files that are not yet represented.
     for (const [fileRef, entries] of buildFilesByFileRef) {
       if (!seenFileRefs.has(fileRef)) {
-        widgetPhase.files.push(entries[0]); // use the first available build file UUID
+        widgetPhase.files.push(entries[0]);
         seenFileRefs.add(fileRef);
       }
     }
