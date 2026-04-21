@@ -444,7 +444,7 @@ const addXcodeTargets = (config) =>
           cfg.buildSettings['PRODUCT_BUNDLE_IDENTIFIER']  = widgetBundleId;
           cfg.buildSettings['PRODUCT_NAME']               = `"${WIDGET_NAME}"`;
           cfg.buildSettings['CODE_SIGN_STYLE']            = codeSignStyle;
-          cfg.buildSettings['CODE_SIGN_IDENTITY']         = '"Apple Development"';
+          cfg.buildSettings['CODE_SIGN_IDENTITY']         = '"Apple Distribution"';
           if (developmentTeam) cfg.buildSettings['DEVELOPMENT_TEAM'] = developmentTeam;
           // Widget has no bridging header — explicitly clear to avoid inheriting
           // the main target's bridging header path via xcconfig.
