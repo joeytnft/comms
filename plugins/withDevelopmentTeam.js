@@ -8,6 +8,7 @@ module.exports = function withDevelopmentTeam(config, { developmentTeam }) {
       const buildConfig = configurations[key];
       if (buildConfig && buildConfig.buildSettings) {
         buildConfig.buildSettings.DEVELOPMENT_TEAM = developmentTeam;
+        buildConfig.buildSettings.ENABLE_BITCODE = 'NO';
       }
     }
     return mod;
