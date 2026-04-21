@@ -10,6 +10,8 @@ import {
   Alert,
   ActivityIndicator,
   FlatList,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -256,8 +258,9 @@ export function MemberQualificationsScreen() {
       )}
 
       {/* Award/Edit qualification modal */}
-      <Modal visible={showAwardModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+      <Modal visible={showAwardModal} transparent animationType="slide" onRequestClose={() => setShowAwardModal(false)}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setShowAwardModal(false)} />
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>
               {editingQual ? 'Update Qualification' : 'Award Qualification'}
@@ -327,12 +330,13 @@ export function MemberQualificationsScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Type picker modal */}
-      <Modal visible={showTypePicker} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+      <Modal visible={showTypePicker} transparent animationType="slide" onRequestClose={() => setShowTypePicker(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowTypePicker(false)}>
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
           <View style={[styles.modalCard, { maxHeight: '60%' }]}>
             <View style={styles.pickerHeader}>
               <Text style={styles.modalTitle}>Select Qualification</Text>
@@ -374,7 +378,8 @@ export function MemberQualificationsScreen() {
               }
             />
           </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </SafeAreaView>
   );

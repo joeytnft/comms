@@ -136,12 +136,13 @@ export async function deleteAlertById(alertId: string, userId: string, organizat
     throw new AuthorizationError('Alert does not belong to your organization');
   }
 
-  // Only the alert triggerer or a group admin can delete alerts
+  // Only the alert triggerer, an org admin, or a group admin can delete alerts
   if (alert.triggeredById !== userId) {
-    const adminMembership = await prisma.groupMembership.findFirst({
-      where: { userId, role: 'ADMIN', group: { organizationId } },
-    });
-    if (!adminMembership) {
+    const [orgAdmin, adminMembership] = await Promise.all([
+      prisma.user.findFirst({ where: { id: userId, isOrgAdmin: true } }),
+      prisma.groupMembership.findFirst({ where: { userId, role: 'ADMIN', group: { organizationId } } }),
+    ]);
+    if (!orgAdmin && !adminMembership) {
       throw new AuthorizationError('Only the alert creator or a group admin can delete alerts');
     }
   }
@@ -157,12 +158,13 @@ export async function resolveAlertById(alertId: string, userId: string, organiza
   }
   if (alert.resolvedAt) return alert;
 
-  // Only the alert triggerer or a group admin can resolve alerts
+  // Only the alert triggerer, an org admin, or a group admin can resolve alerts
   if (alert.triggeredById !== userId) {
-    const adminMembership = await prisma.groupMembership.findFirst({
-      where: { userId, role: 'ADMIN', group: { organizationId } },
-    });
-    if (!adminMembership) {
+    const [orgAdmin, adminMembership] = await Promise.all([
+      prisma.user.findFirst({ where: { id: userId, isOrgAdmin: true } }),
+      prisma.groupMembership.findFirst({ where: { userId, role: 'ADMIN', group: { organizationId } } }),
+    ]);
+    if (!orgAdmin && !adminMembership) {
       throw new AuthorizationError('Only the alert creator or a group admin can resolve alerts');
     }
   }

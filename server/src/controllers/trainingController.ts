@@ -83,6 +83,7 @@ export async function getTraining(
         include: { user: { select: { id: true, displayName: true, avatarUrl: true } } },
         orderBy: { signedUpAt: 'asc' },
       },
+      _count: { select: { signups: { where: { status: 'CONFIRMED' } } } },
     },
   });
 
@@ -92,7 +93,8 @@ export async function getTraining(
     where: { trainingEventId_userId: { trainingEventId: training.id, userId: request.userId } },
   });
 
-  reply.send({ training: { ...training, mySignup } });
+  const { _count, ...rest } = training;
+  reply.send({ training: { ...rest, confirmedCount: _count.signups, mySignup } });
 }
 
 // ── Create training ────────────────────────────────────────────────────────────

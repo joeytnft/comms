@@ -7,7 +7,7 @@ export interface Campus {
   createdAt: string;
   updatedAt: string;
   _count: {
-    users: number;
+    campusMemberships: number;
     groups: number;
   };
 }
@@ -27,5 +27,5 @@ export interface OrgMemberWithCampus {
   email: string;
   avatarUrl?: string | null;
   campusId: string | null;
-  campus: { id: string; name: string } | null;
+  campusMemberships: { campusId: string; campus: { id: string; name: string } }[];
 }

@@ -58,6 +58,7 @@ export function TrainingDetailScreen() {
       await signUp(trainingId, signupNotes.trim() || undefined);
       setShowSignupModal(false);
       setSignupNotes('');
+      fetchTraining(trainingId);
     } catch (e: unknown) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Failed to sign up');
     } finally {
@@ -75,6 +76,7 @@ export function TrainingDetailScreen() {
           setIsActing(true);
           try {
             await cancelSignup(trainingId);
+            fetchTraining(trainingId);
           } catch {
             Alert.alert('Error', 'Failed to cancel signup');
           } finally {
@@ -258,46 +260,49 @@ export function TrainingDetailScreen() {
       </ScrollView>
 
       {/* Signup modal */}
-      <Modal visible={showSignupModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Sign Up for Training</Text>
-            <Text style={styles.modalSubtitle}>{training.title}</Text>
-            <TextInput
-              style={styles.notesInput}
-              placeholder="Notes (optional)"
-              placeholderTextColor={COLORS.textSecondary}
-              value={signupNotes}
-              onChangeText={setSignupNotes}
-              multiline
-              numberOfLines={3}
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setShowSignupModal(false)}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalConfirmBtn}
-                onPress={handleSignup}
-                disabled={isActing}
-              >
-                {isActing ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.modalConfirmText}>Confirm Signup</Text>
-                )}
-              </TouchableOpacity>
+      <Modal visible={showSignupModal} transparent animationType="slide" onRequestClose={() => setShowSignupModal(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowSignupModal(false)}>
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Sign Up for Training</Text>
+              <Text style={styles.modalSubtitle}>{training.title}</Text>
+              <TextInput
+                style={styles.notesInput}
+                placeholder="Notes (optional)"
+                placeholderTextColor={COLORS.textSecondary}
+                value={signupNotes}
+                onChangeText={setSignupNotes}
+                multiline
+                numberOfLines={3}
+              />
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setShowSignupModal(false)}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.modalConfirmBtn}
+                  onPress={handleSignup}
+                  disabled={isActing}
+                >
+                  {isActing ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.modalConfirmText}>Confirm Signup</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* Admin signups modal */}
-      <Modal visible={showAdminSignups} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+      <Modal visible={showAdminSignups} transparent animationType="slide" onRequestClose={() => setShowAdminSignups(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowAdminSignups(false)}>
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
           <View style={[styles.modalCard, { maxHeight: '70%' }]}>
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>Registrations</Text>
@@ -324,7 +329,8 @@ export function TrainingDetailScreen() {
               )}
             </ScrollView>
           </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </SafeAreaView>
   );

@@ -37,6 +37,7 @@ export function CampusManagementScreen() {
 
   // Assign modal
   const [assignCampus, setAssignCampus] = useState<Campus | null>(null);
+  const [reassignMember, setReassignMember] = useState<OrgMemberWithCampus | null>(null);
 
   // Geofence modal
   const [geofenceCampus, setGeofenceCampus] = useState<Campus | null>(null);
@@ -182,22 +183,36 @@ export function CampusManagementScreen() {
     ]);
   };
 
-  const handleRemove = (member: OrgMemberWithCampus) => {
-    if (!member.campusId) return;
-    Alert.alert('Remove from Campus', `Remove ${member.displayName} from their campus?`, [
+  const handleRemove = (member: OrgMemberWithCampus, campusId: string, campusName: string) => {
+    Alert.alert('Remove from Campus', `Remove ${member.displayName} from ${campusName}?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
         style: 'destructive',
         onPress: async () => {
           try {
-            await removeUser(member.campusId!, member.id);
+            await removeUser(campusId, member.id);
+            fetchOrgMembers();
           } catch (e: unknown) {
             Alert.alert('Error', e instanceof Error ? e.message : 'Failed to remove member');
           }
         },
       },
     ]);
+  };
+
+  const handleReassign = async (member: OrgMemberWithCampus, newCampus: Campus) => {
+    try {
+      // Remove from all current campuses then assign to new one
+      for (const cm of member.campusMemberships) {
+        await removeUser(cm.campusId, member.id);
+      }
+      await assignUser(newCampus.id, member.id);
+      setReassignMember(null);
+      fetchOrgMembers();
+    } catch (e: unknown) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to reassign member');
+    }
   };
 
   return (
@@ -240,7 +255,7 @@ export function CampusManagementScreen() {
                     {campus.description ? <Text style={styles.cardDesc}>{campus.description}</Text> : null}
                   </View>
                   <View style={styles.cardStats}>
-                    <Text style={styles.statText}>{campus._count.users} members</Text>
+                    <Text style={styles.statText}>{campus._count.campusMemberships} members</Text>
                     <Text style={styles.statText}>{campus._count.groups} groups</Text>
                   </View>
                 </View>
@@ -272,24 +287,48 @@ export function CampusManagementScreen() {
               <Text style={styles.emptyTitle}>No members</Text>
             </View>
           ) : (
-            orgMembers.map((member) => (
-              <View key={member.id} style={styles.memberRow}>
-                <View style={styles.memberAvatar}>
-                  <Text style={styles.memberAvatarText}>{member.displayName.charAt(0).toUpperCase()}</Text>
+            orgMembers.map((member) => {
+              const campusNames = member.campusMemberships.map(cm => cm.campus.name).join(', ');
+              const isAssigned = member.campusMemberships.length > 0;
+              return (
+                <View key={member.id} style={styles.memberRow}>
+                  <View style={styles.memberAvatar}>
+                    <Text style={styles.memberAvatarText}>{member.displayName.charAt(0).toUpperCase()}</Text>
+                  </View>
+                  <View style={styles.memberInfo}>
+                    <Text style={styles.memberName}>{member.displayName}</Text>
+                    <Text style={styles.memberCampus}>
+                      {isAssigned ? campusNames : 'Unassigned'}
+                    </Text>
+                  </View>
+                  <View style={styles.memberActions}>
+                    {isAssigned && (
+                      <>
+                        <TouchableOpacity style={styles.reassignBtn} onPress={() => setReassignMember(member)}>
+                          <Text style={styles.reassignText}>Reassign</Text>
+                        </TouchableOpacity>
+                        {member.campusMemberships.map(cm => (
+                          <TouchableOpacity
+                            key={cm.campusId}
+                            style={styles.removeMemberBtn}
+                            onPress={() => handleRemove(member, cm.campusId, cm.campus.name)}
+                          >
+                            <Text style={styles.removeMemberText}>
+                              {member.campusMemberships.length > 1 ? `Remove from ${cm.campus.name}` : 'Remove'}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </>
+                    )}
+                    {!isAssigned && (
+                      <TouchableOpacity style={styles.reassignBtn} onPress={() => { setAssignCampus(campuses[0] ?? null); }}>
+                        <Text style={styles.reassignText}>Assign</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
-                <View style={styles.memberInfo}>
-                  <Text style={styles.memberName}>{member.displayName}</Text>
-                  <Text style={styles.memberCampus}>
-                    {member.campus ? member.campus.name : 'Unassigned'}
-                  </Text>
-                </View>
-                {member.campusId ? (
-                  <TouchableOpacity style={styles.removeMemberBtn} onPress={() => handleRemove(member)}>
-                    <Text style={styles.removeMemberText}>Remove</Text>
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-            ))
+              );
+            })
           )
         )}
       </ScrollView>
@@ -381,7 +420,7 @@ export function CampusManagementScreen() {
             <Text style={styles.sheetTitle}>Assign to {assignCampus?.name}</Text>
             <Text style={styles.sheetSub}>Tap an unassigned member to add them to this campus.</Text>
             <ScrollView>
-              {orgMembers.filter((m) => !m.campusId).map((member) => (
+              {orgMembers.filter((m) => m.campusMemberships.length === 0).map((member) => (
                 <TouchableOpacity key={member.id} style={styles.memberRowModal} onPress={() => handleAssign(member)}>
                   <View style={styles.memberAvatar}>
                     <Text style={styles.memberAvatarText}>{member.displayName.charAt(0).toUpperCase()}</Text>
@@ -393,12 +432,45 @@ export function CampusManagementScreen() {
                   <Text style={styles.assignPlus}>+</Text>
                 </TouchableOpacity>
               ))}
-              {orgMembers.filter((m) => !m.campusId).length === 0 && (
+              {orgMembers.filter((m) => m.campusMemberships.length === 0).length === 0 && (
                 <Text style={styles.emptySubtitle}>All members are already assigned to a campus.</Text>
               )}
             </ScrollView>
             <TouchableOpacity style={styles.ghostBtn} onPress={() => setAssignCampus(null)}>
               <Text style={styles.ghostBtnText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Reassign member modal */}
+      <Modal visible={!!reassignMember} transparent animationType="slide" onRequestClose={() => setReassignMember(null)}>
+        <View style={styles.overlay}>
+          <View style={[styles.sheet, { maxHeight: '80%' }]}>
+            <Text style={styles.sheetTitle}>Reassign {reassignMember?.displayName}</Text>
+            <Text style={styles.sheetSub}>Select a campus to move this member to.</Text>
+            <ScrollView>
+              {campuses
+                .filter((c) => !reassignMember?.campusMemberships.some(cm => cm.campusId === c.id))
+                .map((campus) => (
+                  <TouchableOpacity
+                    key={campus.id}
+                    style={styles.memberRowModal}
+                    onPress={() => reassignMember && handleReassign(reassignMember, campus)}
+                  >
+                    <View style={styles.memberInfo}>
+                      <Text style={styles.memberName}>{campus.name}</Text>
+                      {campus.address ? <Text style={styles.memberCampus}>{campus.address}</Text> : null}
+                    </View>
+                    <Text style={styles.assignPlus}>→</Text>
+                  </TouchableOpacity>
+                ))}
+              {campuses.filter((c) => !reassignMember?.campusMemberships.some(cm => cm.campusId === c.id)).length === 0 && (
+                <Text style={styles.emptySubtitle}>No other campuses available.</Text>
+              )}
+            </ScrollView>
+            <TouchableOpacity style={styles.ghostBtn} onPress={() => setReassignMember(null)}>
+              <Text style={styles.ghostBtnText}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -460,6 +532,9 @@ const styles = StyleSheet.create({
   memberInfo: { flex: 1 },
   memberName: { ...TYPOGRAPHY.body, color: COLORS.textPrimary, fontWeight: '500' },
   memberCampus: { ...TYPOGRAPHY.caption, color: COLORS.textMuted },
+  memberActions: { flexDirection: 'column', alignItems: 'flex-end', gap: 4 },
+  reassignBtn: { paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs },
+  reassignText: { ...TYPOGRAPHY.bodySmall, color: COLORS.info },
   removeMemberBtn: { paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs },
   removeMemberText: { ...TYPOGRAPHY.bodySmall, color: COLORS.danger },
   assignPlus: { ...TYPOGRAPHY.heading2, color: COLORS.accent, paddingHorizontal: SPACING.sm },

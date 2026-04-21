@@ -561,23 +561,33 @@ export async function joinByInvite(
     throw new ConflictError('You are already a member of this group');
   }
 
-  const membership = await prisma.groupMembership.create({
-    data: {
-      groupId: group.id,
-      userId: request.userId,
-      role: 'MEMBER',
-    },
-    include: {
-      user: {
-        select: { id: true, displayName: true, avatarUrl: true, lastSeenAt: true },
+  await prisma.groupMembership.create({
+    data: { groupId: group.id, userId: request.userId, role: 'MEMBER' },
+  });
+
+  // Return the full group so the client can add it to the groups list
+  const fullGroup = await prisma.group.findUnique({
+    where: { id: group.id },
+    select: {
+      ...GROUP_SELECT,
+      memberships: {
+        include: { user: { select: { id: true, displayName: true, avatarUrl: true, lastSeenAt: true } } },
+        orderBy: { joinedAt: 'asc' },
       },
-      group: {
-        select: { id: true, name: true, type: true },
-      },
+      _count: { select: { memberships: true } },
     },
   });
 
-  reply.status(201).send({ membership: formatMembership(membership) });
+  reply.status(201).send({
+    group: {
+      ...fullGroup,
+      type: formatGroupType(fullGroup!.type),
+      memberCount: fullGroup!._count.memberships,
+      members: fullGroup!.memberships.map(formatMembership),
+      _count: undefined,
+      memberships: undefined,
+    },
+  });
 }
 
 export async function getGroupKey(
