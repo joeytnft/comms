@@ -207,11 +207,18 @@ export async function login(
     select: {
       id: true, email: true, displayName: true, phone: true,
       avatarUrl: true, publicKey: true, organizationId: true,
-      campusId: true, isOrgAdmin: true, passwordHash: true, createdAt: true, lastSeenAt: true,
+      campusId: true, isOrgAdmin: true, passwordHash: true,
+      accountStatus: true, createdAt: true, lastSeenAt: true,
     },
   });
   if (!user) {
     throw new AuthenticationError('Invalid email or password');
+  }
+
+  if (user.accountStatus === 'INVITED') {
+    throw new AuthenticationError(
+      'Your account has not been activated yet. Check your email for an invite link or use the "Have an invite?" option on the login screen.',
+    );
   }
 
   const isValidPassword = await bcrypt.compare(password, user.passwordHash);

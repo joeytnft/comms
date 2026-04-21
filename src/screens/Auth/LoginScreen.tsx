@@ -26,7 +26,12 @@ export function LoginScreen({ navigation }: { navigation: any }) {
     try {
       await login({ email: email.trim(), password });
     } catch (error: any) {
-      Alert.alert('Login Failed', error.message || 'Please check your credentials.');
+      const message =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message ||
+        'Please check your credentials.';
+      Alert.alert('Login Failed', message);
     }
   };
 
