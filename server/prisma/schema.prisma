@@ -63,16 +63,32 @@ model Campus {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  users        User[]
-  groups       Group[]
-  alerts       Alert[]
-  incidents    Incident[]
-  geofence     Geofence?
+  organization  Organization  @relation(fields: [organizationId], references: [id])
+  users         User[]
+  campusMemberships CampusUser[]
+  groups        Group[]
+  alerts        Alert[]
+  incidents     Incident[]
+  geofence      Geofence?
 
   @@unique([organizationId, name])
   @@index([organizationId])
   @@map("campuses")
+}
+
+model CampusUser {
+  id        String   @id @default(cuid())
+  campusId  String
+  userId    String
+  joinedAt  DateTime @default(now())
+
+  campus Campus @relation(fields: [campusId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([campusId, userId])
+  @@index([campusId])
+  @@index([userId])
+  @@map("campus_users")
 }
 
 enum SubscriptionTier {
@@ -126,9 +142,10 @@ model User {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  organization    Organization      @relation(fields: [organizationId], references: [id])
-  campus          Campus?           @relation(fields: [campusId], references: [id])
-  memberships     GroupMembership[]
+  organization      Organization      @relation(fields: [organizationId], references: [id])
+  campus            Campus?           @relation(fields: [campusId], references: [id])
+  campusMemberships CampusUser[]
+  memberships       GroupMembership[]
   sentMessages    Message[]         @relation("sender")
   triggeredAlerts Alert[]           @relation("triggeredBy")
   reportedIncidents Incident[]      @relation("reportedBy")

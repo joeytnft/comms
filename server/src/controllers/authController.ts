@@ -166,11 +166,12 @@ export async function register(
   // Derive role for the newly created user
   const registerRole = organization.createdBy === user.id ? 'owner' : 'member';
 
-  // Generate tokens
+  // Generate tokens (org admins get campusId=null so they see all-org data)
+  const isNewOrgAdmin = !!organizationName;
   const accessToken = request.server.jwt.sign({
     userId: user.id,
     organizationId: user.organizationId,
-    campusId: user.campusId ?? null,
+    campusId: isNewOrgAdmin ? null : (user.campusId ?? null),
   });
 
   const refreshToken = generateRefreshToken();
@@ -231,11 +232,11 @@ export async function login(
   });
   const role = org?.createdBy === user.id ? 'owner' : user.isOrgAdmin ? 'admin' : 'member';
 
-  // Generate tokens
+  // Generate tokens (org admins get campusId=null so they see all-org data)
   const accessToken = request.server.jwt.sign({
     userId: user.id,
     organizationId: user.organizationId,
-    campusId: user.campusId ?? null,
+    campusId: user.isOrgAdmin ? null : (user.campusId ?? null),
   });
 
   const refreshToken = generateRefreshToken();
@@ -281,7 +282,7 @@ export async function refresh(
 
   const storedToken = await prisma.refreshToken.findUnique({
     where: { token: hashToken(refreshToken) },
-    include: { user: { select: { id: true, organizationId: true, campusId: true } } },
+    include: { user: { select: { id: true, organizationId: true, campusId: true, isOrgAdmin: true } } },
   });
 
   if (!storedToken) {
@@ -300,7 +301,7 @@ export async function refresh(
   const newAccessToken = request.server.jwt.sign({
     userId: storedToken.user.id,
     organizationId: storedToken.user.organizationId,
-    campusId: storedToken.user.campusId ?? null,
+    campusId: storedToken.user.isOrgAdmin ? null : (storedToken.user.campusId ?? null),
   });
 
   const newRefreshToken = generateRefreshToken();

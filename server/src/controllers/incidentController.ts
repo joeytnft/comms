@@ -82,7 +82,12 @@ export async function listIncidents(
     ...(campusId ? { campusId } : {}),
   };
   if (query.status) {
-    where.status = query.status.toUpperCase();
+    const s = query.status.toUpperCase();
+    if (s === 'ACTIVE') {
+      where.status = { in: ['OPEN', 'IN_PROGRESS'] };
+    } else {
+      where.status = s;
+    }
   }
 
   const incidents = await prisma.incident.findMany({

@@ -35,7 +35,7 @@ const CAMPUS_SELECT = {
   inviteCode: true,
   createdAt: true,
   updatedAt: true,
-  _count: { select: { users: true, groups: true } },
+  _count: { select: { campusMemberships: true, groups: true } },
 };
 
 function assertOrgCampus(campus: { organizationId: string } | null, organizationId: string) {
@@ -118,11 +118,11 @@ export async function deleteCampus(
 ) {
   const existing = await prisma.campus.findUnique({
     where: { id: request.params.id },
-    select: { organizationId: true, _count: { select: { users: true } } },
+    select: { organizationId: true, _count: { select: { campusMemberships: true } } },
   });
   assertOrgCampus(existing, request.organizationId);
 
-  if (existing!._count.users > 0) {
+  if (existing!._count.campusMemberships > 0) {
     throw new AuthorizationError(
       'Cannot delete a campus that still has members. Reassign or remove all members first.',
     );
@@ -149,11 +149,15 @@ export async function getCampusMembers(
   });
   assertOrgCampus(existing, request.organizationId);
 
-  const members = await prisma.user.findMany({
+  const memberships = await prisma.campusUser.findMany({
     where: { campusId: request.params.id },
-    select: { id: true, displayName: true, email: true, phone: true, avatarUrl: true, createdAt: true },
-    orderBy: { displayName: 'asc' },
+    select: {
+      joinedAt: true,
+      user: { select: { id: true, displayName: true, email: true, phone: true, avatarUrl: true, createdAt: true } },
+    },
+    orderBy: { user: { displayName: 'asc' } },
   });
+  const members = memberships.map(m => ({ ...m.user, joinedAt: m.joinedAt }));
   reply.send({ members });
 }
 
@@ -166,7 +170,7 @@ export async function assignUserToCampus(
 
   const [campus, user] = await Promise.all([
     prisma.campus.findUnique({ where: { id: request.params.id }, select: { organizationId: true } }),
-    prisma.user.findUnique({ where: { id: userId }, select: { id: true, organizationId: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { id: true, organizationId: true, campusId: true } }),
   ]);
 
   assertOrgCampus(campus, request.organizationId);
@@ -174,7 +178,19 @@ export async function assignUserToCampus(
     throw new NotFoundError('User not found in this organization');
   }
 
-  await prisma.user.update({ where: { id: userId }, data: { campusId: request.params.id } });
+  await prisma.$transaction([
+    // Add to the junction table (upsert — idempotent)
+    prisma.campusUser.upsert({
+      where: { campusId_userId: { campusId: request.params.id, userId } },
+      create: { campusId: request.params.id, userId },
+      update: {},
+    }),
+    // Set as the user's active campus if they don't have one yet
+    ...(user.campusId ? [] : [
+      prisma.user.update({ where: { id: userId }, data: { campusId: request.params.id } }),
+    ]),
+  ]);
+
   reply.send({ ok: true });
 }
 
@@ -196,22 +212,40 @@ export async function removeUserFromCampus(
   if (!user || user.organizationId !== request.organizationId) {
     throw new NotFoundError('User not found in this organization');
   }
-  if (user.campusId !== request.params.id) {
+
+  const membership = await prisma.campusUser.findUnique({
+    where: { campusId_userId: { campusId: request.params.id, userId: request.params.userId } },
+  });
+  if (!membership) {
     throw new AuthorizationError('User is not a member of this campus');
   }
 
-  await prisma.user.update({ where: { id: request.params.userId }, data: { campusId: null } });
+  // Remove from junction table
+  await prisma.campusUser.delete({ where: { id: membership.id } });
+
+  // If this was the user's active campus, clear it (or switch to another membership)
+  if (user.campusId === request.params.id) {
+    const nextMembership = await prisma.campusUser.findFirst({
+      where: { userId: request.params.userId },
+      select: { campusId: true },
+    });
+    await prisma.user.update({
+      where: { id: request.params.userId },
+      data: { campusId: nextMembership?.campusId ?? null },
+    });
+  }
+
   reply.status(204).send();
 }
 
 export async function getOrgMembers(request: FastifyRequest, reply: FastifyReply) {
-  // Returns all org members with their campus assignment — used by Enterprise admins for assigning
+  // Returns all org members with all their campus memberships
   const members = await prisma.user.findMany({
     where: { organizationId: request.organizationId },
     select: {
       id: true, displayName: true, email: true, avatarUrl: true,
       campusId: true,
-      campus: { select: { id: true, name: true } },
+      campusMemberships: { select: { campusId: true, campus: { select: { id: true, name: true } } } },
     },
     orderBy: { displayName: 'asc' },
   });
