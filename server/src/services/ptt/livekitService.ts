@@ -34,7 +34,7 @@ function buildOutput(groupId: string, userId: string): EncodedFileOutput | null 
         accessKey:      SUPABASE_S3_KEY_ID,
         secret:         SUPABASE_S3_ACCESS_SECRET,
         region:         'us-east-1',
-        endpoint:       `${SUPABASE_URL}/storage/v1/s3`,
+        endpoint:       env.SUPABASE_S3_ENDPOINT || `${SUPABASE_URL}/storage/v1/s3`,
         bucket:         SUPABASE_STORAGE_BUCKET,
         forcePathStyle: true,
       }),

@@ -22,6 +22,7 @@ const envSchema = z.object({
   // Supabase S3-compatible credentials (required only for LiveKit egress output)
   SUPABASE_S3_KEY_ID:        z.string().optional(),
   SUPABASE_S3_ACCESS_SECRET: z.string().optional(),
+  SUPABASE_S3_ENDPOINT:      z.string().optional(),
 
   // LiveKit (optional until PTT is implemented)
   LIVEKIT_API_KEY: z.string().optional(),

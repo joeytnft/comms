@@ -269,15 +269,28 @@ RCT_EXPORT_METHOD(setServiceStatus:(NSString *)channelId
     [self emit:@"onPTTTransmitStop" body:@{@"channelId": channelUUID.UUIDString}];
 }
 
+// iOS 16–25 signature (channelUUID present)
 - (void)channelManager:(PTChannelManager *)channelManager
            channelUUID:(NSUUID *)channelUUID
     receivedEphemeralPushToken:(NSData *)pushToken API_AVAILABLE(ios(16.0))
+{
+    [self emitPushToken:pushToken channelUUID:channelUUID];
+}
+
+// iOS 26+ signature (channelUUID removed from delegate method)
+- (void)channelManager:(PTChannelManager *)channelManager
+    receivedEphemeralPushToken:(NSData *)pushToken
+{
+    [self emitPushToken:pushToken channelUUID:_channelUUID];
+}
+
+- (void)emitPushToken:(NSData *)pushToken channelUUID:(NSUUID *)channelUUID
 {
     NSMutableString *hex = [NSMutableString stringWithCapacity:pushToken.length * 2];
     const unsigned char *b = (const unsigned char *)pushToken.bytes;
     for (NSUInteger i = 0; i < pushToken.length; i++) [hex appendFormat:@"%02x", b[i]];
     [self emit:@"onPTTPushToken" body:@{
-        @"channelId": channelUUID.UUIDString,
+        @"channelId": channelUUID.UUIDString ?: @"",
         @"token": hex,
     }];
 }

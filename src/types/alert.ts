@@ -1,6 +1,7 @@
 export type AlertLevel = 'ATTENTION' | 'WARNING' | 'EMERGENCY';
 
 export type AlertTypeKey =
+  | 'ACTIVE_SHOOTER'
   | 'MEDICAL'
   | 'SUSPICIOUS_PERSON'
   | 'CHILD_SAFETY'
@@ -19,6 +20,14 @@ export interface AlertTypeDef {
 }
 
 export const ALERT_TYPE_DEFS: Record<AlertTypeKey, AlertTypeDef> = {
+  ACTIVE_SHOOTER: {
+    label: 'Active Shooter',
+    description: 'Armed intruder — immediate threat to life',
+    color: '#7F1D1D',
+    textColor: '#FFFFFF',
+    emoji: '🚨',
+    defaultLevel: 'EMERGENCY',
+  },
   MEDICAL: {
     label: 'Medical',
     description: 'Injury, illness, or medical emergency',
