@@ -436,6 +436,7 @@ const addXcodeTargets = (config) =>
           cfg.buildSettings['SWIFT_VERSION']              = '5.0';
           cfg.buildSettings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.2';
           cfg.buildSettings['TARGETED_DEVICE_FAMILY']     = '"1,2"';
+          cfg.buildSettings['ARCHS']                      = 'arm64';
           cfg.buildSettings['SKIP_INSTALL']               = 'YES';
           cfg.buildSettings['INFOPLIST_FILE']             = `${WIDGET_NAME}/Info.plist`;
           cfg.buildSettings['MARKETING_VERSION']          = config.version ?? '0.1.0';
