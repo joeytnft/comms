@@ -401,16 +401,6 @@ const addXcodeTargets = (config) =>
       );
       const widgetTargetUUID = widgetTarget.uuid;
 
-      // addTarget('app_extension') does not create a Sources build phase —
-      // add one explicitly so addSourceFile() and fixWidgetBuildPhases() can
-      // attach Swift files to the widget target.
-      xcodeProject.addBuildPhase(
-        [],
-        'PBXSourcesBuildPhase',
-        'Sources',
-        widgetTargetUUID
-      );
-
       // Add build settings for Swift + WidgetKit.
       // pbxXCConfigurationListSection() does not exist in the xcode npm package —
       // read XCConfigurationList objects directly from the project hash instead.
