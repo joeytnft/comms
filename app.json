@@ -39,7 +39,7 @@
         ],
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "20"
+      "buildNumber": "21"
     },
     "android": {
       "package": "com.gathersafe2.www",
@@ -73,7 +73,6 @@
       ],
       "./plugins/withPushToTalk",
       "./plugins/withLiveActivity",
-      "./plugins/withCriticalAlerts",
       "expo-location",
       "expo-camera",
       "expo-notifications",
