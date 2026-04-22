@@ -18,6 +18,7 @@ const envSchema = z.object({
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(32),
   SUPABASE_STORAGE_BUCKET: z.string().default('uploads'),
+  SUPABASE_PTT_BUCKET: z.string().default('ptt-audio'),
 
   // Supabase S3-compatible credentials (required only for LiveKit egress output)
   SUPABASE_S3_KEY_ID:        z.string().optional(),

@@ -20,13 +20,13 @@ function getClients(): { egress: EgressClient; rooms: RoomServiceClient } | null
 }
 
 function buildOutput(groupId: string, userId: string): EncodedFileOutput | null {
-  const { SUPABASE_S3_KEY_ID, SUPABASE_S3_ACCESS_SECRET, SUPABASE_URL, SUPABASE_STORAGE_BUCKET } = env;
+  const { SUPABASE_S3_KEY_ID, SUPABASE_S3_ACCESS_SECRET, SUPABASE_URL, SUPABASE_PTT_BUCKET } = env;
   if (!SUPABASE_S3_KEY_ID || !SUPABASE_S3_ACCESS_SECRET) return null;
 
   return new EncodedFileOutput({
     fileType: EncodedFileType.MP4,
     // {time} is substituted by LiveKit with the Unix timestamp at egress start
-    filepath: `ptt/${groupId}/${userId}_{time}.mp4`,
+    filepath: `${groupId}/${userId}_{time}.mp4`,
     disableManifest: true,
     output: {
       case: 's3',
@@ -35,7 +35,7 @@ function buildOutput(groupId: string, userId: string): EncodedFileOutput | null 
         secret:         SUPABASE_S3_ACCESS_SECRET,
         region:         'us-east-1',
         endpoint:       env.SUPABASE_S3_ENDPOINT || `${SUPABASE_URL}/storage/v1/s3`,
-        bucket:         SUPABASE_STORAGE_BUCKET,
+        bucket:         SUPABASE_PTT_BUCKET,
         forcePathStyle: true,
       }),
     },
