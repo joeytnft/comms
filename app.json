@@ -37,9 +37,10 @@
           "location",
           "remote-notification"
         ],
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSFaceIDUsageDescription": "GatherSafe uses Face ID to unlock the app quickly and securely."
       },
-      "buildNumber": "26"
+      "buildNumber": "27"
     },
     "android": {
       "package": "com.gathersafe2.www",

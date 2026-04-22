@@ -5,6 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscriptionStore } from '@/store/useSubscriptionStore';
 import { useAppLock } from '@/contexts/AppLockContext';
+import { biometricAuth } from '@/utils/biometricAuth';
 import { Button } from '@/components/common';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 import { APP_VERSION } from '@/config/constants';
@@ -12,7 +13,8 @@ import { APP_VERSION } from '@/config/constants';
 export function SettingsScreen() {
   const { user, organization, logout } = useAuth();
   const { tierLabel, subscription, canUseFeature } = useSubscriptionStore();
-  const { isPinEnabled, refreshPinStatus } = useAppLock();
+  const { isPinEnabled, isBiometricEnabled, biometricType, refreshPinStatus, refreshBiometricStatus } = useAppLock();
+  const biometricLabel = biometricType === 'faceId' ? 'Face ID' : 'Touch ID';
   const isEnterprise = subscription?.tier === 'PRO';
   const isOrgAdmin = user?.role === 'owner' || user?.role === 'admin';
   const hasPcoAddon = isOrgAdmin; // Visible to all org owners/admins; connection optional
@@ -236,6 +238,31 @@ export function SettingsScreen() {
               <Text style={styles.chevron}>{'>'}</Text>
             </View>
           </Pressable>
+          {isPinEnabled && biometricType !== null && (
+            <Pressable
+              style={styles.settingRow}
+              onPress={async () => {
+                if (isBiometricEnabled) {
+                  await biometricAuth.setEnabled(false);
+                } else {
+                  // Verify biometric before enabling
+                  const ok = await biometricAuth.authenticate(
+                    `Confirm ${biometricLabel} to enable it as your unlock method`,
+                  );
+                  if (ok) await biometricAuth.setEnabled(true);
+                }
+                await refreshBiometricStatus();
+              }}
+            >
+              <Text style={styles.settingLabel}>{biometricLabel}</Text>
+              <View style={styles.tierRow}>
+                <Text style={[styles.tierBadge, { color: isBiometricEnabled ? COLORS.success : COLORS.textMuted }]}>
+                  {isBiometricEnabled ? 'Enabled' : 'Disabled'}
+                </Text>
+                <Text style={styles.chevron}>{'>'}</Text>
+              </View>
+            </Pressable>
+          )}
         </View>
 
         <View style={styles.section}>

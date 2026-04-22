@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { pinLock } from '@/utils/pinLock';
+import { useAppLock } from '@/contexts/AppLockContext';
 import { COLORS, TYPOGRAPHY, SPACING } from '@/config/theme';
 
 const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'];
@@ -19,6 +20,19 @@ interface Props {
 export function PinEntryScreen({ onUnlock }: Props) {
   const [pin, setPin] = useState('');
   const [attempts, setAttempts] = useState(0);
+  const { isBiometricEnabled, biometricType, tryBiometric } = useAppLock();
+
+  const biometricLabel = biometricType === 'faceId' ? 'Face ID' : 'Touch ID';
+
+  // Auto-attempt biometric on mount (context also fires this, but guard here
+  // so the button is available immediately if auto-prompt is dismissed)
+  useEffect(() => {
+    if (isBiometricEnabled) {
+      tryBiometric().then((success) => {
+        if (success) onUnlock();
+      });
+    }
+  }, []);
 
   const handleDigit = (digit: string) => {
     if (digit === '⌫') {
@@ -55,10 +69,15 @@ export function PinEntryScreen({ onUnlock }: Props) {
     }
   };
 
+  const handleBiometric = async () => {
+    const success = await tryBiometric();
+    if (success) onUnlock();
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.body}>
-        <Text style={styles.appName}>Guardian Comm</Text>
+        <Text style={styles.appName}>GatherSafe</Text>
         <Text style={styles.subtitle}>Enter your PIN to unlock</Text>
 
         {/* Dots */}
@@ -89,6 +108,12 @@ export function PinEntryScreen({ onUnlock }: Props) {
           <Text style={styles.attemptsText}>
             Incorrect PIN — {5 - attempts} attempt(s) remaining
           </Text>
+        )}
+
+        {isBiometricEnabled && (
+          <TouchableOpacity style={styles.biometricBtn} onPress={handleBiometric}>
+            <Text style={styles.biometricText}>Use {biometricLabel}</Text>
+          </TouchableOpacity>
         )}
       </View>
     </SafeAreaView>
@@ -143,5 +168,15 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.bodySmall,
     color: COLORS.danger,
     marginTop: SPACING.lg,
+  },
+  biometricBtn: {
+    marginTop: SPACING.xl,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+  },
+  biometricText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.accent,
+    fontWeight: '600',
   },
 });
