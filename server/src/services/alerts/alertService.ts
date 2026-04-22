@@ -84,7 +84,7 @@ export async function createAlert(params: {
   }
 
   // Send push notifications — Critical Alert path for active shooter events
-  const triggererName = alert.triggeredBy.displayName;
+  const triggererName = alert.triggeredBy?.displayName ?? 'Unknown';
   if (params.alertType === 'ACTIVE_SHOOTER') {
     sendCriticalAlertPushNotification(params.organizationId, alert.id, triggererName).catch(
       () => {},
