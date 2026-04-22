@@ -444,6 +444,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           throw new Error('LiveKit server URL is not configured. Set LIVEKIT_URL on the server.');
         }
 
+        // For direct LiveKit mode (no native PTT framework), we own the audio session.
+        // Native PTT path skips this — iOS activates/deactivates via onAudioActivated.
+        if (!nativePTTActiveRef.current) {
+          AudioSession?.startAudioSession();
+        }
+
         const room = new Room!({
           audioCaptureDefaults: {
             echoCancellation: true,
