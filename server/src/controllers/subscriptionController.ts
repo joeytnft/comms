@@ -14,7 +14,6 @@ export async function getSubscription(
     select: {
       subscriptionTier: true,
       subscriptionStatus: true,
-      trialEndsAt: true,
       pcoIntegrationEnabled: true,
       _count: { select: { users: true } },
     },

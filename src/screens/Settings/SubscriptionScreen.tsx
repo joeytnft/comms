@@ -99,7 +99,7 @@ export function SubscriptionScreen() {
             <Text style={styles.tierBadgeText}>{tierLabel()}</Text>
           </View>
           <Text style={styles.planStatus}>
-            {subscription?.status === 'ACTIVE'
+            {subscription?.status === 'ACTIVE' || subscription?.status === 'TRIALING'
               ? 'Active'
               : subscription?.status ?? '—'}
           </Text>

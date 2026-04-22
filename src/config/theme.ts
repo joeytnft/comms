@@ -18,7 +18,8 @@ export const COLORS = {
   alertEmergency: '#EF4444',
 
   // PTT colors
-  pttIdle: '#374151',
+  pttIdle: '#166534',
+  pttIdleGlow: '#22c55e',
   pttTransmitting: '#EF4444',
   pttReceiving: '#10B981',
 
