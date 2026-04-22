@@ -68,6 +68,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   const intentionalLeaveRef = useRef(false);
   // True while we are between "transmission started" and audio session activated
   const transmittingRef = useRef(false);
+  // True only when native PTT framework successfully joined a channel this session
+  const nativePTTActiveRef = useRef(false);
   // Live Activity ID for the current PTT session (iOS 16.2+)
   const liveActivityIdRef = useRef<string | null>(null);
 
@@ -347,33 +349,43 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         }
 
         // ── iOS: Apple native PTT framework ──────────────────────────────────
+        nativePTTActiveRef.current = false;
         if (USE_NATIVE_PTT) {
-          // requestJoinChannel returns the resolved UUID
-          const resolvedId = await nativePTTService.joinChannel(groupId, response.groupName);
-          nativePTTChannelIdRef.current = resolvedId;
+          try {
+            // requestJoinChannel returns the resolved UUID
+            const resolvedId = await nativePTTService.joinChannel(groupId, response.groupName);
+            nativePTTChannelIdRef.current = resolvedId;
+            nativePTTActiveRef.current = true;
 
-          // Register the ephemeral push token with the server once it arrives
-          const unsubToken = nativePTTService.onPushTokenReceived(async (token) => {
-            unsubToken();
-            try {
-              const accessToken = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
-              await fetch(`${AppEnv.apiUrl}/ptt/${groupId}/register-token`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-                },
-                body: JSON.stringify({ token }),
-              });
-            } catch (err) {
-              console.warn('[PTT] Failed to register push token:', err);
-            }
-          });
+            // Register the ephemeral push token with the server once it arrives
+            const unsubToken = nativePTTService.onPushTokenReceived(async (token) => {
+              unsubToken();
+              try {
+                const accessToken = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
+                await fetch(`${AppEnv.apiUrl}/ptt/${groupId}/register-token`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+                  },
+                  body: JSON.stringify({ token }),
+                });
+              } catch (err) {
+                console.warn('[PTT] Failed to register push token:', err);
+              }
+            });
 
-          // Report service as "ready" in system UI
-          nativePTTService.setServiceStatus(resolvedId, 'ready').catch(() => null);
+            // Report service as "ready" in system UI
+            nativePTTService.setServiceStatus(resolvedId, 'ready').catch(() => null);
+          } catch (nativeErr) {
+            // Native PTT framework unavailable on this OS version — fall through to
+            // direct LiveKit mode so PTT still works without system UI integration.
+            console.warn('[PTT] Native PTT init failed, using direct LiveKit mode:', nativeErr);
+            nativePTTChannelIdRef.current = null;
+          }
+        }
 
-        } else if (Platform.OS === 'android') {
+        if (!nativePTTActiveRef.current && Platform.OS === 'android') {
           // ── Android: ConnectionService keeps audio alive in background ────
           await new Promise<void>((resolve) => {
             const uuid = callKitService.startCall(response.groupName, () => resolve());
@@ -470,11 +482,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       roomRef.current?.disconnect();
       roomRef.current = null;
 
-      if (USE_NATIVE_PTT) {
+      if (nativePTTActiveRef.current) {
         if (nativePTTChannelIdRef.current) {
           nativePTTService.leaveChannel(nativePTTChannelIdRef.current).catch(() => null);
           nativePTTChannelIdRef.current = null;
         }
+        nativePTTActiveRef.current = false;
       } else if (Platform.OS === 'android') {
         if (callUUIDRef.current) {
           callKitService.endCall(callUUIDRef.current);
@@ -516,14 +529,14 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         recorder.start(200);
         mediaRecorderRef.current = recorder;
       }).catch(() => null);
-    } else if (USE_NATIVE_PTT) {
+    } else if (nativePTTActiveRef.current) {
       // Tell the PTT framework the user wants to transmit.
       // The framework fires PTT_TRANSMISSION_STARTED → our effect handles state.
       if (nativePTTChannelIdRef.current) {
         nativePTTService.beginTransmitting(nativePTTChannelIdRef.current).catch(() => null);
       }
     } else {
-      // iOS (no PTT framework) or Android
+      // iOS (PTT framework unavailable or init failed) or Android
       usePTTStore.getState().setTransmitting(true);
       transmitStartedAtRef.current = Date.now();
       socket.emit('ptt:start', { groupId: currentGroupId });
@@ -551,19 +564,19 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       socket.emit('ptt:stop', { groupId: currentGroupId });
       mediaRecorderRef.current?.stop();
       mediaRecorderRef.current = null;
-    } else if (USE_NATIVE_PTT) {
+    } else if (nativePTTActiveRef.current) {
       // Tell the framework to stop. PTT_TRANSMISSION_ENDED event handles the rest.
       if (nativePTTChannelIdRef.current) {
         nativePTTService.stopTransmitting(nativePTTChannelIdRef.current).catch(() => null);
       }
     } else {
-      // iOS (no PTT framework) or Android
+      // iOS (PTT framework unavailable or init failed) or Android
       const durationMs = Date.now() - transmitStartedAtRef.current;
       usePTTStore.getState().setTransmitting(false);
       socket.emit('ptt:stop', { groupId: currentGroupId });
       roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null);
       if (Platform.OS === 'android' && callUUIDRef.current) callKitService.setMuted(callUUIDRef.current, true);
-      if (Platform.OS === 'android') socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
+      socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
     }
     // Update Live Activity — done transmitting
     const { currentGroupName, connectedMemberCount } = usePTTStore.getState();

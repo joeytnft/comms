@@ -28,7 +28,7 @@ export function PTTScreen() {
 
   const { groups, fetchGroups } = useGroupStore();
   const { error, clearError } = usePTTStore();
-  const { logs, isLoading: logsLoading, fetchLogs } = usePTTLogStore();
+  const { logs, isLoading: logsLoading, error: logsError, fetchLogs } = usePTTLogStore();
   const [showGroupPicker, setShowGroupPicker] = useState(!isConnected);
   const [showLog, setShowLog] = useState(false);
   const [playingUrl, setPlayingUrl] = useState<string | null>(null);
@@ -235,7 +235,7 @@ export function PTTScreen() {
           style={styles.logContainer}
           ListEmptyComponent={
             <Text style={styles.logEmpty}>
-              {logsLoading ? 'Loading...' : 'No recordings yet'}
+              {logsLoading ? 'Loading...' : logsError ? `Could not load log: ${logsError}` : 'No recordings yet'}
             </Text>
           }
           renderItem={({ item }) => {
