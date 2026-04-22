@@ -73,10 +73,10 @@ async function savePttLog(
         // ffmpeg unavailable — keep original format
       }
 
-      const filename = `ptt/${groupId}/${userId}_${Date.now()}.${ext}`;
+      const filename = `${groupId}/${userId}_${Date.now()}.${ext}`;
       const { error: uploadErr } = await getSupabase()
         .storage
-        .from(env.SUPABASE_STORAGE_BUCKET)
+        .from(env.SUPABASE_PTT_BUCKET)
         .upload(filename, audioBuffer, { contentType: finalMime, upsert: false });
 
       if (uploadErr) {
@@ -84,7 +84,7 @@ async function savePttLog(
       } else {
         const { data: { publicUrl } } = getSupabase()
           .storage
-          .from(env.SUPABASE_STORAGE_BUCKET)
+          .from(env.SUPABASE_PTT_BUCKET)
           .getPublicUrl(filename);
         audioUrl = publicUrl;
       }
@@ -280,15 +280,15 @@ export function setupPTTSocket(io: Server, socket: Socket) {
             createdAt: endedAt,
           });
         }
-      } else if (env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY && env.SUPABASE_STORAGE_BUCKET) {
+      } else if (env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY && env.SUPABASE_PTT_BUCKET) {
         // Native iOS client — audio captured by LiveKit egress. Poll Supabase storage
         // after a delay and backfill the audioUrl on the pttLog record.
         setTimeout(async () => {
           try {
             const { data: files } = await getSupabase()
               .storage
-              .from(env.SUPABASE_STORAGE_BUCKET)
-              .list(`ptt/${groupId}`, {
+              .from(env.SUPABASE_PTT_BUCKET)
+              .list(groupId, {
                 search: userId,
                 sortBy: { column: 'name', order: 'desc' },
                 limit: 5,
@@ -299,8 +299,8 @@ export function setupPTTSocket(io: Server, socket: Socket) {
             const latestFile = files[0];
             const { data: { publicUrl } } = getSupabase()
               .storage
-              .from(env.SUPABASE_STORAGE_BUCKET)
-              .getPublicUrl(`ptt/${groupId}/${latestFile.name}`);
+              .from(env.SUPABASE_PTT_BUCKET)
+              .getPublicUrl(`${groupId}/${latestFile.name}`);
 
             const recentLog = await prisma.pttLog.findFirst({
               where: {
