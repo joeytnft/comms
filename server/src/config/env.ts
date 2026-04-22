@@ -24,6 +24,7 @@ const envSchema = z.object({
   SUPABASE_S3_KEY_ID:        z.string().optional(),
   SUPABASE_S3_ACCESS_SECRET: z.string().optional(),
   SUPABASE_S3_ENDPOINT:      z.string().optional(),
+  SUPABASE_S3_REGION:        z.string().default('us-east-1'),
 
   // LiveKit (optional until PTT is implemented)
   LIVEKIT_API_KEY: z.string().optional(),

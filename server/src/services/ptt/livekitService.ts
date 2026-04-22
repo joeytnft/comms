@@ -21,7 +21,10 @@ function getClients(): { egress: EgressClient; rooms: RoomServiceClient } | null
 
 function buildOutput(groupId: string, userId: string): EncodedFileOutput | null {
   const { SUPABASE_S3_KEY_ID, SUPABASE_S3_ACCESS_SECRET, SUPABASE_URL, SUPABASE_PTT_BUCKET } = env;
-  if (!SUPABASE_S3_KEY_ID || !SUPABASE_S3_ACCESS_SECRET) return null;
+  if (!SUPABASE_S3_KEY_ID || !SUPABASE_S3_ACCESS_SECRET) {
+    logger.warn('[LiveKit] Egress skipped — SUPABASE_S3_KEY_ID or SUPABASE_S3_ACCESS_SECRET not set');
+    return null;
+  }
 
   return new EncodedFileOutput({
     fileType: EncodedFileType.MP4,
@@ -33,7 +36,7 @@ function buildOutput(groupId: string, userId: string): EncodedFileOutput | null 
       value: new S3Upload({
         accessKey:      SUPABASE_S3_KEY_ID,
         secret:         SUPABASE_S3_ACCESS_SECRET,
-        region:         'us-east-1',
+        region:         env.SUPABASE_S3_REGION,
         endpoint:       env.SUPABASE_S3_ENDPOINT || `${SUPABASE_URL}/storage/v1/s3`,
         bucket:         SUPABASE_PTT_BUCKET,
         forcePathStyle: true,
@@ -49,8 +52,12 @@ function buildOutput(groupId: string, userId: string): EncodedFileOutput | null 
  */
 export async function startTransmissionEgress(groupId: string, userId: string): Promise<void> {
   const clients = getClients();
-  const output  = clients ? buildOutput(groupId, userId) : null;
-  if (!clients || !output) return;
+  if (!clients) {
+    logger.warn('[LiveKit] Egress skipped — LIVEKIT_URL/API_KEY/API_SECRET not configured');
+    return;
+  }
+  const output = buildOutput(groupId, userId);
+  if (!output) return;
 
   try {
     const roomName     = `ptt:${groupId}`;
@@ -59,20 +66,20 @@ export async function startTransmissionEgress(groupId: string, userId: string): 
     const audioTrack   = participant?.tracks.find((t) => t.type === TrackType.AUDIO);
 
     if (!audioTrack?.sid) {
-      logger.debug(`[LiveKit] No audio track found for ${userId} in ${roomName} — skipping egress`);
+      logger.warn(`[LiveKit] No published audio track for ${userId} in ${roomName} — egress skipped. Check mic track is published before ptt:start fires.`);
       return;
     }
 
+    logger.info(`[LiveKit] Starting egress for ${userId} in ${roomName}, track ${audioTrack.sid}, bucket ${env.SUPABASE_PTT_BUCKET}, region ${env.SUPABASE_S3_REGION}`);
     const egress = await clients.egress.startTrackCompositeEgress(
       roomName,
       output,
-      audioTrack.sid,   // audioTrackId
+      audioTrack.sid,
     );
 
     await redis.setex(`ptt:egress:${userId}:${groupId}`, 3600, egress.egressId);
-    // Store reverse mapping so the webhook handler can resolve userId+groupId from egressId
     await redis.setex(`ptt:egress_meta:${egress.egressId}`, 3600, JSON.stringify({ userId, groupId }));
-    logger.info(`[LiveKit] Egress ${egress.egressId} started for ${userId} in ${roomName}`);
+    logger.info(`[LiveKit] Egress ${egress.egressId} started OK`);
   } catch (err) {
     logger.warn({ err }, '[LiveKit] startTransmissionEgress failed — continuing without egress');
   }

@@ -470,17 +470,22 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         });
 
         await room.connect(livekitUrl, response.token, { autoSubscribe: true });
-        // Pre-publish mic track muted with DTX — keeps the track negotiated so
-        // unmute() is ~20ms vs setMicrophoneEnabled(true) which re-negotiates (~150ms).
-        // DTX eliminates silence packets, preventing false active-speaker events.
-        const micTrack = await createLocalAudioTrack!({
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        });
-        await room.localParticipant.publishTrack(micTrack, { dtx: true, audioBitrate: 16_000 });
-        micTrack.mute();
-        micTrackRef.current = micTrack;
+        // Pre-publish mic track muted with DTX for instant unmute on first press.
+        // Wrapped in try-catch: on first launch iOS may not have the audio session
+        // fully provisioned yet — fall back to on-demand enable in that case.
+        try {
+          const micTrack = await createLocalAudioTrack!({
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          });
+          await room.localParticipant.publishTrack(micTrack, { dtx: true, audioBitrate: 16_000 });
+          micTrack.mute();
+          micTrackRef.current = micTrack;
+        } catch (trackErr) {
+          console.warn('[PTT] Pre-publish mic track failed, will use on-demand enable:', trackErr);
+          await room.localParticipant.setMicrophoneEnabled(false).catch(() => null);
+        }
       }
 
       socket.emit('ptt:join', { groupId });
