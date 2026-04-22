@@ -81,7 +81,8 @@ async function setActiveRemoteParticipant(channelId: string, participantName: st
 /** Clear the active speaker indicator when they stop talking. */
 async function clearActiveRemoteParticipant(channelId: string): Promise<void> {
   if (!isAvailable) return;
-  return PushToTalkModule.clearActiveRemoteParticipant(channelId);
+  // Pass null participantName to the native setActiveRemoteParticipant — this clears the speaker.
+  return PushToTalkModule.setActiveRemoteParticipant(channelId, null);
 }
 
 /**
@@ -105,15 +106,15 @@ async function setServiceStatus(channelId: string, status: PTTServiceStatus): Pr
 
 /** Fired once after joinChannel succeeds. */
 function onChannelJoined(cb: (channelId: string) => void): Unsubscribe {
-  return on('PTT_CHANNEL_JOINED', (d) => cb(d.channelId as string));
+  return on('onPTTChannelJoined', (d) => cb(d.channelId as string));
 }
 
 function onChannelLeft(cb: (channelId: string) => void): Unsubscribe {
-  return on('PTT_CHANNEL_LEFT', (d) => cb(d.channelId as string));
+  return on('onPTTChannelLeft', (d) => cb(d.channelId as string));
 }
 
 function onJoinFailed(cb: (channelId: string, error: string) => void): Unsubscribe {
-  return on('PTT_JOIN_FAILED', (d) => cb(d.channelId as string, d.error as string));
+  return on('onPTTError', (d) => cb(d.channelId as string, d.error as string));
 }
 
 /**
@@ -121,24 +122,31 @@ function onJoinFailed(cb: (channelId: string, error: string) => void): Unsubscri
  * Send this token to your server so it can send pushtotalk pushes to this device.
  */
 function onPushTokenReceived(cb: (token: string) => void): Unsubscribe {
-  return on('PTT_PUSH_TOKEN_RECEIVED', (d) => cb(d.token as string));
+  return on('onPTTPushToken', (d) => cb(d.token as string));
 }
 
 /**
  * Fired when audio transmission begins — regardless of source.
  * Source is 'user' (app button), 'systemUI' (lock screen / Dynamic Island),
  * or 'bluetooth' (accessory).
+ * Note: native payload includes channelId but not source; source defaults to 'user'.
  */
 function onTransmissionStarted(cb: (event: PTTTransmissionEvent) => void): Unsubscribe {
-  return on('PTT_TRANSMISSION_STARTED', (d) => cb(d as unknown as PTTTransmissionEvent));
+  return on('onPTTTransmitStart', (d) => cb({
+    channelId: d.channelId as string,
+    source: (d.source as PTTTransmitSource) ?? 'user',
+  }));
 }
 
 function onTransmissionEnded(cb: (event: PTTTransmissionEvent) => void): Unsubscribe {
-  return on('PTT_TRANSMISSION_ENDED', (d) => cb(d as unknown as PTTTransmissionEvent));
+  return on('onPTTTransmitStop', (d) => cb({
+    channelId: d.channelId as string,
+    source: (d.source as PTTTransmitSource) ?? 'user',
+  }));
 }
 
 function onTransmissionFailed(cb: (channelId: string, error: string) => void): Unsubscribe {
-  return on('PTT_TRANSMISSION_FAILED', (d) => cb(d.channelId as string, d.error as string));
+  return on('onPTTError', (d) => cb(d.channelId as string, d.error as string));
 }
 
 /**
@@ -147,11 +155,11 @@ function onTransmissionFailed(cb: (channelId: string, error: string) => void): U
  * On receive: start LiveKit audio playback.
  */
 function onAudioActivated(cb: () => void): Unsubscribe {
-  return on('PTT_AUDIO_ACTIVATED', () => cb());
+  return on('onPTTAudioActivated', () => cb());
 }
 
 function onAudioDeactivated(cb: () => void): Unsubscribe {
-  return on('PTT_AUDIO_DEACTIVATED', () => cb());
+  return on('onPTTAudioDeactivated', () => cb());
 }
 
 // ─── Exported service ─────────────────────────────────────────────────────────

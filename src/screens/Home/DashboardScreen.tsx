@@ -17,7 +17,7 @@ type DashboardNav = BottomTabNavigationProp<MainTabParamList>;
 
 export function DashboardScreen() {
   const { user } = useAuth();
-  const { subscription, daysLeftInTrial, fetchSubscription } = useSubscriptionStore();
+  const { fetchSubscription } = useSubscriptionStore();
   const { teamLocations, fetchTeamLocations } = useLocationStore();
   const { activeAlerts, fetchAlerts } = useAlertStore();
   const { incidents, fetchIncidents } = useIncidentStore();
@@ -52,21 +52,9 @@ export function DashboardScreen() {
   const activeAlertCount = activeAlerts.length;
   const openIncidentCount = incidents.filter((i) => i.status === 'OPEN' || i.status === 'IN_PROGRESS').length;
 
-  const trialDays = daysLeftInTrial();
-  const showTrialBanner = subscription?.status === 'TRIALING' && trialDays <= 3 && trialDays > 0;
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Trial expiring banner */}
-        {showTrialBanner && (
-          <View style={styles.trialBanner}>
-            <Text style={styles.trialBannerText}>
-              Your trial expires in {trialDays} day{trialDays !== 1 ? 's' : ''}. Upgrade to keep all features.
-            </Text>
-          </View>
-        )}
-
         {/* Welcome header */}
         <View style={styles.header}>
           <View style={styles.avatar}>
@@ -262,18 +250,6 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: COLORS.gray700,
-  },
-  trialBanner: {
-    backgroundColor: COLORS.warning,
-    padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.md,
-    marginBottom: SPACING.md,
-  },
-  trialBannerText: {
-    ...TYPOGRAPHY.bodySmall,
-    color: COLORS.textInverse,
-    fontWeight: '600',
-    textAlign: 'center',
   },
   criticalSection: {
     marginBottom: SPACING.lg,

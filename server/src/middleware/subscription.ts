@@ -9,7 +9,6 @@ async function getOrgSubscription(organizationId: string) {
     select: {
       subscriptionTier: true,
       subscriptionStatus: true,
-      trialEndsAt: true,
     },
   });
 
@@ -20,19 +19,8 @@ async function getOrgSubscription(organizationId: string) {
   return org;
 }
 
-function isSubscriptionActive(org: {
-  subscriptionStatus: string;
-  trialEndsAt: Date | null;
-}): boolean {
-  if (org.subscriptionStatus === 'ACTIVE') return true;
-  if (
-    org.subscriptionStatus === 'TRIALING' &&
-    org.trialEndsAt &&
-    org.trialEndsAt > new Date()
-  ) {
-    return true;
-  }
-  return false;
+function isSubscriptionActive(org: { subscriptionStatus: string }): boolean {
+  return org.subscriptionStatus === 'ACTIVE';
 }
 
 /**
@@ -116,11 +104,14 @@ export async function checkMemberLimit(request: FastifyRequest, _reply: FastifyR
       id: true,
       subscriptionTier: true,
       subscriptionStatus: true,
-      trialEndsAt: true,
+      pcoIntegrationEnabled: true,
     },
   });
 
   if (!org) return; // Let the controller handle the 404
+
+  // Planning Center add-on overrides member cap to unlimited
+  if (org.pcoIntegrationEnabled) return;
 
   const limits = PLAN_LIMITS[org.subscriptionTier];
   if (limits.maxMembers === -1) return; // unlimited

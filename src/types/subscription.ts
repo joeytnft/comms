@@ -1,5 +1,5 @@
-export type SubscriptionTier = 'FREE' | 'STARTER' | 'TEAM' | 'PRO';
-export type SubscriptionStatus = 'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'CANCELED' | 'EXPIRED';
+export type SubscriptionTier = 'STARTER' | 'TEAM' | 'PRO';
+export type SubscriptionStatus = 'ACTIVE' | 'PAST_DUE' | 'CANCELED' | 'EXPIRED';
 
 export interface PlanLimits {
   maxLeadGroups: number;
@@ -26,7 +26,6 @@ export interface SubscriptionPlan {
 export interface OrganizationSubscription {
   tier: SubscriptionTier;
   status: SubscriptionStatus;
-  trialEndsAt: string | null;
   limits: PlanLimits;
   usage: {
     members: number;

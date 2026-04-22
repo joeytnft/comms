@@ -35,7 +35,7 @@ export function TrainingDetailScreen() {
   const route = useRoute<RouteT>();
   const { trainingId } = route.params;
 
-  const { currentTraining, signups, isLoading, fetchTraining, fetchSignups, signUp, cancelSignup, deleteTraining } =
+  const { currentTraining, signups, isLoading, fetchTraining, fetchSignups, signUp, cancelSignup, deleteTraining, clearCurrentTraining } =
     useTrainingStore();
   const { user } = useAuthStore();
 
@@ -49,7 +49,9 @@ export function TrainingDetailScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchTraining(trainingId);
-    }, [trainingId]),
+      if (isAdmin) fetchSignups(trainingId);
+      return () => clearCurrentTraining();
+    }, [trainingId, isAdmin]),
   );
 
   const handleSignup = async () => {
@@ -106,7 +108,7 @@ export function TrainingDetailScreen() {
   };
 
   const handleShowSignups = async () => {
-    await fetchSignups(trainingId);
+    if (signups.length === 0) await fetchSignups(trainingId);
     setShowAdminSignups(true);
   };
 
@@ -372,7 +374,7 @@ const styles = StyleSheet.create({
   signupBannerWait: { backgroundColor: COLORS.warning + '22' },
   signupBannerText: { ...TYPOGRAPHY.body, color: COLORS.textPrimary, fontWeight: '600' },
   primaryBtn: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.success,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     alignItems: 'center',
@@ -381,6 +383,7 @@ const styles = StyleSheet.create({
   primaryBtnAlt: { backgroundColor: COLORS.warning },
   primaryBtnText: { ...TYPOGRAPHY.body, color: '#fff', fontWeight: '700' },
   cancelBtn: {
+    backgroundColor: COLORS.error + '22',
     borderWidth: 1,
     borderColor: COLORS.error,
     borderRadius: BORDER_RADIUS.md,
@@ -388,7 +391,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: SPACING.md,
   },
-  cancelBtnText: { ...TYPOGRAPHY.body, color: COLORS.error, fontWeight: '600' },
+  cancelBtnText: { ...TYPOGRAPHY.body, color: COLORS.error, fontWeight: '700' },
   adminBtn: {
     borderWidth: 1,
     borderColor: COLORS.primary,
@@ -429,15 +432,15 @@ const styles = StyleSheet.create({
   modalCancelBtn: {
     flex: 1,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.gray600,
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     alignItems: 'center',
   },
-  modalCancelText: { ...TYPOGRAPHY.body, color: COLORS.textSecondary },
+  modalCancelText: { ...TYPOGRAPHY.body, color: COLORS.textPrimary },
   modalConfirmBtn: {
     flex: 2,
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.success,
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     alignItems: 'center',

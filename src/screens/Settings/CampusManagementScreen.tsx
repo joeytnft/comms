@@ -320,9 +320,15 @@ export function CampusManagementScreen() {
                         ))}
                       </>
                     )}
-                    {!isAssigned && (
-                      <TouchableOpacity style={styles.reassignBtn} onPress={() => { setAssignCampus(campuses[0] ?? null); }}>
-                        <Text style={styles.reassignText}>Assign</Text>
+                    {!isAssigned && campuses.length > 0 && (
+                      <TouchableOpacity
+                        style={styles.reassignBtn}
+                        onPress={() => {
+                          // Open the campus picker — user can pick which campus to assign this member to
+                          setAssignCampus(campuses[0]);
+                        }}
+                      >
+                        <Text style={styles.reassignText}>Assign to Campus</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -413,27 +419,65 @@ export function CampusManagementScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Assign members modal */}
+      {/* Manage campus members modal */}
       <Modal visible={!!assignCampus} transparent animationType="slide" onRequestClose={() => setAssignCampus(null)}>
         <View style={styles.overlay}>
-          <View style={[styles.sheet, { maxHeight: '80%' }]}>
-            <Text style={styles.sheetTitle}>Assign to {assignCampus?.name}</Text>
-            <Text style={styles.sheetSub}>Tap an unassigned member to add them to this campus.</Text>
+          <View style={[styles.sheet, { maxHeight: '85%' }]}>
+            <Text style={styles.sheetTitle}>Members — {assignCampus?.name}</Text>
             <ScrollView>
-              {orgMembers.filter((m) => m.campusMemberships.length === 0).map((member) => (
-                <TouchableOpacity key={member.id} style={styles.memberRowModal} onPress={() => handleAssign(member)}>
-                  <View style={styles.memberAvatar}>
-                    <Text style={styles.memberAvatarText}>{member.displayName.charAt(0).toUpperCase()}</Text>
-                  </View>
-                  <View style={styles.memberInfo}>
-                    <Text style={styles.memberName}>{member.displayName}</Text>
-                    <Text style={styles.memberCampus}>{member.email}</Text>
-                  </View>
-                  <Text style={styles.assignPlus}>+</Text>
-                </TouchableOpacity>
-              ))}
-              {orgMembers.filter((m) => m.campusMemberships.length === 0).length === 0 && (
-                <Text style={styles.emptySubtitle}>All members are already assigned to a campus.</Text>
+              {/* Members already in this campus */}
+              {orgMembers.filter((m) => m.campusMemberships.some(cm => cm.campusId === assignCampus?.id)).length > 0 && (
+                <>
+                  <Text style={styles.manageSectionLabel}>IN THIS CAMPUS</Text>
+                  {orgMembers
+                    .filter((m) => m.campusMemberships.some(cm => cm.campusId === assignCampus?.id))
+                    .map((member) => (
+                      <View key={member.id} style={styles.memberRowModal}>
+                        <View style={styles.memberAvatar}>
+                          <Text style={styles.memberAvatarText}>{member.displayName.charAt(0).toUpperCase()}</Text>
+                        </View>
+                        <View style={styles.memberInfo}>
+                          <Text style={styles.memberName}>{member.displayName}</Text>
+                          <Text style={styles.memberCampus}>{member.email}</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.removeInlineBtn}
+                          onPress={() => assignCampus && handleRemove(member, assignCampus.id, assignCampus.name)}
+                        >
+                          <Text style={styles.removeInlineText}>Remove</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                </>
+              )}
+
+              {/* Members not yet in this campus */}
+              {orgMembers.filter((m) => !m.campusMemberships.some(cm => cm.campusId === assignCampus?.id)).length > 0 && (
+                <>
+                  <Text style={styles.manageSectionLabel}>ADD MEMBERS</Text>
+                  {orgMembers
+                    .filter((m) => !m.campusMemberships.some(cm => cm.campusId === assignCampus?.id))
+                    .map((member) => (
+                      <TouchableOpacity key={member.id} style={styles.memberRowModal} onPress={() => handleAssign(member)}>
+                        <View style={styles.memberAvatar}>
+                          <Text style={styles.memberAvatarText}>{member.displayName.charAt(0).toUpperCase()}</Text>
+                        </View>
+                        <View style={styles.memberInfo}>
+                          <Text style={styles.memberName}>{member.displayName}</Text>
+                          <Text style={styles.memberCampus}>
+                            {member.campusMemberships.length > 0
+                              ? member.campusMemberships.map(cm => cm.campus.name).join(', ')
+                              : member.email}
+                          </Text>
+                        </View>
+                        <Text style={styles.assignPlus}>+</Text>
+                      </TouchableOpacity>
+                    ))}
+                </>
+              )}
+
+              {orgMembers.length === 0 && (
+                <Text style={styles.emptySubtitle}>No members in your organization.</Text>
               )}
             </ScrollView>
             <TouchableOpacity style={styles.ghostBtn} onPress={() => setAssignCampus(null)}>
@@ -538,6 +582,22 @@ const styles = StyleSheet.create({
   removeMemberBtn: { paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs },
   removeMemberText: { ...TYPOGRAPHY.bodySmall, color: COLORS.danger },
   assignPlus: { ...TYPOGRAPHY.heading2, color: COLORS.accent, paddingHorizontal: SPACING.sm },
+  manageSectionLabel: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.xs,
+  },
+  removeInlineBtn: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderWidth: 1,
+    borderColor: COLORS.danger,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  removeInlineText: { ...TYPOGRAPHY.caption, color: COLORS.danger, fontWeight: '600' },
   empty: { alignItems: 'center', paddingVertical: SPACING.xl },
   emptyTitle: { ...TYPOGRAPHY.body, color: COLORS.textSecondary, fontWeight: '600' },
   emptySubtitle: { ...TYPOGRAPHY.bodySmall, color: COLORS.textMuted, marginTop: SPACING.xs, textAlign: 'center' },

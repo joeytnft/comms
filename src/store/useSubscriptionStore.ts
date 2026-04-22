@@ -27,13 +27,10 @@ interface SubscriptionState {
 
   // Computed helpers
   canUseFeature: (feature: keyof OrganizationSubscription['limits']['features']) => boolean;
-  isTrialExpired: () => boolean;
-  daysLeftInTrial: () => number;
   tierLabel: () => string;
 }
 
 const TIER_LABELS: Record<SubscriptionTier, string> = {
-  FREE: 'Free',
   STARTER: 'Starter',
   TEAM: 'Team',
   PRO: 'Ministry Pro',
@@ -138,29 +135,12 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   canUseFeature: (feature) => {
     const { subscription } = get();
     if (!subscription) return false;
-    const isActive =
-      subscription.status === 'ACTIVE' ||
-      (subscription.status === 'TRIALING' && !get().isTrialExpired());
-    return isActive && subscription.limits.features[feature];
-  },
-
-  isTrialExpired: () => {
-    const { subscription } = get();
-    if (!subscription || subscription.status !== 'TRIALING') return false;
-    if (!subscription.trialEndsAt) return true;
-    return new Date(subscription.trialEndsAt) < new Date();
-  },
-
-  daysLeftInTrial: () => {
-    const { subscription } = get();
-    if (!subscription?.trialEndsAt) return 0;
-    const diff = new Date(subscription.trialEndsAt).getTime() - Date.now();
-    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+    return subscription.status === 'ACTIVE' && subscription.limits.features[feature];
   },
 
   tierLabel: () => {
     const { subscription } = get();
-    if (!subscription) return 'Free';
+    if (!subscription) return '';
     return TIER_LABELS[subscription.tier] || subscription.tier;
   },
 }));

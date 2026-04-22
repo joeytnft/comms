@@ -115,6 +115,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
   },
 
   fetchSignups: async (trainingId) => {
+    set({ signups: [] });
     const { signups } = await trainingService.listSignups(trainingId);
     set({ signups });
   },

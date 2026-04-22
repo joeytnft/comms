@@ -35,9 +35,10 @@ export async function getSubscription(
   ]);
 
   const baseLimits = PLAN_LIMITS[org.subscriptionTier];
-  // Override planningCenter feature flag based on per-org add-on
+  // Planning Center add-on: override planningCenter feature flag and lift member cap to unlimited
   const limits = {
     ...baseLimits,
+    maxMembers: org.pcoIntegrationEnabled ? -1 : baseLimits.maxMembers,
     features: {
       ...baseLimits.features,
       planningCenter: org.pcoIntegrationEnabled,
@@ -48,7 +49,6 @@ export async function getSubscription(
     subscription: {
       tier: org.subscriptionTier,
       status: org.subscriptionStatus,
-      trialEndsAt: org.trialEndsAt,
       limits,
       usage: {
         members: org._count.users,
@@ -130,7 +130,7 @@ export async function handleWebhook(
   }
 
   // Determine the new tier from entitlements
-  let newTier: SubscriptionTier = 'FREE';
+  let newTier: SubscriptionTier = 'STARTER';
   let newStatus: SubscriptionStatus = org.subscriptionStatus;
 
   if (event.entitlement_ids?.includes('pro')) {
@@ -156,7 +156,7 @@ export async function handleWebhook(
       break;
     case 'EXPIRATION':
       newStatus = 'EXPIRED';
-      newTier = 'FREE';
+      newTier = 'STARTER';
       break;
     case 'SUBSCRIBER_ALIAS':
     case 'PRODUCT_CHANGE':

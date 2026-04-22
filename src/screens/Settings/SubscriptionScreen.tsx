@@ -15,7 +15,6 @@ import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/th
 import { SubscriptionTier } from '@/types/subscription';
 
 const TIER_COLORS: Record<SubscriptionTier, string> = {
-  FREE: COLORS.gray500,
   STARTER: COLORS.info,
   TEAM: COLORS.warning,
   PRO: COLORS.accent,
@@ -50,7 +49,6 @@ export function SubscriptionScreen() {
     presentPaywall,
     presentCustomerCenter,
     restorePurchases,
-    daysLeftInTrial,
     tierLabel,
   } = useSubscriptionStore();
 
@@ -60,8 +58,7 @@ export function SubscriptionScreen() {
     fetchCustomerInfo();
   }, []);
 
-  const currentTier = subscription?.tier || 'FREE';
-  const trialDays = daysLeftInTrial();
+  const currentTier = subscription?.tier || 'STARTER';
 
   const handleUpgrade = async () => {
     const purchased = await presentPaywall();
@@ -102,17 +99,19 @@ export function SubscriptionScreen() {
             <Text style={styles.tierBadgeText}>{tierLabel()}</Text>
           </View>
           <Text style={styles.planStatus}>
-            {subscription?.status === 'TRIALING'
-              ? `Trial — ${trialDays} day${trialDays !== 1 ? 's' : ''} left`
-              : subscription?.status === 'ACTIVE'
-                ? 'Active'
-                : subscription?.status || 'Free'}
+            {subscription?.status === 'ACTIVE'
+              ? 'Active'
+              : subscription?.status ?? '—'}
           </Text>
           {subscription && (
             <View style={styles.usageRow}>
               <Text style={styles.usageText}>
                 Members: {subscription.usage.members}
-                {subscription.limits.maxMembers > 0 ? ` / ${subscription.limits.maxMembers}` : ' (unlimited)'}
+                {subscription.limits.maxMembers > 0
+                  ? ` / ${subscription.limits.maxMembers}`
+                  : subscription.limits.features.planningCenter
+                    ? ' (unlimited — Planning Center)'
+                    : ' (unlimited)'}
               </Text>
               <Text style={styles.usageText}>
                 Lead Groups: {subscription.usage.leadGroups}
@@ -127,7 +126,7 @@ export function SubscriptionScreen() {
         </View>
 
         <Text style={styles.billingNote}>
-          Only the account creator is billed. Invited members join for free.
+          Only the account creator is billed. Invited members use the organization's subscription.
         </Text>
 
         {/* Upgrade / manage CTA — only org owners and admins can purchase */}
@@ -158,7 +157,7 @@ export function SubscriptionScreen() {
 
         {/* Plan comparison */}
         <Text style={styles.sectionTitle}>Plans</Text>
-        {plans.map((plan) => {
+        {plans.filter((plan) => plan.tier !== ('FREE' as string)).map((plan) => {
           const isCurrent = plan.tier === currentTier;
           return (
             <View key={plan.tier} style={[styles.planCard, isCurrent && styles.planCardCurrent]}>

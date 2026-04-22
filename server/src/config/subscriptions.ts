@@ -23,6 +23,8 @@ export interface PlanDefinition {
   limits: PlanLimits;
 }
 
+// Member limits per tier. -1 = unlimited.
+// Planning Center add-on always overrides maxMembers to -1 regardless of tier.
 export const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
   FREE: {
     maxLeadGroups: 1,
@@ -41,14 +43,14 @@ export const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
   STARTER: {
     maxLeadGroups: 1,
     maxSubGroups: 5,
-    maxMembers: 20,
+    maxMembers: 40,
     features: {
       ptt: true,
       alerts: true,
       location: true,
       incidents: true,
       multiCampus: false,
-      scheduling: false,
+      scheduling: true,
       planningCenter: false,
     },
   },
@@ -84,13 +86,6 @@ export const PLAN_LIMITS: Record<SubscriptionTier, PlanLimits> = {
 
 export const PLANS: PlanDefinition[] = [
   {
-    tier: 'FREE',
-    name: 'Free',
-    priceMonthly: 0,
-    rcProductId: '',
-    limits: PLAN_LIMITS.FREE,
-  },
-  {
     tier: 'STARTER',
     name: 'Starter',
     priceMonthly: 800,
@@ -112,5 +107,3 @@ export const PLANS: PlanDefinition[] = [
     limits: PLAN_LIMITS.PRO,
   },
 ];
-
-export const FREE_TRIAL_DAYS = 14;
