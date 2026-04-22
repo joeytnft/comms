@@ -8,6 +8,7 @@ import { usePTTStore } from '@/store/usePTTStore';
 import { usePTTLogStore } from '@/store/usePTTLogStore';
 import { useHardwareButton } from '@/hooks/useHardwareButton';
 import { nativePTTService } from '@/services/nativePTTService';
+import { pttRecorderService } from '@/services/pttRecorderService';
 import { callKitService } from '@/services/callKitService';
 import { bluetoothPTTService } from '@/services/bluetoothPTTService';
 import { liveActivityService } from '@/services/liveActivityService';
@@ -126,25 +127,31 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       if (pttState !== 'transmitting') return;
       const durationMs = Date.now() - transmitStartedAtRef.current;
       usePTTStore.getState().setTransmitting(false);
+      if (micTrackRef.current) { micTrackRef.current.mute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null); }
       if (socket && currentGroupId) {
         socket.emit('ptt:stop', { groupId: currentGroupId });
-        socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
+        pttRecorderService.stopAndUpload(currentGroupId).then((audioUrl) => {
+          socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs, ...(audioUrl ? { audioUrl } : {}) });
+        }).catch(() => {
+          socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
+        });
       }
-      if (micTrackRef.current) { micTrackRef.current.mute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null); }
     });
 
     // Transmission failed (e.g. active cellular call)
     const unsubFail = nativePTTService.onTransmissionFailed((_channelId, error) => {
       usePTTStore.getState().setTransmitting(false);
       transmittingRef.current = false;
+      pttRecorderService.cancel();
       console.warn('[PTT] transmission failed:', error);
     });
 
     // iOS activates audio session — now safe to open mic or play audio
     const unsubActivated = nativePTTService.onAudioActivated(() => {
       if (transmittingRef.current) {
-        // User is transmitting — unmute mic
+        // User is transmitting — unmute mic and start local recording
         if (micTrackRef.current) { micTrackRef.current.unmute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null); }
+        pttRecorderService.start().catch(() => null);
       }
       // For incoming audio, LiveKit auto-plays subscribed tracks — nothing to do here
     });
@@ -549,6 +556,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           callUUIDRef.current = null;
         }
       }
+      pttRecorderService.cancel();
       AudioSession?.stopAudioSession();
     }
 
@@ -599,6 +607,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       socket.emit('ptt:start', { groupId: currentGroupId });
       if (micTrackRef.current) { micTrackRef.current.unmute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null); }
       if (Platform.OS === 'android' && callUUIDRef.current) callKitService.setMuted(callUUIDRef.current, false);
+      pttRecorderService.start().catch(() => null);
     }
     // Update Live Activity to show "You are speaking"
     const { currentGroupName, connectedMemberCount } = usePTTStore.getState();
@@ -628,9 +637,13 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         transmittingRef.current = false;
         usePTTStore.getState().setTransmitting(false);
         socket.emit('ptt:stop', { groupId: currentGroupId });
-        socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
         if (micTrackRef.current) { micTrackRef.current.mute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null); }
         nativePTTService.stopTransmitting(nativePTTChannelIdRef.current).catch(() => null);
+        pttRecorderService.stopAndUpload(currentGroupId).then((audioUrl) => {
+          socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs, ...(audioUrl ? { audioUrl } : {}) });
+        }).catch(() => {
+          socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
+        });
       }
     } else {
       // iOS (PTT framework unavailable or init failed) or Android
@@ -639,7 +652,11 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       socket.emit('ptt:stop', { groupId: currentGroupId });
       if (micTrackRef.current) { micTrackRef.current.mute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null); }
       if (Platform.OS === 'android' && callUUIDRef.current) callKitService.setMuted(callUUIDRef.current, true);
-      socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
+      pttRecorderService.stopAndUpload(currentGroupId).then((audioUrl) => {
+        socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs, ...(audioUrl ? { audioUrl } : {}) });
+      }).catch(() => {
+        socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
+      });
     }
     // Update Live Activity — done transmitting
     const { currentGroupName, connectedMemberCount } = usePTTStore.getState();

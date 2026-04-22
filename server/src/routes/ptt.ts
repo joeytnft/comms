@@ -16,4 +16,7 @@ export async function pttRoutes(app: FastifyInstance) {
 
   // Register an ephemeral APNs PTT push token (iOS only)
   app.post('/:groupId/register-token', pttController.registerPushToken);
+
+  // Client-side PTT audio upload (replaces LiveKit egress)
+  app.post('/:groupId/audio', pttController.uploadAudio);
 }

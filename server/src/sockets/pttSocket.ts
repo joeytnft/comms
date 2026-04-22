@@ -280,55 +280,9 @@ export function setupPTTSocket(io: Server, socket: Socket) {
             createdAt: endedAt,
           });
         }
-      } else if (env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY && env.SUPABASE_PTT_BUCKET) {
-        // Native iOS client — audio captured by LiveKit egress. Poll Supabase storage
-        // after a delay and backfill the audioUrl on the pttLog record.
-        setTimeout(async () => {
-          try {
-            const { data: files } = await getSupabase()
-              .storage
-              .from(env.SUPABASE_PTT_BUCKET)
-              .list(groupId, {
-                search: userId,
-                sortBy: { column: 'name', order: 'desc' },
-                limit: 5,
-              });
-
-            if (!files || files.length === 0) return;
-
-            const latestFile = files[0];
-            const { data: { publicUrl } } = getSupabase()
-              .storage
-              .from(env.SUPABASE_PTT_BUCKET)
-              .getPublicUrl(`${groupId}/${latestFile.name}`);
-
-            const recentLog = await prisma.pttLog.findFirst({
-              where: {
-                groupId,
-                senderId: userId,
-                audioUrl: null,
-                createdAt: { gte: new Date(Date.now() - 120_000) },
-              },
-              orderBy: { createdAt: 'desc' },
-            });
-
-            if (recentLog) {
-              await prisma.pttLog.update({
-                where: { id: recentLog.id },
-                data: { audioUrl: publicUrl },
-              });
-              io.to(room).emit('ptt:log_updated', {
-                id: recentLog.id,
-                groupId,
-                audioUrl: publicUrl,
-              });
-              logger.info(`[PTT] Backfilled audioUrl for native log ${recentLog.id}`);
-            }
-          } catch (err) {
-            logger.warn({ err }, '[PTT] Failed to backfill egress audio URL');
-          }
-        }, 20_000);
       }
+      // Native clients upload audio via POST /ptt/:groupId/audio and then
+      // emit ptt:native_log with the audioUrl — no server-side polling needed.
 
       const group = await prisma.group.findUnique({
         where: { id: groupId },
