@@ -6,7 +6,9 @@
       "Bash(node -e ' *)",
       "Bash(xargs ls *)",
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(git -C /home/joe7432/comms add server/src/services/alerts/alertService.ts)",
+      "Bash(git -C /home/joe7432/comms status --short)"
     ]
   }
 }
