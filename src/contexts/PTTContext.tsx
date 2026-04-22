@@ -13,8 +13,11 @@ import { bluetoothPTTService } from '@/services/bluetoothPTTService';
 import { liveActivityService } from '@/services/liveActivityService';
 import { useAuthStore } from '@/store/useAuthStore';
 import { secureStorage } from '@/utils/secureStorage';
+import { mmkvStorage } from '@/utils/mmkv';
 import { ACCESS_TOKEN_KEY } from '@/config/constants';
 import { ENV as AppEnv } from '@/config/env';
+
+const LIVE_ACTIVITY_ID_KEY = 'ptt_live_activity_id';
 
 // LiveKit (native only — tree-shaken on web)
 let Room: typeof import('livekit-client').Room | null = null;
@@ -77,6 +80,26 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   const nativePTTActiveRef = useRef(false);
   // Live Activity ID for the current PTT session (iOS 16.2+)
   const liveActivityIdRef = useRef<string | null>(null);
+
+  // End the Live Activity, falling back to the MMKV-persisted ID if the in-memory
+  // ref was lost (e.g. process was killed and restarted by iOS in the background).
+  const endLiveActivity = useCallback(() => {
+    const id = liveActivityIdRef.current ?? mmkvStorage.getString(LIVE_ACTIVITY_ID_KEY) ?? null;
+    liveActivityService.end(id);
+    liveActivityIdRef.current = null;
+    mmkvStorage.delete(LIVE_ACTIVITY_ID_KEY);
+  }, []);
+
+  // On mount: if a Live Activity ID was persisted from a previous process run and
+  // we are not currently connected, the session ended abnormally — dismiss it now.
+  useEffect(() => {
+    const storedId = mmkvStorage.getString(LIVE_ACTIVITY_ID_KEY);
+    if (storedId && !usePTTStore.getState().isConnected) {
+      liveActivityService.end(storedId);
+      mmkvStorage.delete(LIVE_ACTIVITY_ID_KEY);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ─── iOS native PTT setup ───────────────────────────────────────────────────
   useEffect(() => {
@@ -143,9 +166,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       nativePTTChannelIdRef.current = null;
       usePTTStore.getState().disconnect();
       AudioSession?.stopAudioSession();
-      // Dismiss the Live Activity when the system closes the channel
-      liveActivityService.end(liveActivityIdRef.current);
-      liveActivityIdRef.current = null;
+      endLiveActivity();
     });
 
     return () => {
@@ -335,7 +356,10 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       if (usePTTStore.getState().config.showLiveActivity) {
         const orgName = useAuthStore.getState().organization?.name ?? 'GatherSafe';
         liveActivityService.start(response.groupName, orgName)
-          .then((id) => { liveActivityIdRef.current = id; })
+          .then((id) => {
+            liveActivityIdRef.current = id;
+            if (id) mmkvStorage.setString(LIVE_ACTIVITY_ID_KEY, id);
+          })
           .catch(() => null);
       }
 
@@ -530,11 +554,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
     socket.emit('ptt:leave', { groupId: currentGroupId });
     usePTTStore.getState().disconnect();
-
-    // Dismiss the Live Activity pill
-    liveActivityService.end(liveActivityIdRef.current);
-    liveActivityIdRef.current = null;
-  }, [socket]);
+    endLiveActivity();
+  }, [socket, endLiveActivity]);
 
   // ─── startTransmitting ──────────────────────────────────────────────────────
   const startTransmitting = useCallback(() => {
