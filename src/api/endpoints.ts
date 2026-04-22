@@ -117,6 +117,7 @@ export const ENDPOINTS = {
     ASSIGN_USER: (id: string) => `/campuses/${id}/members`,
     REMOVE_USER: (id: string, userId: string) => `/campuses/${id}/members/${userId}`,
     ORG_MEMBERS: '/campuses/org-members',
+    MY_MEMBERSHIPS: '/campuses/my-memberships',
   },
 
   // Subscription

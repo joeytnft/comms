@@ -13,7 +13,9 @@ interface QualificationState {
   memberQualifications: Record<string, MemberQualification[]>;
   // Org-wide summary (admin view)
   qualifiedMembers: QualifiedMember[];
-  isLoading: boolean;
+  isLoading: boolean;       // fetchSummary + fetchTypes (for QualificationTypesScreen)
+  isLoadingTypes: boolean;  // fetchTypes only — avoids clobbering isLoadingMember
+  isLoadingMember: boolean; // fetchMemberQualifications only
   error: string | null;
 
   fetchTypes: () => Promise<void>;
@@ -38,16 +40,19 @@ export const useQualificationStore = create<QualificationState>((set) => ({
   memberQualifications: {},
   qualifiedMembers: [],
   isLoading: false,
+  isLoadingTypes: false,
+  isLoadingMember: false,
   error: null,
 
   fetchTypes: async () => {
-    set({ isLoading: true, error: null });
+    set({ isLoading: true, isLoadingTypes: true, error: null });
     try {
       const { qualificationTypes } = await qualificationService.listTypes();
-      set({ qualificationTypes, isLoading: false });
+      set({ qualificationTypes, isLoading: false, isLoadingTypes: false });
     } catch (e: unknown) {
       set({
         isLoading: false,
+        isLoadingTypes: false,
         error: e instanceof Error ? e.message : 'Failed to load qualification types',
       });
     }
@@ -72,16 +77,16 @@ export const useQualificationStore = create<QualificationState>((set) => ({
   },
 
   fetchMemberQualifications: async (userId) => {
-    set({ isLoading: true, error: null });
+    set({ isLoadingMember: true, error: null });
     try {
       const { qualifications } = await qualificationService.getMemberQualifications(userId);
       set((s) => ({
         memberQualifications: { ...s.memberQualifications, [userId]: qualifications },
-        isLoading: false,
+        isLoadingMember: false,
       }));
     } catch (e: unknown) {
       set({
-        isLoading: false,
+        isLoadingMember: false,
         error: e instanceof Error ? e.message : 'Failed to load qualifications',
       });
     }

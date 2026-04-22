@@ -41,21 +41,13 @@ export function PTTButton({
 
     Animated.spring(scaleAnim, {
       toValue: 0.93,
-      useNativeDriver: false,
+      useNativeDriver: true,
     }).start();
 
     pulseRef.current = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.18,
-          duration: 500,
-          useNativeDriver: false,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 500,
-          useNativeDriver: false,
-        }),
+        Animated.timing(pulseAnim, { toValue: 1.18, duration: 500, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1,    duration: 500, useNativeDriver: true }),
       ]),
     );
     pulseRef.current.start();
@@ -69,7 +61,7 @@ export function PTTButton({
 
     Animated.spring(scaleAnim, {
       toValue: 1,
-      useNativeDriver: false,
+      useNativeDriver: true,
     }).start();
 
     pulseRef.current?.stop();
@@ -84,91 +76,61 @@ export function PTTButton({
   const iconSize = Math.round(size * 0.40);
 
   return (
-    <View style={styles.container}>
-      {/* Idle ready ring — subtle glow when connected and ready */}
+    // Container sized to ring so absolute rings stay centered
+    <View style={[styles.container, { width: ringSize, height: ringSize }]}>
+
+      {/* Idle ready ring */}
       {!disabled && state === 'idle' && (
-        <View
-          style={[
-            styles.idleRing,
-            {
-              width: ringSize,
-              height: ringSize,
-              borderRadius: ringSize / 2,
-              borderColor: COLORS.pttIdleGlow,
-            },
-          ]}
-        />
+        <View style={[
+          styles.ring,
+          { width: ringSize, height: ringSize, borderRadius: ringSize / 2, borderColor: COLORS.pttIdleGlow, opacity: 0.5 },
+        ]} />
       )}
 
-      {/* Pulse ring when transmitting */}
+      {/* Transmitting pulse ring */}
       {state === 'transmitting' && (
-        <Animated.View
-          style={[
-            styles.pulseRing,
-            {
-              width: ringSize,
-              height: ringSize,
-              borderRadius: ringSize / 2,
-              borderColor: COLORS.pttTransmitting,
-              transform: [{ scale: pulseAnim }],
-            },
-          ]}
-        />
+        <Animated.View style={[
+          styles.ring,
+          { width: ringSize, height: ringSize, borderRadius: ringSize / 2, borderColor: COLORS.pttTransmitting, opacity: 0.45, transform: [{ scale: pulseAnim }] },
+        ]} />
       )}
 
-      {/* Receiving indicator ring */}
+      {/* Receiving ring */}
       {state === 'receiving' && (
-        <View
-          style={[
-            styles.receivingRing,
-            {
-              width: ringSize,
-              height: ringSize,
-              borderRadius: ringSize / 2,
-              borderColor: COLORS.pttReceiving,
-            },
-          ]}
-        />
+        <View style={[
+          styles.ring,
+          { width: ringSize, height: ringSize, borderRadius: ringSize / 2, borderColor: COLORS.pttReceiving, opacity: 0.6, borderWidth: 3 },
+        ]} />
       )}
 
       <Pressable
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         disabled={disabled || state === 'receiving'}
+        style={styles.pressable}
       >
-        <Animated.View
-          style={[
+        {/* Animated.View only handles scale — backgroundColor is on the inner View
+            so state-driven color changes always re-render correctly */}
+        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+          <View style={[
             styles.button,
-            {
-              width: size,
-              height: size,
-              borderRadius: size / 2,
-              backgroundColor: buttonColor,
-              transform: [{ scale: scaleAnim }],
-            },
+            { width: size, height: size, borderRadius: size / 2, backgroundColor: buttonColor },
             SHADOWS.lg,
-          ]}
-        >
-          {/* Inner highlight ring for depth */}
-          <View
-            style={[
+          ]}>
+            <View style={[
               styles.innerRing,
-              {
-                width: size - 20,
-                height: size - 20,
-                borderRadius: (size - 20) / 2,
-              },
-            ]}
-          />
-          <Ionicons
-            name={state === 'receiving' ? 'volume-high' : 'mic'}
-            size={iconSize}
-            color={COLORS.white}
-          />
+              { width: size - 20, height: size - 20, borderRadius: (size - 20) / 2 },
+            ]} />
+            <Ionicons
+              name={state === 'receiving' ? 'volume-high' : 'mic'}
+              size={iconSize}
+              color={COLORS.white}
+            />
+          </View>
         </Animated.View>
       </Pressable>
 
-      <Text style={[styles.label, { color: disabled ? COLORS.gray500 : buttonColor }]}>
+      <Text style={[styles.label, { color: disabled ? COLORS.gray500 : buttonColor, top: ringSize / 2 + size / 2 + 12 }]}>
         {disabled ? 'NOT CONNECTED' : STATE_LABELS[state]}
       </Text>
     </View>
@@ -177,6 +139,10 @@ export function PTTButton({
 
 const styles = StyleSheet.create({
   container: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pressable: {
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -189,26 +155,17 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.15)',
   },
-  idleRing: {
+  ring: {
     position: 'absolute',
     borderWidth: 2,
-    opacity: 0.5,
-  },
-  pulseRing: {
-    position: 'absolute',
-    borderWidth: 3,
-    opacity: 0.45,
-  },
-  receivingRing: {
-    position: 'absolute',
-    borderWidth: 3,
-    opacity: 0.6,
   },
   label: {
+    position: 'absolute',
     ...TYPOGRAPHY.caption,
     fontWeight: '700',
     letterSpacing: 2,
-    marginTop: 20,
     textTransform: 'uppercase',
+    textAlign: 'center',
+    width: 200,
   },
 });

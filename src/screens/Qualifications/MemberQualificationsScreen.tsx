@@ -4,6 +4,7 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
+  Pressable,
   StyleSheet,
   Modal,
   TextInput,
@@ -103,7 +104,7 @@ export function MemberQualificationsScreen() {
   const route = useRoute<RouteT>();
   const { userId, memberName } = route.params;
 
-  const { qualificationTypes, memberQualifications, isLoading, fetchTypes, fetchMemberQualifications, awardQualification, revokeQualification } =
+  const { qualificationTypes, memberQualifications, isLoadingTypes, isLoadingMember, fetchTypes, fetchMemberQualifications, awardQualification, revokeQualification } =
     useQualificationStore();
   const { user } = useAuthStore();
 
@@ -117,7 +118,6 @@ export function MemberQualificationsScreen() {
   const [notes, setNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [showTypePicker, setShowTypePicker] = useState(false);
-  const [typesRefreshing, setTypesRefreshing] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -128,18 +128,17 @@ export function MemberQualificationsScreen() {
 
   const qualifications = memberQualifications[userId] ?? [];
 
-  const openAward = useCallback(async () => {
+  const openAward = useCallback(() => {
     setEditingQual(null);
     setSelectedTypeId('');
     setEarnedDate(new Date().toISOString().split('T')[0]);
     setNotes('');
-    // Ensure types are loaded before opening — fetch if missing
-    if (qualificationTypes.length === 0) {
-      setTypesRefreshing(true);
-      try { await fetchTypes(); } finally { setTypesRefreshing(false); }
+    // Types are already fetched by useFocusEffect; if still empty and not loading, refresh
+    if (qualificationTypes.length === 0 && !isLoadingTypes) {
+      fetchTypes();
     }
     setShowAwardModal(true);
-  }, [qualificationTypes.length, fetchTypes]);
+  }, [qualificationTypes.length, isLoadingTypes, fetchTypes]);
 
   const openEdit = (qual: MemberQualification) => {
     setEditingQual(qual);
@@ -220,7 +219,7 @@ export function MemberQualificationsScreen() {
         )}
       </View>
 
-      {isLoading && qualifications.length === 0 ? (
+      {isLoadingMember && qualifications.length === 0 ? (
         <ActivityIndicator color={COLORS.primary} style={{ marginTop: SPACING.xl }} />
       ) : qualifications.length === 0 ? (
         <View style={styles.empty}>
@@ -265,78 +264,80 @@ export function MemberQualificationsScreen() {
 
       {/* Award/Edit qualification modal */}
       <Modal visible={showAwardModal} transparent animationType="slide" onRequestClose={() => setShowAwardModal(false)}>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setShowAwardModal(false)} />
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>
-              {editingQual ? 'Update Qualification' : 'Award Qualification'}
-            </Text>
+        <View style={styles.modalOverlay}>
+          <Pressable style={{ flex: 1 }} onPress={() => setShowAwardModal(false)} />
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>
+                {editingQual ? 'Update Qualification' : 'Award Qualification'}
+              </Text>
 
-            {!editingQual && (
-              <>
-                <Text style={styles.fieldLabel}>Qualification Type *</Text>
-                <TouchableOpacity
-                  style={styles.selectBtn}
-                  onPress={() => setShowTypePicker(true)}
-                >
-                  <Text
-                    style={[
-                      styles.selectText,
-                      !selectedTypeId && { color: COLORS.textSecondary },
-                    ]}
+              {!editingQual && (
+                <>
+                  <Text style={styles.fieldLabel}>Qualification Type *</Text>
+                  <TouchableOpacity
+                    style={styles.selectBtn}
+                    onPress={() => setShowTypePicker(true)}
                   >
-                    {selectedTypeName}
-                  </Text>
+                    <Text
+                      style={[
+                        styles.selectText,
+                        !selectedTypeId && { color: COLORS.textSecondary },
+                      ]}
+                    >
+                      {selectedTypeName}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+              {editingQual && (
+                <Text style={styles.editingQualName}>{editingQual.qualificationType.name}</Text>
+              )}
+
+              <Text style={styles.fieldLabel}>Date Earned *</Text>
+              <TextInput
+                style={styles.input}
+                value={earnedDate}
+                onChangeText={setEarnedDate}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={COLORS.textSecondary}
+                keyboardType="numeric"
+              />
+
+              <Text style={styles.fieldLabel}>Notes (optional)</Text>
+              <TextInput
+                style={[styles.input, styles.textarea]}
+                value={notes}
+                onChangeText={setNotes}
+                placeholder="Certification number, instructor, location..."
+                placeholderTextColor={COLORS.textSecondary}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setShowAwardModal(false)}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
                 </TouchableOpacity>
-              </>
-            )}
-            {editingQual && (
-              <Text style={styles.editingQualName}>{editingQual.qualificationType.name}</Text>
-            )}
-
-            <Text style={styles.fieldLabel}>Date Earned *</Text>
-            <TextInput
-              style={styles.input}
-              value={earnedDate}
-              onChangeText={setEarnedDate}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={COLORS.textSecondary}
-              keyboardType="numeric"
-            />
-
-            <Text style={styles.fieldLabel}>Notes (optional)</Text>
-            <TextInput
-              style={[styles.input, styles.textarea]}
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="Certification number, instructor, location..."
-              placeholderTextColor={COLORS.textSecondary}
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setShowAwardModal(false)}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalSaveBtn}
-                onPress={handleSave}
-                disabled={isSaving}
-              >
-                {isSaving ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.modalSaveText}>Save</Text>
-                )}
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.modalSaveBtn}
+                  onPress={handleSave}
+                  disabled={isSaving}
+                >
+                  {isSaving ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.modalSaveText}>Save</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        </KeyboardAvoidingView>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
 
       {/* Type picker modal */}
@@ -350,7 +351,7 @@ export function MemberQualificationsScreen() {
                 <Text style={styles.pickerDone}>Done</Text>
               </TouchableOpacity>
             </View>
-            {(isLoading || typesRefreshing) && qualificationTypes.length === 0 ? (
+            {isLoadingTypes && qualificationTypes.length === 0 ? (
               <ActivityIndicator color={COLORS.primary} style={{ margin: SPACING.lg }} />
             ) : (
               <FlatList

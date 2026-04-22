@@ -21,4 +21,7 @@ export async function campusRoutes(app: FastifyInstance) {
 
   // All org members with campus assignments (for admin UI)
   app.get('/org-members', ctrl.getOrgMembers);
+
+  // Current user's own campus memberships (any role)
+  app.get('/my-memberships', ctrl.getMyMemberships);
 }

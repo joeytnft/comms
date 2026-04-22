@@ -251,3 +251,14 @@ export async function getOrgMembers(request: FastifyRequest, reply: FastifyReply
   });
   reply.send({ members });
 }
+
+export async function getMyMemberships(request: FastifyRequest, reply: FastifyReply) {
+  const memberships = await prisma.campusUser.findMany({
+    where: { userId: request.userId },
+    select: {
+      campus: { select: { id: true, name: true, address: true } },
+    },
+    orderBy: { campus: { name: 'asc' } },
+  });
+  reply.send({ campuses: memberships.map((m: { campus: { id: string; name: string; address: string | null } }) => m.campus) });
+}

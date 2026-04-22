@@ -1,14 +1,3 @@
-/**
- * PTT Beep Sounds
- *
- * Plays a short audio tone when the user starts or stops transmitting.
- * Uses expo-av for sound playback + Vibration for haptic fallback.
- *
- * Replace the .wav files in src/assets/sounds/ with real tones for production.
- * The current files are silent placeholders — the vibration feedback works
- * immediately without them.
- */
-
 import { Vibration, Platform } from 'react-native';
 import { Audio } from 'expo-av';
 
@@ -26,7 +15,7 @@ async function loadSounds(): Promise<void> {
   try {
     await Audio.setAudioModeAsync({
       playsInSilentModeIOS: true,
-      allowsRecordingIOS: false,
+      // Do NOT set allowsRecordingIOS — PTTContext owns the audio session mode
     });
     const [s, e] = await Promise.all([
       Audio.Sound.createAsync(START_SOUND, { volume: 0.8 }),
@@ -36,11 +25,10 @@ async function loadSounds(): Promise<void> {
     stopSound = e.sound;
     loaded = true;
   } catch {
-    // Sound loading failed — vibration fallback will still work
+    // Sound loading failed — vibration fallback still works
   }
 }
 
-// Pre-load sounds on module import
 if (Platform.OS !== 'web') {
   loadSounds();
 }
@@ -51,18 +39,16 @@ async function playSound(sound: Audio.Sound | null): Promise<void> {
     await sound.setPositionAsync(0);
     await sound.playAsync();
   } catch {
-    // Ignore playback errors (e.g. audio focus lost)
+    // Ignore — audio focus may be held by PTT recording
   }
 }
 
 export const pttBeeps = {
-  /** Play "transmit start" beep — indicates user can begin speaking */
   async onTransmitStart(): Promise<void> {
     Vibration.vibrate(40);
     await playSound(startSound);
   },
 
-  /** Play "transmit stop" beep — indicates transmission ended */
   async onTransmitStop(): Promise<void> {
     Vibration.vibrate([0, 20, 20, 20]);
     await playSound(stopSound);

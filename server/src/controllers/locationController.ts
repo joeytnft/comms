@@ -51,25 +51,46 @@ export async function updateLocation(
 
 /**
  * GET /location/team — Get all team members' locations for the org.
- * Campus-scoped users see only their campus. Org-level users (campusId=null)
- * may pass ?campusId= to filter to a specific campus.
+ *
+ * Org-level users (no JWT campusId) see the whole org, or filter by ?campusId.
+ * Campus-scoped users see their campus by default. If they pass ?campusId they
+ * can view another campus they're a member of (verified via CampusUser table).
+ *
+ * Filtering uses CampusUser membership, not user.campusId, so multi-campus
+ * members appear in every campus they belong to.
  */
 export async function getTeamLocations(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const { organizationId, campusId: jwtCampusId } = request;
+  const { organizationId, campusId: jwtCampusId, userId } = request;
   const query = request.query as { campusId?: string };
 
-  // Campus-assigned users are always scoped to their campus.
-  // Org-level users can optionally pass a campusId query param to filter.
-  const campusFilter = jwtCampusId ?? (query.campusId || null);
+  let campusFilter: string | null = null;
+
+  if (jwtCampusId) {
+    const requestedId = query.campusId || null;
+    if (!requestedId || requestedId === jwtCampusId) {
+      campusFilter = jwtCampusId;
+    } else {
+      // Only honour the override if this user is actually a member of that campus
+      const membership = await prisma.campusUser.findUnique({
+        where: { campusId_userId: { campusId: requestedId, userId } },
+        select: { campusId: true },
+      });
+      campusFilter = membership ? requestedId : jwtCampusId;
+    }
+  } else {
+    campusFilter = query.campusId || null;
+  }
 
   const locations = await prisma.userLocation.findMany({
     where: {
       user: {
         organizationId,
-        ...(campusFilter ? { campusId: campusFilter } : {}),
+        // Filter by junction-table membership so multi-campus members show up
+        // in every campus they belong to, not just their primary campus.
+        ...(campusFilter ? { campusMemberships: { some: { campusId: campusFilter } } } : {}),
       },
     },
     include: {

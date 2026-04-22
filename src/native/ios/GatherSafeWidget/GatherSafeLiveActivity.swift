@@ -33,6 +33,23 @@ private func alertLabel(_ level: String?) -> String {
     }
 }
 
+// ── Lock-screen background helper ─────────────────────────────────────────────
+// iOS 17 changed widgets/Live Activities to require containerBackground.
+// Without it the lock-screen banner container is invisible (Dynamic Island still
+// works because it uses a completely separate rendering path).
+
+@available(iOS 16.2, *)
+private extension View {
+    @ViewBuilder
+    func lockScreenBackground() -> some View {
+        if #available(iOS 17.0, *) {
+            self.containerBackground(Color.gsBackground, for: .widget)
+        } else {
+            self.background(Color.gsBackground)
+        }
+    }
+}
+
 // ── Mic icon coloured by PTT state ────────────────────────────────────────────
 
 @available(iOS 16.2, *)
@@ -169,8 +186,11 @@ struct GatherSafeLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: GatherSafeActivityAttributes.self) { context in
             // Lock screen / StandBy
+            // containerBackground is required on iOS 17+ for the banner to appear.
+            // .lockScreenBackground() resolves to containerBackground (iOS 17+) or
+            // .background() (iOS 16.2–16.x) — see helper extension above.
             ExpandedView(attributes: context.attributes, state: context.state)
-                .background(Color.gsBackground)
+                .lockScreenBackground()
         } dynamicIsland: { context in
             DynamicIsland {
                 // Expanded Dynamic Island (press & hold)
