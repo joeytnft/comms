@@ -6,55 +6,89 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSubscriptionStore } from '@/store/useSubscriptionStore';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 
+type CampusOption = { id: string | null; name: string };
+
 /**
- * Shown only to org-level users (role=owner, no campus assignment) on
- * Enterprise plans. Lets them switch the active campus view context.
+ * Visible on Team Map when the user has access to more than one campus:
+ *
+ * - Org-level users (owner/admin, no campusId): All Campuses + each org campus
+ * - Campus-scoped users with 2+ memberships: their campuses only (no "All" option)
+ *
+ * Requires PRO subscription since multi-campus is a PRO feature.
  */
 export function CampusSwitcher() {
   const { user } = useAuth();
   const { subscription } = useSubscriptionStore();
-  const { campuses } = useCampusStore();
+  const { campuses, myMemberships } = useCampusStore();
   const { activeCampusId, activeCampusName, setActiveCampus } = useCampusViewStore();
   const [open, setOpen] = useState(false);
 
-  // Visible to org-level users (owner or admin) with no campus assignment on Enterprise
-  const isEnterprise = subscription?.tier === 'PRO';
+  const isPro = subscription?.tier === 'PRO';
   const isOrgLevel = (user?.role === 'owner' || user?.role === 'admin') && !user?.campusId;
-  if (!isEnterprise || !isOrgLevel || campuses.length === 0) return null;
+  const isCampusMember = !!user?.campusId;
 
-  const label = activeCampusName ?? 'All Campuses';
+  // Org-level: show if PRO and there are campuses to switch between
+  // Campus-scoped: show if PRO and they belong to 2+ campuses
+  const showForOrgLevel = isPro && isOrgLevel && campuses.length > 0;
+  const showForMember = isPro && isCampusMember && myMemberships.length > 1;
+
+  if (!showForOrgLevel && !showForMember) return null;
+
+  let options: CampusOption[];
+  let label: string;
+
+  if (isOrgLevel) {
+    options = [
+      { id: null, name: 'All Campuses' },
+      ...campuses.map((c: { id: string; name: string }) => ({ id: c.id, name: c.name })),
+    ];
+    label = activeCampusName ?? 'All Campuses';
+  } else {
+    options = myMemberships.map((c: { id: string; name: string }) => ({ id: c.id, name: c.name }));
+    // Default label = whichever campus is active or their primary
+    const effectiveId = activeCampusId ?? user?.campusId;
+    label = myMemberships.find((c: { id: string }) => c.id === effectiveId)?.name ?? options[0]?.name ?? 'Campus';
+  }
+
+  // For campus-scoped members: the "selected" campus is the active override or their primary
+  const memberEffectiveId = isCampusMember ? (activeCampusId ?? user?.campusId) : activeCampusId;
 
   return (
     <>
       <TouchableOpacity style={styles.pill} onPress={() => setOpen(true)}>
-        <Text style={styles.pillText}>{label}</Text>
+        <Text style={styles.pillText} numberOfLines={1}>{label}</Text>
         <Text style={styles.chevron}>▾</Text>
       </TouchableOpacity>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={() => setOpen(false)}>
-          <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>View Campus</Text>
+          <TouchableOpacity activeOpacity={1}>
+            <View style={styles.sheet}>
+              <Text style={styles.sheetTitle}>View Campus</Text>
 
-            <FlatList
-              data={[{ id: null, name: 'All Campuses' }, ...campuses.map((c) => ({ id: c.id, name: c.name }))]}
-              keyExtractor={(item) => item.id ?? '__all'}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[styles.option, activeCampusId === item.id && styles.optionSelected]}
-                  onPress={() => {
-                    setActiveCampus(item.id, item.id ? item.name : null);
-                    setOpen(false);
-                  }}
-                >
-                  <Text style={[styles.optionText, activeCampusId === item.id && styles.optionTextSelected]}>
-                    {item.name}
-                  </Text>
-                  {activeCampusId === item.id && <Text style={styles.check}>✓</Text>}
-                </TouchableOpacity>
-              )}
-            />
-          </View>
+              <FlatList
+                data={options}
+                keyExtractor={(item: CampusOption) => item.id ?? '__all'}
+                renderItem={({ item }: { item: CampusOption }) => {
+                  const isSelected = item.id === memberEffectiveId;
+                  return (
+                    <TouchableOpacity
+                      style={[styles.option, isSelected && styles.optionSelected]}
+                      onPress={() => {
+                        setActiveCampus(item.id, item.id ? item.name : null);
+                        setOpen(false);
+                      }}
+                    >
+                      <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>
+                        {item.name}
+                      </Text>
+                      {isSelected && <Text style={styles.check}>✓</Text>}
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            </View>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
     </>
@@ -72,12 +106,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.gray700,
     gap: 4,
+    maxWidth: 140,
     ...SHADOWS.sm,
   },
   pillText: {
     ...TYPOGRAPHY.bodySmall,
     color: COLORS.info,
     fontWeight: '600',
+    flex: 1,
   },
   chevron: {
     color: COLORS.info,

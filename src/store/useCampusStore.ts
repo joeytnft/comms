@@ -3,14 +3,22 @@ import { apiClient } from '@/api/client';
 import { ENDPOINTS } from '@/api/endpoints';
 import { Campus, CampusMember, OrgMemberWithCampus } from '@/types/campus';
 
+interface CampusBasic {
+  id: string;
+  name: string;
+  address?: string | null;
+}
+
 interface CampusState {
   campuses: Campus[];
+  myMemberships: CampusBasic[];
   currentCampusMembers: CampusMember[];
   orgMembers: OrgMemberWithCampus[];
   isLoading: boolean;
   error: string | null;
 
   fetchCampuses(): Promise<void>;
+  fetchMyMemberships(): Promise<void>;
   createCampus(data: { name: string; description?: string; address?: string }): Promise<Campus>;
   updateCampus(id: string, data: { name?: string; description?: string; address?: string }): Promise<void>;
   deleteCampus(id: string): Promise<void>;
@@ -23,10 +31,22 @@ interface CampusState {
 
 export const useCampusStore = create<CampusState>((set, get) => ({
   campuses: [],
+  myMemberships: [],
   currentCampusMembers: [],
   orgMembers: [],
   isLoading: false,
   error: null,
+
+  async fetchMyMemberships() {
+    try {
+      const { campuses } = await apiClient.get<{ campuses: CampusBasic[] }>(
+        ENDPOINTS.CAMPUSES.MY_MEMBERSHIPS,
+      );
+      set({ myMemberships: campuses });
+    } catch {
+      // Non-fatal — switcher just won't show for campus-scoped members
+    }
+  },
 
   async fetchCampuses() {
     set({ isLoading: true, error: null });

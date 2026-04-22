@@ -49,7 +49,7 @@ export function TeamMapScreen() {
   const { activeAlerts, fetchAlerts } = useAlertStore();
   const { user } = useAuthStore();
   const { activeCampusId } = useCampusViewStore();
-  const { fetchCampuses } = useCampusStore();
+  const { fetchCampuses, fetchMyMemberships } = useCampusStore();
   const { subscription } = useSubscriptionStore();
   const refreshInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const [geofence, setGeofence] = useState<Geofence | null>(null);
@@ -66,7 +66,12 @@ export function TeamMapScreen() {
   // One-time setup on focus: campuses, alerts
   useFocusEffect(
     useCallback(() => {
-      if (subscription?.tier === 'PRO') fetchCampuses();
+      if (subscription?.tier === 'PRO') {
+        fetchCampuses();
+        // For campus-scoped users: fetch their own memberships so the switcher
+        // can offer their other campuses without requiring admin access.
+        if (user?.campusId) fetchMyMemberships();
+      }
       fetchAlerts({ active: true });
 
       return () => {
