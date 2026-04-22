@@ -4,7 +4,9 @@
       "Bash(npx ts-node *)",
       "Bash(node -e \"const lk = require\\('/home/joe7432/comms/server/node_modules/livekit-server-sdk'\\); console.log\\(Object.keys\\(lk\\).filter\\(k => k.toLowerCase\\(\\).includes\\('webhook'\\)\\)\\)\")",
       "Bash(node -e ' *)",
-      "Bash(xargs ls *)"
+      "Bash(xargs ls *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }
