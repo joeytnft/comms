@@ -107,6 +107,7 @@ export const SPACING = {
 } as const;
 
 export const BORDER_RADIUS = {
+  xs: 4,
   sm: 6,
   md: 10,
   lg: 16,
