@@ -135,7 +135,8 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
   canUseFeature: (feature) => {
     const { subscription } = get();
     if (!subscription) return false;
-    return subscription.status === 'ACTIVE' && subscription.limits.features[feature];
+    const isActive = subscription.status === 'ACTIVE' || subscription.status === 'TRIALING';
+    return isActive && subscription.limits.features[feature];
   },
 
   tierLabel: () => {

@@ -8,7 +8,6 @@ import {
   NotFoundError,
   ValidationError,
 } from '../utils/errors';
-import { FREE_TRIAL_DAYS } from '../config/subscriptions';
 import { sendPasswordResetEmail } from '../services/emailService';
 
 const RESET_TOKEN_EXPIRY_MINUTES = 60;
@@ -107,16 +106,12 @@ export async function register(
   }
   // FLOW 3: Create new organization (admin signup)
   else if (organizationName) {
-    const trialEnd = new Date();
-    trialEnd.setDate(trialEnd.getDate() + FREE_TRIAL_DAYS);
-
     organization = await prisma.organization.create({
       data: {
         name: organizationName,
         createdBy: email, // Temporarily use email; will update with userId after user creation
         subscriptionTier: 'FREE',
-        subscriptionStatus: 'TRIALING',
-        trialEndsAt: trialEnd,
+        subscriptionStatus: 'ACTIVE',
       },
     });
   }

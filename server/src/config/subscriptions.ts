@@ -1,7 +1,5 @@
 import { SubscriptionTier } from '@prisma/client';
 
-export const FREE_TRIAL_DAYS = 14;
-
 export interface PlanLimits {
   maxLeadGroups: number;  // -1 = unlimited
   maxSubGroups: number;   // -1 = unlimited
