@@ -129,6 +129,9 @@ export async function buildApp() {
         methods: ['GET', 'POST'],
       },
       transports: ['websocket'],
+      // Keep connections alive through Cloudflare's 100-second idle timeout
+      pingInterval: 25_000,
+      pingTimeout:  60_000,
     });
 
     setIO(io);
