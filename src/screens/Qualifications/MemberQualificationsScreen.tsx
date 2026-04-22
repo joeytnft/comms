@@ -133,12 +133,9 @@ export function MemberQualificationsScreen() {
     setSelectedTypeId('');
     setEarnedDate(new Date().toISOString().split('T')[0]);
     setNotes('');
-    // Types are already fetched by useFocusEffect; if still empty and not loading, refresh
-    if (qualificationTypes.length === 0 && !isLoadingTypes) {
-      fetchTypes();
-    }
+    fetchTypes(); // Always refresh so soft-reactivated types appear immediately
     setShowAwardModal(true);
-  }, [qualificationTypes.length, isLoadingTypes, fetchTypes]);
+  }, [fetchTypes]);
 
   const openEdit = (qual: MemberQualification) => {
     setEditingQual(qual);

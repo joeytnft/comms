@@ -37,6 +37,21 @@ export async function createQualificationType(
   const existing = await prisma.qualificationType.findUnique({
     where: { organizationId_name: { organizationId: request.organizationId, name: name.trim() } },
   });
+
+  // Reactivate a previously soft-deleted type with the same name rather than blocking
+  if (existing && !existing.isActive) {
+    const qualType = await prisma.qualificationType.update({
+      where: { id: existing.id },
+      data: {
+        isActive: true,
+        description: description?.trim() ?? existing.description,
+        validityDays: validityDays ?? existing.validityDays,
+      },
+    });
+    reply.status(201).send({ qualificationType: qualType });
+    return;
+  }
+
   if (existing) throw new ValidationError('A qualification type with this name already exists');
 
   const qualType = await prisma.qualificationType.create({

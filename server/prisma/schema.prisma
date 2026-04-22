@@ -266,14 +266,14 @@ enum MemberRole {
 model Message {
   id               String      @id @default(cuid())
   groupId          String
-  senderId         String
+  senderId         String?
   type             MessageType @default(TEXT)
   encryptedContent String      // E2E encrypted — server cannot read
   iv               String      // Initialization vector
   createdAt        DateTime    @default(now())
 
   group  Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  sender User  @relation("sender", fields: [senderId], references: [id])
+  sender User? @relation("sender", fields: [senderId], references: [id], onDelete: SetNull)
   readReceipts ReadReceipt[]
 
   @@index([groupId, createdAt])
@@ -308,7 +308,7 @@ model Alert {
   id              String     @id @default(cuid())
   organizationId  String
   campusId        String?
-  triggeredById   String
+  triggeredById   String?
   level           AlertLevel
   alertType       String?    // e.g. MEDICAL, SUSPICIOUS_PERSON, LOCKDOWN, etc.
   message         String?
@@ -322,7 +322,7 @@ model Alert {
 
   organization    Organization          @relation(fields: [organizationId], references: [id])
   campus          Campus?               @relation(fields: [campusId], references: [id])
-  triggeredBy     User                  @relation("triggeredBy", fields: [triggeredById], references: [id])
+  triggeredBy     User?                 @relation("triggeredBy", fields: [triggeredById], references: [id], onDelete: SetNull)
   acknowledgments AlertAcknowledgment[]
   targetGroups    AlertGroupTarget[]    // Empty = global (all groups in org)
 
@@ -368,7 +368,7 @@ model Incident {
   id               String          @id @default(cuid())
   organizationId   String
   campusId         String?
-  reportedById     String
+  reportedById     String?
   title            String
   encryptedDetails String          // E2E encrypted
   severity         IncidentSeverity
@@ -381,7 +381,7 @@ model Incident {
 
   organization Organization    @relation(fields: [organizationId], references: [id])
   campus       Campus?         @relation(fields: [campusId], references: [id])
-  reportedBy   User            @relation("reportedBy", fields: [reportedById], references: [id])
+  reportedBy   User?           @relation("reportedBy", fields: [reportedById], references: [id], onDelete: SetNull)
   photos       IncidentPhoto[]
 
   @@index([organizationId, createdAt])
@@ -426,7 +426,7 @@ model PttLog {
   createdAt  DateTime @default(now())
 
   group  Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  sender User  @relation(fields: [senderId], references: [id])
+  sender User  @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([groupId, createdAt])
   @@map("ptt_logs")
@@ -479,12 +479,12 @@ model ServiceTemplate {
   startTime      String   // "09:00" 24h
   description    String?
   isActive       Boolean  @default(true)
-  createdById    String
+  createdById    String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   organization Organization       @relation(fields: [organizationId], references: [id])
-  createdBy    User               @relation("templateCreatedBy", fields: [createdById], references: [id])
+  createdBy    User?              @relation("templateCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   roleSlots    TemplateRoleSlot[]
   services     ServiceSchedule[]
 
@@ -512,12 +512,12 @@ model ServiceSchedule {
   name           String
   serviceDate    DateTime
   description    String?
-  createdById    String
+  createdById    String?
   createdAt      DateTime @default(now())
 
   organization Organization      @relation(fields: [organizationId], references: [id])
   template     ServiceTemplate?  @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  createdBy    User              @relation("serviceCreatedBy", fields: [createdById], references: [id])
+  createdBy    User?             @relation("serviceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   assignments  ShiftAssignment[]
   availability ServiceAvailability[]
 
@@ -536,7 +536,7 @@ model ShiftAssignment {
   createdAt DateTime         @default(now())
 
   service      ServiceSchedule    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  user         User               @relation("shiftAssignments", fields: [userId], references: [id])
+  user         User               @relation("shiftAssignments", fields: [userId], references: [id], onDelete: Cascade)
   post         Post?              @relation(fields: [postId], references: [id])
   checkIn      CheckIn?
   swapRequests ShiftSwapRequest[] @relation("fromAssignment")
@@ -587,7 +587,7 @@ model ShiftSwapRequest {
   createdAt        DateTime   @default(now())
 
   fromAssignment ShiftAssignment @relation("fromAssignment", fields: [fromAssignmentId], references: [id], onDelete: Cascade)
-  toUser         User            @relation("swapRequestsReceived", fields: [toUserId], references: [id])
+  toUser         User            @relation("swapRequestsReceived", fields: [toUserId], references: [id], onDelete: Cascade)
 
   @@map("shift_swap_requests")
 }
@@ -843,12 +843,12 @@ model TrainingEvent {
   endDate        DateTime?
   maxAttendees   Int?
   isActive       Boolean   @default(true)
-  createdBy      String
+  createdBy      String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
   organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  creator      User                  @relation("trainingCreator", fields: [createdBy], references: [id])
+  creator      User?                 @relation("trainingCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   groupTargets TrainingGroupTarget[]
   signups      TrainingSignup[]
 

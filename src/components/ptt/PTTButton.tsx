@@ -73,19 +73,11 @@ export function PTTButton({
 
   const buttonColor = disabled ? COLORS.gray600 : STATE_COLORS[state];
   const ringSize = size + 44;
-  const iconSize = Math.round(size * 0.40);
+  const iconSize = Math.round(size * 0.44);
 
   return (
     // Container sized to ring so absolute rings stay centered
     <View style={[styles.container, { width: ringSize, height: ringSize }]}>
-
-      {/* Idle ready ring */}
-      {!disabled && state === 'idle' && (
-        <View style={[
-          styles.ring,
-          { width: ringSize, height: ringSize, borderRadius: ringSize / 2, borderColor: COLORS.pttIdleGlow, opacity: 0.5 },
-        ]} />
-      )}
 
       {/* Transmitting pulse ring */}
       {state === 'transmitting' && (

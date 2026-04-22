@@ -561,9 +561,14 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         mediaRecorderRef.current = recorder;
       }).catch(() => null);
     } else if (nativePTTActiveRef.current) {
-      // Tell the PTT framework the user wants to transmit.
-      // The framework fires PTT_TRANSMISSION_STARTED → our effect handles state.
       if (nativePTTChannelIdRef.current) {
+        // Optimistically update UI immediately — native framework confirmation arrives
+        // via onTransmissionStarted (which no-ops when pttState is already 'transmitting').
+        transmittingRef.current = true;
+        transmitStartedAtRef.current = Date.now();
+        usePTTStore.getState().setTransmitting(true);
+        socket.emit('ptt:start', { groupId: currentGroupId });
+        if (micTrackRef.current) { micTrackRef.current.unmute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null); }
         nativePTTService.beginTransmitting(nativePTTChannelIdRef.current).catch(() => null);
       }
     } else {
@@ -596,8 +601,14 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       mediaRecorderRef.current?.stop();
       mediaRecorderRef.current = null;
     } else if (nativePTTActiveRef.current) {
-      // Tell the framework to stop. PTT_TRANSMISSION_ENDED event handles the rest.
       if (nativePTTChannelIdRef.current) {
+        // Optimistically stop — onTransmissionEnded will no-op if state already idle.
+        const durationMs = Date.now() - transmitStartedAtRef.current;
+        transmittingRef.current = false;
+        usePTTStore.getState().setTransmitting(false);
+        socket.emit('ptt:stop', { groupId: currentGroupId });
+        socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
+        if (micTrackRef.current) { micTrackRef.current.mute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null); }
         nativePTTService.stopTransmitting(nativePTTChannelIdRef.current).catch(() => null);
       }
     } else {
