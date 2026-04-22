@@ -74,9 +74,15 @@ RCT_EXPORT_METHOD(initialize:(NSString *)channelId
             __strong typeof(weak) strong = weak;
             if (!strong) { resolve(nil); return; }
             strong->_channelManager = mgr;
-            [mgr requestJoinChannelWithUUID:strong->_channelUUID
-                                 descriptor:strong->_channelDescriptor];
-            resolve(nil);
+            @try {
+                [mgr requestJoinChannelWithUUID:strong->_channelUUID
+                                     descriptor:strong->_channelDescriptor];
+                resolve(strong->_channelUUID.UUIDString);
+            } @catch (NSException *exception) {
+                reject(@"PTT_JOIN_ERROR",
+                       exception.reason ?: @"Failed to join PTT channel",
+                       nil);
+            }
         }];
         return;
     }

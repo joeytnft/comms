@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -117,6 +117,7 @@ export function MemberQualificationsScreen() {
   const [notes, setNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [showTypePicker, setShowTypePicker] = useState(false);
+  const [typesRefreshing, setTypesRefreshing] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -127,13 +128,18 @@ export function MemberQualificationsScreen() {
 
   const qualifications = memberQualifications[userId] ?? [];
 
-  const openAward = () => {
+  const openAward = useCallback(async () => {
     setEditingQual(null);
     setSelectedTypeId('');
     setEarnedDate(new Date().toISOString().split('T')[0]);
     setNotes('');
+    // Ensure types are loaded before opening — fetch if missing
+    if (qualificationTypes.length === 0) {
+      setTypesRefreshing(true);
+      try { await fetchTypes(); } finally { setTypesRefreshing(false); }
+    }
     setShowAwardModal(true);
-  };
+  }, [qualificationTypes.length, fetchTypes]);
 
   const openEdit = (qual: MemberQualification) => {
     setEditingQual(qual);
@@ -344,39 +350,45 @@ export function MemberQualificationsScreen() {
                 <Text style={styles.pickerDone}>Done</Text>
               </TouchableOpacity>
             </View>
-            <FlatList
-              data={unearnedTypes}
-              keyExtractor={(t) => t.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.typeRow}
-                  onPress={() => {
-                    setSelectedTypeId(item.id);
-                    setShowTypePicker(false);
-                  }}
-                >
-                  <View style={styles.typeInfo}>
-                    <Text style={styles.typeName}>{item.name}</Text>
-                    {item.description ? (
-                      <Text style={styles.typeDesc}>{item.description}</Text>
-                    ) : null}
-                    <Text style={styles.typeValidity}>
-                      {item.validityDays > 0
-                        ? `Valid for ${item.validityDays} days`
-                        : 'Never expires'}
-                    </Text>
-                  </View>
-                  {selectedTypeId === item.id && (
-                    <Text style={styles.typeCheck}>✓</Text>
-                  )}
-                </TouchableOpacity>
-              )}
-              ListEmptyComponent={
-                <Text style={styles.noTypes}>
-                  All qualification types are already awarded to this member.
-                </Text>
-              }
-            />
+            {(isLoading || typesRefreshing) && qualificationTypes.length === 0 ? (
+              <ActivityIndicator color={COLORS.primary} style={{ margin: SPACING.lg }} />
+            ) : (
+              <FlatList
+                data={unearnedTypes}
+                keyExtractor={(t) => t.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.typeRow}
+                    onPress={() => {
+                      setSelectedTypeId(item.id);
+                      setShowTypePicker(false);
+                    }}
+                  >
+                    <View style={styles.typeInfo}>
+                      <Text style={styles.typeName}>{item.name}</Text>
+                      {item.description ? (
+                        <Text style={styles.typeDesc}>{item.description}</Text>
+                      ) : null}
+                      <Text style={styles.typeValidity}>
+                        {item.validityDays > 0
+                          ? `Valid for ${item.validityDays} days`
+                          : 'Never expires'}
+                      </Text>
+                    </View>
+                    {selectedTypeId === item.id && (
+                      <Text style={styles.typeCheck}>✓</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  <Text style={styles.noTypes}>
+                    {qualificationTypes.length === 0
+                      ? 'No qualification types have been created yet. Add them via Training → Qualification Types.'
+                      : 'All qualification types are already awarded to this member.'}
+                  </Text>
+                }
+              />
+            )}
           </View>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -397,7 +409,7 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   backBtn: { minWidth: 48 },
-  backText: { ...TYPOGRAPHY.body, color: COLORS.primary },
+  backText: { ...TYPOGRAPHY.body, color: COLORS.info },
   headerTitle: { ...TYPOGRAPHY.h3, color: COLORS.textPrimary, flex: 1 },
   addBtn: {
     backgroundColor: COLORS.primary,
@@ -539,7 +551,7 @@ const styles = StyleSheet.create({
   typeInfo: { flex: 1 },
   typeName: { ...TYPOGRAPHY.body, fontWeight: '600', color: COLORS.textPrimary },
   typeDesc: { ...TYPOGRAPHY.caption, color: COLORS.textSecondary },
-  typeValidity: { ...TYPOGRAPHY.caption, color: COLORS.primary },
+  typeValidity: { ...TYPOGRAPHY.caption, color: COLORS.info },
   typeCheck: { fontSize: 18, color: COLORS.primary, fontWeight: '700' },
   noTypes: { ...TYPOGRAPHY.body, color: COLORS.textSecondary, textAlign: 'center', padding: SPACING.lg },
 });

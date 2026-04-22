@@ -47,6 +47,10 @@ export const COLORS = {
   textSecondary: '#9CA3AF',
   textMuted: '#6B7280',
   textInverse: '#111827',
+
+  // Semantic aliases used across screens
+  error: '#EF4444',   // alias for danger
+  border: '#374151',  // alias for gray700
 } as const;
 
 export const TYPOGRAPHY = {
@@ -85,6 +89,11 @@ export const TYPOGRAPHY = {
     fontWeight: '600' as const,
     lineHeight: 24,
   },
+
+  // Shorthand aliases (h1/h2/h3) used in qualification/training screens
+  h1: { fontSize: 28, fontWeight: '700' as const, lineHeight: 34 },
+  h2: { fontSize: 22, fontWeight: '600' as const, lineHeight: 28 },
+  h3: { fontSize: 18, fontWeight: '600' as const, lineHeight: 24 },
 } as const;
 
 export const SPACING = {
