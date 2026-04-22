@@ -11,6 +11,7 @@ interface PTTLogState {
 
   fetchLogs: (groupId: string) => Promise<void>;
   prependLog: (log: PttLog) => void;
+  updateLogAudioUrl: (id: string, groupId: string, audioUrl: string) => void;
   clearError: () => void;
 }
 
@@ -43,6 +44,17 @@ export const usePTTLogStore = create<PTTLogState>((set) => ({
       logs: {
         ...state.logs,
         [log.groupId]: [log, ...(state.logs[log.groupId] ?? [])],
+      },
+    }));
+  },
+
+  updateLogAudioUrl: (id: string, groupId: string, audioUrl: string) => {
+    set((state) => ({
+      logs: {
+        ...state.logs,
+        [groupId]: (state.logs[groupId] ?? []).map((log) =>
+          log.id === id ? { ...log, audioUrl } : log,
+        ),
       },
     }));
   },

@@ -250,6 +250,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     };
 
     const handleLogSaved = (data: {
+      id?: string;
       groupId: string;
       userId: string;
       displayName?: string;
@@ -258,7 +259,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       createdAt: string;
     }) => {
       usePTTLogStore.getState().prependLog({
-        id: `${data.userId}_${data.createdAt}`,
+        id: data.id ?? `${data.userId}_${data.createdAt}`,
         groupId: data.groupId,
         senderId: data.userId,
         audioUrl: data.audioUrl,
@@ -266,6 +267,10 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         createdAt: data.createdAt,
         sender: { id: data.userId, displayName: data.displayName ?? 'Team member', avatarUrl: null },
       });
+    };
+
+    const handleLogUpdated = (data: { id: string; groupId: string; audioUrl: string }) => {
+      usePTTLogStore.getState().updateLogAudioUrl(data.id, data.groupId, data.audioUrl);
     };
 
     const handleSocketReconnect = () => {
@@ -293,6 +298,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     socket.on('ptt:room_state',   handleRoomState);
     socket.on('ptt:audio_chunk',  handleAudioChunk);
     socket.on('ptt:log_saved',    handleLogSaved);
+    socket.on('ptt:log_updated',  handleLogUpdated);
     socket.on('connect',          handleSocketReconnect);
     socket.on('disconnect',       handleSocketDisconnect);
 
@@ -304,6 +310,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       socket.off('ptt:room_state',   handleRoomState);
       socket.off('ptt:audio_chunk',  handleAudioChunk);
       socket.off('ptt:log_saved',    handleLogSaved);
+      socket.off('ptt:log_updated',  handleLogUpdated);
       socket.off('connect',          handleSocketReconnect);
       socket.off('disconnect',       handleSocketDisconnect);
     };

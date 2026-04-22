@@ -70,6 +70,8 @@ export async function startTransmissionEgress(groupId: string, userId: string): 
     );
 
     await redis.setex(`ptt:egress:${userId}:${groupId}`, 3600, egress.egressId);
+    // Store reverse mapping so the webhook handler can resolve userId+groupId from egressId
+    await redis.setex(`ptt:egress_meta:${egress.egressId}`, 3600, JSON.stringify({ userId, groupId }));
     logger.info(`[LiveKit] Egress ${egress.egressId} started for ${userId} in ${roomName}`);
   } catch (err) {
     logger.warn({ err }, '[LiveKit] startTransmissionEgress failed — continuing without egress');

@@ -280,6 +280,54 @@ export function setupPTTSocket(io: Server, socket: Socket) {
             createdAt: endedAt,
           });
         }
+      } else if (env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY && env.SUPABASE_STORAGE_BUCKET) {
+        // Native iOS client — audio captured by LiveKit egress. Poll Supabase storage
+        // after a delay and backfill the audioUrl on the pttLog record.
+        setTimeout(async () => {
+          try {
+            const { data: files } = await getSupabase()
+              .storage
+              .from(env.SUPABASE_STORAGE_BUCKET)
+              .list(`ptt/${groupId}`, {
+                search: userId,
+                sortBy: { column: 'name', order: 'desc' },
+                limit: 5,
+              });
+
+            if (!files || files.length === 0) return;
+
+            const latestFile = files[0];
+            const { data: { publicUrl } } = getSupabase()
+              .storage
+              .from(env.SUPABASE_STORAGE_BUCKET)
+              .getPublicUrl(`ptt/${groupId}/${latestFile.name}`);
+
+            const recentLog = await prisma.pttLog.findFirst({
+              where: {
+                groupId,
+                senderId: userId,
+                audioUrl: null,
+                createdAt: { gte: new Date(Date.now() - 120_000) },
+              },
+              orderBy: { createdAt: 'desc' },
+            });
+
+            if (recentLog) {
+              await prisma.pttLog.update({
+                where: { id: recentLog.id },
+                data: { audioUrl: publicUrl },
+              });
+              io.to(room).emit('ptt:log_updated', {
+                id: recentLog.id,
+                groupId,
+                audioUrl: publicUrl,
+              });
+              logger.info(`[PTT] Backfilled audioUrl for native log ${recentLog.id}`);
+            }
+          } catch (err) {
+            logger.warn({ err }, '[PTT] Failed to backfill egress audio URL');
+          }
+        }, 20_000);
       }
 
       const group = await prisma.group.findUnique({
@@ -307,7 +355,7 @@ export function setupPTTSocket(io: Server, socket: Socket) {
         where: { id: userId },
         select: { displayName: true },
       });
-      await prisma.pttLog.create({
+      const savedLog = await prisma.pttLog.create({
         data: {
           groupId: data.groupId,
           senderId: userId,
@@ -316,8 +364,9 @@ export function setupPTTSocket(io: Server, socket: Socket) {
         },
       });
       const room = `ptt:${data.groupId}`;
-      const createdAt = new Date().toISOString();
+      const createdAt = savedLog.createdAt.toISOString();
       io.to(room).emit('ptt:log_saved', {
+        id: savedLog.id,
         groupId: data.groupId,
         userId,
         displayName: user?.displayName ?? 'Unknown',

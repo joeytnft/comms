@@ -323,7 +323,7 @@ export function AlertsScreen() {
     const badgeColor = typeDef?.color ?? ALERT_COLORS[item.level];
     const badgeLabel = typeDef ? `${typeDef.emoji} ${typeDef.label}` : ALERT_LABELS[item.level];
     const isGlobal = item.targetGroups.length === 0;
-    const isOwner = item.triggeredBy.id === userId;
+    const isOwner = item.triggeredBy.id === userId || !!user?.isOrgAdmin;
 
     return (
       <View style={[styles.alertCard, { borderLeftColor: badgeColor }]}>
