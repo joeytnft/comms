@@ -18,7 +18,7 @@ async function requireAdmin(request: FastifyRequest) {
 
 export async function listQualificationTypes(request: FastifyRequest, reply: FastifyReply) {
   const types = await prisma.qualificationType.findMany({
-    where: { organizationId: request.organizationId, isActive: true },
+    where: { organizationId: request.organizationId },
     orderBy: { name: 'asc' },
   });
   reply.send({ qualificationTypes: types });
@@ -37,20 +37,6 @@ export async function createQualificationType(
   const existing = await prisma.qualificationType.findUnique({
     where: { organizationId_name: { organizationId: request.organizationId, name: name.trim() } },
   });
-
-  // Reactivate a previously soft-deleted type with the same name rather than blocking
-  if (existing && !existing.isActive) {
-    const qualType = await prisma.qualificationType.update({
-      where: { id: existing.id },
-      data: {
-        isActive: true,
-        description: description?.trim() ?? existing.description,
-        validityDays: validityDays ?? existing.validityDays,
-      },
-    });
-    reply.status(201).send({ qualificationType: qualType });
-    return;
-  }
 
   if (existing) throw new ValidationError('A qualification type with this name already exists');
 
@@ -102,8 +88,8 @@ export async function deleteQualificationType(
     where: { id: request.params.id, organizationId: request.organizationId },
   });
   if (!existing) throw new NotFoundError('Qualification type not found');
-  // Soft-delete to preserve history
-  await prisma.qualificationType.update({ where: { id: existing.id }, data: { isActive: false } });
+  // Hard delete — cascades to memberQualifications via DB constraint
+  await prisma.qualificationType.delete({ where: { id: existing.id } });
   reply.status(204).send();
 }
 
@@ -151,7 +137,7 @@ export async function awardQualification(
   if (!targetUser) throw new NotFoundError('User not found');
 
   const qualType = await prisma.qualificationType.findFirst({
-    where: { id: qualificationTypeId, organizationId: request.organizationId, isActive: true },
+    where: { id: qualificationTypeId, organizationId: request.organizationId },
   });
   if (!qualType) throw new NotFoundError('Qualification type not found');
 
