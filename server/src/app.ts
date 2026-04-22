@@ -27,6 +27,8 @@ import { integrationRoutes } from './routes/integrations';
 import { trainingRoutes } from './routes/training';
 import { qualificationRoutes } from './routes/qualifications';
 import { setupSocketHandlers } from './sockets/socketHandler';
+import { webhookRoutes } from './routes/webhooks';
+import { setIO } from './config/socketIO';
 
 export async function buildApp() {
   const app = Fastify({
@@ -114,6 +116,7 @@ export async function buildApp() {
   app.register(integrationRoutes, { prefix: '/integrations' });
   app.register(trainingRoutes, { prefix: '/training' });
   app.register(qualificationRoutes, { prefix: '/qualifications' });
+  app.register(webhookRoutes, { prefix: '/webhooks' });
 
   // Socket.IO setup
   app.addHook('onReady', async () => {
@@ -128,6 +131,7 @@ export async function buildApp() {
       transports: ['websocket'],
     });
 
+    setIO(io);
     setupSocketHandlers(io);
 
     logger.info('[Socket.IO] Attached to HTTP server');
