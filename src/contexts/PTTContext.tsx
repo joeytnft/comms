@@ -102,6 +102,26 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ─── React to showLiveActivity toggle changes mid-session ──────────────────
+  useEffect(() => {
+    if (!store.isConnected) return;
+    if (store.config.showLiveActivity) {
+      // User turned it ON while already connected — start one now if none running
+      if (!liveActivityIdRef.current) {
+        const orgName = useAuthStore.getState().organization?.name ?? 'GatherSafe';
+        liveActivityService.start(store.currentGroupName ?? '', orgName)
+          .then((id) => {
+            liveActivityIdRef.current = id;
+            if (id) mmkvStorage.setString(LIVE_ACTIVITY_ID_KEY, id);
+          })
+          .catch(() => null);
+      }
+    } else {
+      // User turned it OFF — end the running Live Activity immediately
+      endLiveActivity();
+    }
+  }, [store.config.showLiveActivity]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ─── iOS native PTT setup ───────────────────────────────────────────────────
   useEffect(() => {
     if (!USE_NATIVE_PTT) return;
