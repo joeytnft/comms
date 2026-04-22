@@ -226,10 +226,11 @@ export async function login(
     throw new AuthenticationError('Invalid email or password');
   }
 
-  // Update last seen
+  // Update last seen — use select to avoid reading columns that may not exist in the DB yet
   await prisma.user.update({
     where: { id: user.id },
     data: { lastSeenAt: new Date() },
+    select: { id: true },
   });
 
   // Derive role
