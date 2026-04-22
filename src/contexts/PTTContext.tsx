@@ -19,11 +19,13 @@ import { ENV as AppEnv } from '@/config/env';
 // LiveKit (native only — tree-shaken on web)
 let Room: typeof import('livekit-client').Room | null = null;
 let RoomEvent: typeof import('livekit-client').RoomEvent | null = null;
+let createLocalAudioTrack: typeof import('livekit-client').createLocalAudioTrack | null = null;
 let AudioSession: typeof import('@livekit/react-native').AudioSession | null = null;
 if (Platform.OS !== 'web') {
   const lk = require('livekit-client');
   Room = lk.Room;
   RoomEvent = lk.RoomEvent;
+  createLocalAudioTrack = lk.createLocalAudioTrack;
   const rnLk = require('@livekit/react-native');
   AudioSession = rnLk.AudioSession;
 }
@@ -55,6 +57,9 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
   // LiveKit room instance (native)
   const roomRef = useRef<InstanceType<typeof import('livekit-client').Room> | null>(null);
+  // Pre-published mic track kept muted between transmissions for instant PTT response
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const micTrackRef = useRef<any>(null);
 
   // Web MediaRecorder ref
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -102,7 +107,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         socket.emit('ptt:stop', { groupId: currentGroupId });
         socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
       }
-      roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null);
+      if (micTrackRef.current) { micTrackRef.current.mute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null); }
     });
 
     // Transmission failed (e.g. active cellular call)
@@ -116,14 +121,14 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     const unsubActivated = nativePTTService.onAudioActivated(() => {
       if (transmittingRef.current) {
         // User is transmitting — unmute mic
-        roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null);
+        if (micTrackRef.current) { micTrackRef.current.unmute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null); }
       }
       // For incoming audio, LiveKit auto-plays subscribed tracks — nothing to do here
     });
 
     // iOS deactivates audio session — mute mic, stop any recording
     const unsubDeactivated = nativePTTService.onAudioDeactivated(() => {
-      roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null);
+      if (micTrackRef.current) { micTrackRef.current.mute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null); }
     });
 
     // System closed the channel (user left from Dynamic Island / lock screen)
@@ -408,7 +413,14 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           throw new Error('LiveKit server URL is not configured. Set LIVEKIT_URL on the server.');
         }
 
-        const room = new Room!();
+        const room = new Room!({
+          audioCaptureDefaults: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+          dynacast: false,
+        });
         roomRef.current = room;
 
         room.on(RoomEvent!.ParticipantConnected, (participant: { identity: string }) => {
@@ -447,6 +459,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         });
 
         room.on(RoomEvent!.Disconnected, () => {
+          micTrackRef.current = null; // room cleanup releases the underlying track
           if (intentionalLeaveRef.current) {
             intentionalLeaveRef.current = false;
             usePTTStore.getState().disconnect();
@@ -457,8 +470,17 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         });
 
         await room.connect(livekitUrl, response.token, { autoSubscribe: true });
-        // Pre-create mic track in muted state for instant PTT response
-        await room.localParticipant.setMicrophoneEnabled(false);
+        // Pre-publish mic track muted with DTX — keeps the track negotiated so
+        // unmute() is ~20ms vs setMicrophoneEnabled(true) which re-negotiates (~150ms).
+        // DTX eliminates silence packets, preventing false active-speaker events.
+        const micTrack = await createLocalAudioTrack!({
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        });
+        await room.localParticipant.publishTrack(micTrack, { dtx: true, audioBitrate: 16_000 });
+        micTrack.mute();
+        micTrackRef.current = micTrack;
       }
 
       socket.emit('ptt:join', { groupId });
@@ -479,6 +501,10 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       mediaRecorderRef.current?.stop();
       mediaRecorderRef.current = null;
     } else {
+      if (micTrackRef.current) {
+        micTrackRef.current.stop();
+        micTrackRef.current = null;
+      }
       roomRef.current?.disconnect();
       roomRef.current = null;
 
@@ -540,7 +566,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       usePTTStore.getState().setTransmitting(true);
       transmitStartedAtRef.current = Date.now();
       socket.emit('ptt:start', { groupId: currentGroupId });
-      roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null);
+      if (micTrackRef.current) { micTrackRef.current.unmute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null); }
       if (Platform.OS === 'android' && callUUIDRef.current) callKitService.setMuted(callUUIDRef.current, false);
     }
     // Update Live Activity to show "You are speaking"
@@ -574,7 +600,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       const durationMs = Date.now() - transmitStartedAtRef.current;
       usePTTStore.getState().setTransmitting(false);
       socket.emit('ptt:stop', { groupId: currentGroupId });
-      roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null);
+      if (micTrackRef.current) { micTrackRef.current.mute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null); }
       if (Platform.OS === 'android' && callUUIDRef.current) callKitService.setMuted(callUUIDRef.current, true);
       socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
     }
