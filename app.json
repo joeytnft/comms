@@ -7,7 +7,7 @@
     "scheme": "gathersafe",
     "userInterfaceStyle": "automatic",
     "updates": {
-      "url": "https://u.expo.dev/0008bf22-68a7-4e29-853b-b4ab27875a82"
+      "url": "https://u.expo.dev/0305c4ae-e29a-4d01-afbf-402f427c8e54"
     },
     "runtimeVersion": {
       "policy": "appVersion"
@@ -39,7 +39,7 @@
         ],
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "22"
+      "buildNumber": "23"
     },
     "android": {
       "package": "com.gathersafe2.www",
@@ -107,7 +107,9 @@
       ]
     ],
     "extra": {
-      "eas": {}
+      "eas": {
+        "projectId": "0305c4ae-e29a-4d01-afbf-402f427c8e54"
+      }
     },
     "owner": "joeyt56"
   }
