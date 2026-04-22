@@ -107,9 +107,7 @@
       ]
     ],
     "extra": {
-      "eas": {
-        "projectId": "0008bf22-68a7-4e29-853b-b4ab27875a82"
-      }
+      "eas": {}
     },
     "owner": "joeyt56"
   }
