@@ -579,14 +579,17 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   const leaveChannel = useCallback(() => {
     const currentGroupId = usePTTStore.getState().currentGroupId;
 
-    // Always end the Live Activity first — this must not be gated on socket/group state
+    // Always end the Live Activity first — must not be gated on socket/group state
     // because the island can get stuck if the socket is disconnected when leave is pressed.
     endLiveActivity();
 
-    if (!socket || !currentGroupId) return;
-
     intentionalLeaveRef.current = true;
 
+    // Tear down local audio/native resources regardless of socket/group state.
+    // When the user taps Leave after opening the app from the Dynamic Island,
+    // the socket may be momentarily null (reconnect in flight). Skipping cleanup
+    // here leaves the LiveKit room, native PTT channel, and store in a connected
+    // state, so the UI never navigates back to the group picker.
     if (Platform.OS === 'web') {
       mediaRecorderRef.current?.stop();
       mediaRecorderRef.current = null;
@@ -614,7 +617,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       AudioSession?.stopAudioSession();
     }
 
-    socket.emit('ptt:leave', { groupId: currentGroupId });
+    const s = socketRef.current ?? socket;
+    if (s && currentGroupId) {
+      s.emit('ptt:leave', { groupId: currentGroupId });
+    }
+    // Always reset store — this flips isConnected back to false so the UI
+    // can render the group picker and the user isn't stuck on the PTT screen.
     usePTTStore.getState().disconnect();
   }, [socket, endLiveActivity]);
 
