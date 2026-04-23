@@ -2,6 +2,7 @@ import { Server, Socket } from 'socket.io';
 import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
 import * as hierarchyService from '../services/groups/hierarchyService';
+import { sendChatMessagePushNotifications } from '../services/notifications/pushService';
 
 interface JoinGroupData {
   groupId: string;
@@ -119,7 +120,7 @@ export function setupChatSocket(io: Server, socket: Socket) {
       // Also notify LEAD group members if this is a SUB group
       const group = await prisma.group.findUnique({
         where: { id: data.groupId },
-        select: { parentGroupId: true, type: true },
+        select: { name: true, parentGroupId: true, type: true },
       });
 
       if (group?.parentGroupId) {
@@ -128,6 +129,16 @@ export function setupChatSocket(io: Server, socket: Socket) {
           fromSubGroup: data.groupId,
         });
       }
+
+      // Push notifications to offline members (fire-and-forget)
+      const groupName = group?.name ?? 'GatherSafe';
+      sendChatMessagePushNotifications(
+        data.groupId,
+        userId,
+        message.id,
+        message.sender?.displayName ?? 'Unknown',
+        groupName,
+      ).catch((err) => logger.error({ err }, '[Chat] Push notification error'));
 
       // Acknowledge to sender
       if (callback) {

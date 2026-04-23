@@ -2,6 +2,9 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../config/database';
 import { NotFoundError, ValidationError, AuthorizationError } from '../utils/errors';
 import * as hierarchyService from '../services/groups/hierarchyService';
+import { getIO } from '../config/socketIO';
+import { sendChatMessagePushNotifications } from '../services/notifications/pushService';
+import { logger } from '../utils/logger';
 
 interface SendMessageBody {
   encryptedContent: string;
@@ -72,6 +75,27 @@ export async function sendMessage(
   });
 
   reply.status(201).send({ message });
+
+  // Broadcast to connected socket clients
+  const io = getIO();
+  if (io) {
+    io.to(`group:${groupId}`).emit('new_message', message);
+    if (group.parentGroupId) {
+      io.to(`group:${group.parentGroupId}`).emit('new_message', {
+        ...message,
+        fromSubGroup: groupId,
+      });
+    }
+  }
+
+  // Push notifications to offline members (fire-and-forget)
+  sendChatMessagePushNotifications(
+    groupId,
+    request.userId,
+    message.id,
+    message.sender?.displayName ?? 'Unknown',
+    group.name,
+  ).catch((err) => logger.error({ err }, '[Message] Push notification error'));
 
   return message;
 }

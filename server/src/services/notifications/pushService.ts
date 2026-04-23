@@ -194,10 +194,54 @@ export async function sendMessagePushNotification(
       title: groupName,
       body: `${senderName} sent a message`,
       priority: 'normal',
-      data: { messageId, groupId, type: 'message' },
+      data: { messageId, groupId, groupName, type: 'message' },
       channelId: 'messages',
     }]);
   } catch (err) {
     logger.error({ err }, '[Push] Failed to send message notification');
+  }
+}
+
+/**
+ * Send chat message push notifications to all group members except the sender.
+ * Fire-and-forget — call without await in hot paths.
+ */
+export async function sendChatMessagePushNotifications(
+  groupId: string,
+  senderId: string,
+  messageId: string,
+  senderName: string,
+  groupName: string,
+): Promise<void> {
+  const { expo, Expo } = await getExpo();
+
+  const members = await prisma.groupMembership.findMany({
+    where: { groupId, userId: { not: senderId } },
+    select: { user: { select: { expoPushToken: true } } },
+  });
+
+  const tokens = members
+    .map((m) => m.user.expoPushToken)
+    .filter((t): t is string => !!t && Expo.isExpoPushToken(t));
+
+  if (tokens.length === 0) return;
+
+  const messages: ExpoPushMessage[] = tokens.map((token) => ({
+    to: token as ExpoPushToken,
+    sound: 'default',
+    title: groupName,
+    body: `${senderName} sent a message`,
+    priority: 'normal',
+    data: { messageId, groupId, groupName, type: 'message' },
+    channelId: 'messages',
+  }));
+
+  const chunks = expo.chunkPushNotifications(messages);
+  for (const chunk of chunks) {
+    try {
+      await expo.sendPushNotificationsAsync(chunk);
+    } catch (err) {
+      logger.error({ err }, '[Push] Failed to send chat message notifications chunk');
+    }
   }
 }
