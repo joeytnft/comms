@@ -55,12 +55,12 @@ export default function MembersPage() {
     setLoading(true);
     try {
       const [mRes, cRes] = await Promise.all([
-        fetch('/api/admin/proxy/users'),
+        fetch('/api/admin/proxy/users/org-members'),
         fetch('/api/admin/proxy/campuses'),
       ]);
       const mData = mRes.ok ? await mRes.json() : {};
       const cData = cRes.ok ? await cRes.json() : {};
-      setMembers(Array.isArray(mData.users) ? mData.users : []);
+      setMembers(Array.isArray(mData.members) ? mData.members : []);
       setCampuses(Array.isArray(cData.campuses) ? cData.campuses : (Array.isArray(cData) ? cData : []));
     } finally {
       setLoading(false);

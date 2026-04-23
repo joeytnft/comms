@@ -76,7 +76,7 @@ export default function TrainingPage() {
   const handleStatusChange = async (id: string, status: string) => {
     try {
       await fetch(`/api/admin/proxy/training/${id}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
       });
@@ -149,8 +149,8 @@ export default function TrainingPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-3 mb-1">
                     <h3 className="font-semibold text-white">{ev.title}</h3>
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_STYLES[ev.status]}`}>
-                      {ev.status.charAt(0) + ev.status.slice(1).toLowerCase()}
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_STYLES[ev.status ?? ''] ?? 'bg-white/5 text-slate-400'}`}>
+                      {ev.status ? ev.status.charAt(0) + ev.status.slice(1).toLowerCase() : 'Unknown'}
                     </span>
                     {ev.requiredForAll && (
                       <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400">Required</span>
@@ -229,8 +229,8 @@ export default function TrainingPage() {
         {detailEvent && (
           <div className="space-y-4">
             <div className="flex items-center gap-2">
-              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_STYLES[detailEvent.status]}`}>
-                {detailEvent.status.charAt(0) + detailEvent.status.slice(1).toLowerCase()}
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_STYLES[detailEvent.status ?? ''] ?? 'bg-white/5 text-slate-400'}`}>
+                {detailEvent.status ? detailEvent.status.charAt(0) + detailEvent.status.slice(1).toLowerCase() : 'Unknown'}
               </span>
               {detailEvent.requiredForAll && (
                 <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400">Required</span>

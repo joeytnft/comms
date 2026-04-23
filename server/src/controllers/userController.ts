@@ -1,11 +1,15 @@
+import { randomUUID } from 'crypto';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../config/database';
-import { NotFoundError, ValidationError, AuthorizationError } from '../utils/errors';
+import { NotFoundError, ValidationError, AuthorizationError, ConflictError } from '../utils/errors';
+import { sendInviteEmail } from '../services/emailService';
 
 interface UpdateProfileBody {
   displayName?: string;
   phone?: string;
   avatarUrl?: string;
+  currentPassword?: string;
+  newPassword?: string;
 }
 
 interface UpdatePublicKeyBody {
@@ -19,6 +23,13 @@ interface UpdatePushTokenBody {
 interface AdminUpdateBody {
   displayName?: string;
   phone?: string;
+  isOrgAdmin?: boolean;
+}
+
+interface InviteUserBody {
+  email: string;
+  displayName: string;
+  campusId?: string;
   isOrgAdmin?: boolean;
 }
 
@@ -63,16 +74,26 @@ export async function updateMe(
   request: FastifyRequest<{ Body: UpdateProfileBody }>,
   reply: FastifyReply,
 ) {
-  const { displayName, phone, avatarUrl } = request.body;
-
-  if (!displayName && phone === undefined && avatarUrl === undefined) {
-    throw new ValidationError('At least one field must be provided');
-  }
+  const { displayName, phone, avatarUrl, currentPassword, newPassword } = request.body;
 
   const data: Record<string, string | null> = {};
   if (displayName) data.displayName = displayName;
   if (phone !== undefined) data.phone = phone || null;
   if (avatarUrl !== undefined) data.avatarUrl = avatarUrl || null;
+
+  if (newPassword) {
+    if (!currentPassword) throw new ValidationError('Current password is required to set a new password');
+    if (newPassword.length < 8) throw new ValidationError('New password must be at least 8 characters');
+    const current = await prisma.user.findUnique({ where: { id: request.userId }, select: { passwordHash: true } });
+    const bcrypt = await import('bcrypt');
+    const valid = await bcrypt.compare(currentPassword, current?.passwordHash ?? '');
+    if (!valid) throw new ValidationError('Current password is incorrect');
+    data.passwordHash = await bcrypt.hash(newPassword, 12);
+  }
+
+  if (Object.keys(data).length === 0) {
+    throw new ValidationError('At least one field must be provided');
+  }
 
   const user = await prisma.user.update({
     where: { id: request.userId },
@@ -225,4 +246,74 @@ export async function adminUpdateUser(
   });
 
   reply.send({ user: updated });
+}
+
+export async function inviteUser(
+  request: FastifyRequest<{ Body: InviteUserBody }>,
+  reply: FastifyReply,
+) {
+  await requireOrgAdmin(request.userId, request.organizationId);
+
+  const { email, displayName, campusId, isOrgAdmin } = request.body;
+  if (!email || !displayName) throw new ValidationError('Email and display name are required');
+
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) throw new ConflictError('A user with that email already exists');
+
+  const org = await prisma.organization.findUnique({
+    where: { id: request.organizationId },
+    select: { name: true },
+  });
+  if (!org) throw new NotFoundError('Organization');
+
+  const inviteToken = randomUUID();
+  const inviteExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+  const user = await prisma.user.create({
+    data: {
+      email,
+      displayName,
+      passwordHash: '',
+      organizationId: request.organizationId,
+      campusId: campusId || null,
+      isOrgAdmin: isOrgAdmin ?? false,
+      accountStatus: 'INVITED',
+      inviteToken,
+      inviteExpiresAt,
+    },
+    select: USER_SELECT,
+  });
+
+  sendInviteEmail(email, displayName, org.name, inviteToken).catch(
+    (err: unknown) => request.log.error(err, 'Failed to send invite email'),
+  );
+
+  reply.status(201).send({ user });
+}
+
+export async function removeMember(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) {
+  await requireOrgAdmin(request.userId, request.organizationId);
+
+  const { id } = request.params;
+
+  if (id === request.userId) throw new ValidationError('You cannot remove yourself');
+
+  const target = await prisma.user.findFirst({
+    where: { id, organizationId: request.organizationId },
+    select: { id: true },
+  });
+  if (!target) throw new NotFoundError('User');
+
+  const org = await prisma.organization.findUnique({
+    where: { id: request.organizationId },
+    select: { createdBy: true },
+  });
+  if (org?.createdBy === id) throw new ValidationError('Cannot remove the organization owner');
+
+  await prisma.user.delete({ where: { id } });
+
+  reply.send({ ok: true });
 }

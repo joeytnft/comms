@@ -38,13 +38,13 @@ export default function QualificationsPage() {
     setLoading(true);
     try {
       const [qRes, mRes] = await Promise.all([
-        fetch('/api/admin/proxy/qualifications'),
-        fetch('/api/admin/proxy/users'),
+        fetch('/api/admin/proxy/qualifications/types'),
+        fetch('/api/admin/proxy/users/org-members'),
       ]);
       const qData = qRes.ok ? await qRes.json() : {};
       const mData = mRes.ok ? await mRes.json() : {};
-      setQualTypes(Array.isArray(qData.qualifications) ? qData.qualifications : (Array.isArray(qData) ? qData : []));
-      setMembers(Array.isArray(mData.users) ? mData.users : []);
+      setQualTypes(Array.isArray(qData.qualificationTypes) ? qData.qualificationTypes : []);
+      setMembers(Array.isArray(mData.members) ? mData.members : []);
     } finally { setLoading(false); }
   }, []);
 
@@ -53,7 +53,7 @@ export default function QualificationsPage() {
   const handleCreate = async () => {
     setSaving(true);
     try {
-      const res = await fetch('/api/admin/proxy/qualifications', {
+      const res = await fetch('/api/admin/proxy/qualifications/types', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: qualName, description: qualDesc }),
@@ -68,7 +68,7 @@ export default function QualificationsPage() {
     if (!confirmDelete) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/admin/proxy/qualifications/${confirmDelete.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/admin/proxy/qualifications/types/${confirmDelete.id}`, { method: 'DELETE' });
       if (!res.ok) { showToast('Failed to delete'); return; }
       setConfirmDelete(null); showToast('Deleted'); fetchData();
     } finally { setSaving(false); }
@@ -78,7 +78,7 @@ export default function QualificationsPage() {
     if (!assignMember || !assignQual) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/admin/proxy/users/${assignMember}/qualifications`, {
+      const res = await fetch(`/api/admin/proxy/qualifications/members/${assignMember}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ qualificationTypeId: assignQual }),
