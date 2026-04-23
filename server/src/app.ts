@@ -28,6 +28,7 @@ import { trainingRoutes } from './routes/training';
 import { qualificationRoutes } from './routes/qualifications';
 import { setupSocketHandlers } from './sockets/socketHandler';
 import { webhookRoutes } from './routes/webhooks';
+import { organizationRoutes } from './routes/organizations';
 import { setIO } from './config/socketIO';
 
 export async function buildApp() {
@@ -116,6 +117,7 @@ export async function buildApp() {
   app.register(integrationRoutes, { prefix: '/integrations' });
   app.register(trainingRoutes, { prefix: '/training' });
   app.register(qualificationRoutes, { prefix: '/qualifications' });
+  app.register(organizationRoutes, { prefix: '/organizations' });
   app.register(webhookRoutes, { prefix: '/webhooks' });
 
   // Socket.IO setup

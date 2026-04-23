@@ -74,7 +74,7 @@ export default function DashboardPage() {
     const load = async () => {
       try {
         const [usersRes, campusRes, incidentRes, trainingRes] = await Promise.allSettled([
-          fetch('/api/admin/proxy/users'),
+          fetch('/api/admin/proxy/users/org-members'),
           fetch('/api/admin/proxy/campuses'),
           fetch('/api/admin/proxy/incidents?limit=5'),
           fetch('/api/admin/proxy/training?limit=5&status=SCHEDULED'),
@@ -86,7 +86,7 @@ export default function DashboardPage() {
         const trainingData = trainingRes.status === 'fulfilled' && trainingRes.value.ok ? await trainingRes.value.json() : {};
 
         setStats({
-          memberCount: users.total ?? (Array.isArray(users.users) ? users.users.length : 0),
+          memberCount: Array.isArray(users.members) ? users.members.length : 0,
           campusCount: Array.isArray(campuses.campuses) ? campuses.campuses.length : (Array.isArray(campuses) ? campuses.length : 0),
           openIncidents: incidentData.total ?? (Array.isArray(incidentData.incidents) ? incidentData.incidents.length : 0),
           upcomingTrainings: trainingData.total ?? (Array.isArray(trainingData.trainings) ? trainingData.trainings.length : 0),

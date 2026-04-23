@@ -48,18 +48,26 @@ export default function SettingsPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [orgRes, profileRes] = await Promise.all([
+      const [subRes, profileRes] = await Promise.all([
         fetch('/api/admin/proxy/subscription'),
         fetch('/api/admin/proxy/users/me'),
       ]);
-      const orgData = orgRes.ok ? await orgRes.json() : {};
+      const subData = subRes.ok ? await subRes.json() : {};
       const profileData = profileRes.ok ? await profileRes.json() : {};
 
-      const orgInfo = orgData.organization ?? orgData;
-      setOrg(orgInfo);
-      setOrgName(orgInfo.name ?? '');
-
       const p = profileData.user ?? profileData;
+      const orgFromProfile = profileData.organization ?? {};
+      setOrg({
+        id: orgFromProfile.id ?? '',
+        name: orgFromProfile.name ?? '',
+        subscriptionTier: subData.subscription?.tier ?? 'FREE',
+        subscriptionStatus: subData.subscription?.status ?? 'active',
+        memberCount: subData.subscription?.usage?.members,
+        memberLimit: subData.subscription?.limits?.members,
+        createdAt: '',
+      });
+      setOrgName(orgFromProfile.name ?? '');
+
       setProfile(p);
       setDisplayName(p.displayName ?? '');
       setPhone(p.phone ?? '');

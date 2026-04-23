@@ -37,12 +37,27 @@ export default function PlanningCenterPage() {
   const fetchConnection = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/proxy/integrations/pco');
+      const res = await fetch('/api/admin/proxy/integrations/pco/status');
       if (res.ok) {
         const data = await res.json();
-        setConnection(data.connection ?? data);
-        setPeople(Array.isArray(data.people) ? data.people : []);
-      } else if (res.status === 404) {
+        setConnection({
+          id: '',
+          connected: !!data.connected,
+          organizationName: data.pcoOrgName ?? undefined,
+          connectedAt: data.connectedAt ?? undefined,
+          lastSyncAt: data.lastSyncAt ?? undefined,
+          syncStatus: 'IDLE',
+        });
+        if (data.connected) {
+          const pplRes = await fetch('/api/admin/proxy/integrations/pco/people');
+          if (pplRes.ok) {
+            const pplData = await pplRes.json();
+            const pplList = Array.isArray(pplData.people) ? pplData.people : [];
+            setPeople(pplList);
+            setConnection((prev) => prev ? { ...prev, personCount: pplList.length } : prev);
+          }
+        }
+      } else {
         setConnection({ id: '', connected: false });
       }
     } finally { setLoading(false); }
@@ -66,7 +81,7 @@ export default function PlanningCenterPage() {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      const res = await fetch('/api/admin/proxy/integrations/pco/sync', { method: 'POST' });
+      const res = await fetch('/api/admin/proxy/integrations/pco/sync/people', { method: 'POST' });
       if (res.ok) { showToast('Sync started — this may take a moment'); fetchConnection(); }
       else { showToast('Sync failed'); }
     } finally { setSyncing(false); }
@@ -74,7 +89,7 @@ export default function PlanningCenterPage() {
 
   const handleDisconnect = async () => {
     if (!confirm('Disconnect Planning Center? Synced data will remain but future syncs will stop.')) return;
-    await fetch('/api/admin/proxy/integrations/pco', { method: 'DELETE' });
+    await fetch('/api/admin/proxy/integrations/pco/disconnect', { method: 'DELETE' });
     showToast('Disconnected'); fetchConnection();
   };
 
