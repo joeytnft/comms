@@ -8,7 +8,9 @@
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
       "Bash(git -C /home/joe7432/comms add server/src/services/alerts/alertService.ts)",
-      "Bash(git -C /home/joe7432/comms status --short)"
+      "Bash(git -C /home/joe7432/comms status --short)",
+      "Bash(git -C /home/joe7432/comms add server/prisma/migrations/20260422200724_allow_user_deletion/migration.sql)",
+      "Bash(git -C /home/joe7432/comms commit -m ' *)"
     ]
   }
 }
