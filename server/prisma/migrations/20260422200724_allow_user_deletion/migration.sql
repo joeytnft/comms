@@ -26,10 +26,10 @@ ALTER TABLE "shift_swap_requests" DROP CONSTRAINT "shift_swap_requests_toUserId_
 ALTER TABLE "training_events" DROP CONSTRAINT "training_events_createdBy_fkey";
 
 -- DropIndex
-DROP INDEX "geofences_organizationId_key";
+DROP INDEX IF EXISTS "geofences_organizationId_key";
 
 -- DropIndex
-DROP INDEX "users_pcoPersonId_idx";
+DROP INDEX IF EXISTS "users_pcoPersonId_idx";
 
 -- AlterTable
 ALTER TABLE "alerts" ALTER COLUMN "triggeredById" DROP NOT NULL;
