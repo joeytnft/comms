@@ -15,7 +15,7 @@ const PLANS = [
       'Incident logging',
       'iOS & Android apps',
     ],
-    cta: 'Start Free Trial',
+    cta: 'Get Started',
   },
   {
     name: 'Team',
@@ -31,7 +31,7 @@ const PLANS = [
       'Response plan broadcasting',
       'Priority support',
     ],
-    cta: 'Start Free Trial',
+    cta: 'Get Started',
   },
   {
     name: 'Ministry Pro',
@@ -45,7 +45,7 @@ const PLANS = [
       'Everything in Team',
       'Multi-campus support',
     ],
-    cta: 'Start Free Trial',
+    cta: 'Get Started',
   },
 ];
 
@@ -59,9 +59,7 @@ export function Pricing() {
             Simple, transparent pricing
           </h2>
           <p className="mt-4 text-slate-400">
-            Every plan includes a{' '}
-            <span className="font-semibold text-white">14-day free trial</span>.
-            No credit card required. Cancel anytime.
+            Simple, transparent pricing. Cancel anytime.
           </p>
         </div>
 
