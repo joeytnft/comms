@@ -92,12 +92,12 @@ export default function TrainingPage() {
     new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
   return (
-    <main className="flex-1 p-8">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8">
       {toast && (
         <div className="fixed top-6 right-6 z-50 bg-navy-800 border border-white/10 rounded-xl px-5 py-3 text-sm text-white shadow-xl">{toast}</div>
       )}
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-y-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white">Training</h1>
           <p className="text-sm text-slate-400 mt-1">{events.length} event{events.length !== 1 ? 's' : ''}</p>
@@ -112,7 +112,7 @@ export default function TrainingPage() {
       </div>
 
       {/* Filter tabs */}
-      <div className="flex items-center gap-1 mb-6 bg-navy-900 border border-white/10 rounded-xl p-1 w-fit">
+      <div className="flex items-center gap-1 mb-6 bg-navy-900 border border-white/10 rounded-xl p-1 w-full sm:w-fit overflow-x-auto">
         {(['all', 'SCHEDULED', 'COMPLETED', 'CANCELLED'] as const).map((f) => (
           <button
             key={f}
@@ -190,7 +190,7 @@ export default function TrainingPage() {
 
       {/* Create modal */}
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Create Training Event" size="lg">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="col-span-2">
             <label className="block text-sm font-medium text-slate-300 mb-1.5">Title</label>
             <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Active Shooter Response" className="w-full bg-navy-800 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" />

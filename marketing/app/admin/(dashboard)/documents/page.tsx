@@ -114,12 +114,12 @@ export default function DocumentsPage() {
     new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
   return (
-    <main className="flex-1 p-8">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8">
       {toast && (
         <div className="fixed top-6 right-6 z-50 bg-navy-800 border border-white/10 rounded-xl px-5 py-3 text-sm text-white shadow-xl">{toast}</div>
       )}
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-y-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white">Documents</h1>
           <p className="text-sm text-slate-400 mt-1">{docs.length} document{docs.length !== 1 ? 's' : ''}</p>
