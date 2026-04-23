@@ -11,7 +11,9 @@
       "Bash(git -C /home/joe7432/comms status --short)",
       "Bash(git -C /home/joe7432/comms add server/prisma/migrations/20260422200724_allow_user_deletion/migration.sql)",
       "Bash(git -C /home/joe7432/comms commit -m ' *)",
-      "Bash(xargs cat *)"
+      "Bash(xargs cat *)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('expo',{}\\).get\\('ios',{}\\).get\\('entitlements',{}\\), indent=2\\)\\)\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); plugins=d.get\\('expo',{}\\).get\\('plugins',[]\\); print\\(json.dumps\\(plugins, indent=2\\)\\)\")"
     ]
   }
 }
