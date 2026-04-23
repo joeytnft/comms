@@ -155,6 +155,7 @@ export const ENDPOINTS = {
   // Qualifications
   QUALIFICATIONS: {
     TYPES: '/qualifications/types',
+    TYPES_ACTIVE: '/qualifications/types?activeOnly=true',
     TYPE: (id: string) => `/qualifications/types/${id}`,
     SUMMARY: '/qualifications/summary',
     MEMBER: (userId: string) => `/qualifications/members/${userId}`,

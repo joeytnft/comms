@@ -19,7 +19,7 @@ import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navig
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQualificationStore } from '@/store/useQualificationStore';
 import { useAuthStore } from '@/store/useAuthStore';
-import { MemberQualification, QualificationType, isQualificationExpired, isQualificationExpiringSoon } from '@/types';
+import { MemberQualification, isQualificationExpired, isQualificationExpiringSoon } from '@/types';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 import { TrainingStackParamList } from '@/navigation/TrainingStackNavigator';
 
@@ -104,7 +104,7 @@ export function MemberQualificationsScreen() {
   const route = useRoute<RouteT>();
   const { userId, memberName } = route.params;
 
-  const { qualificationTypes, memberQualifications, isLoadingTypes, isLoadingMember, fetchTypes, fetchMemberQualifications, awardQualification, revokeQualification } =
+  const { qualificationTypes, memberQualifications, isLoadingTypes, isLoadingMember, fetchActiveTypes, fetchMemberQualifications, awardQualification, revokeQualification } =
     useQualificationStore();
   const { user } = useAuthStore();
 
@@ -121,7 +121,7 @@ export function MemberQualificationsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      fetchTypes();
+      fetchActiveTypes();
       fetchMemberQualifications(userId);
     }, [userId]),
   );
@@ -133,9 +133,9 @@ export function MemberQualificationsScreen() {
     setSelectedTypeId('');
     setEarnedDate(new Date().toISOString().split('T')[0]);
     setNotes('');
-    fetchTypes(); // Always refresh so soft-reactivated types appear immediately
+    fetchActiveTypes(); // Always refresh so reactivated types appear immediately
     setShowAwardModal(true);
-  }, [fetchTypes]);
+  }, [fetchActiveTypes]);
 
   const openEdit = (qual: MemberQualification) => {
     setEditingQual(qual);
@@ -197,7 +197,7 @@ export function MemberQualificationsScreen() {
   // Unearned qualification types (for the award form type picker)
   const earnedTypeIds = new Set(qualifications.map((q) => q.qualificationTypeId));
   const unearnedTypes = qualificationTypes.filter(
-    (t) => !earnedTypeIds.has(t.id) || editingQual?.qualificationTypeId === t.id,
+    (t) => t.isActive && (!earnedTypeIds.has(t.id) || editingQual?.qualificationTypeId === t.id),
   );
 
   return (

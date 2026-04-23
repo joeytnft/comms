@@ -13,6 +13,11 @@ export const qualificationService = {
     return response;
   },
 
+  async listActiveTypes(): Promise<{ qualificationTypes: QualificationType[] }> {
+    const response = await apiClient.get(ENDPOINTS.QUALIFICATIONS.TYPES_ACTIVE);
+    return response;
+  },
+
   async createType(data: {
     name: string;
     description?: string;

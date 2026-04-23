@@ -19,6 +19,7 @@ interface QualificationState {
   error: string | null;
 
   fetchTypes: () => Promise<void>;
+  fetchActiveTypes: () => Promise<void>;
   createType: (data: { name: string; description?: string; validityDays?: number }) => Promise<QualificationType>;
   updateType: (
     id: string,
@@ -52,6 +53,19 @@ export const useQualificationStore = create<QualificationState>((set) => ({
     } catch (e: unknown) {
       set({
         isLoading: false,
+        isLoadingTypes: false,
+        error: e instanceof Error ? e.message : 'Failed to load qualification types',
+      });
+    }
+  },
+
+  fetchActiveTypes: async () => {
+    set({ isLoadingTypes: true, error: null });
+    try {
+      const { qualificationTypes } = await qualificationService.listActiveTypes();
+      set({ qualificationTypes, isLoadingTypes: false });
+    } catch (e: unknown) {
+      set({
         isLoadingTypes: false,
         error: e instanceof Error ? e.message : 'Failed to load qualification types',
       });

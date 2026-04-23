@@ -7,12 +7,13 @@ import { PTTConfigScreen } from '@/screens/Settings/PTTConfigScreen';
 import { TeamMapScreen } from '@/screens/Map/TeamMapScreen';
 import { IncidentStackNavigator } from './IncidentStackNavigator';
 import { ScheduleStackNavigator } from './ScheduleStackNavigator';
-import { TrainingStackNavigator } from './TrainingStackNavigator';
+import { TrainingStackNavigator, TrainingStackParamList } from './TrainingStackNavigator';
 import { CampusManagementScreen } from '@/screens/Settings/CampusManagementScreen';
 import { PinSetupScreen } from '@/screens/Auth/PinSetupScreen';
 import { EditProfileScreen } from '@/screens/Settings/EditProfileScreen';
 import { MembersScreen } from '@/screens/Settings/MembersScreen';
 import { PlanningCenterScreen } from '@/screens/Settings/PlanningCenterScreen';
+import { NavigatorScreenParams } from '@react-navigation/native';
 import { COLORS } from '@/config/theme';
 
 export type MoreStackParamList = {
@@ -28,7 +29,7 @@ export type MoreStackParamList = {
   PinSetup: undefined;
   Members: undefined;
   PlanningCenter: undefined;
-  Training: undefined;
+  Training: NavigatorScreenParams<TrainingStackParamList> | undefined;
 };
 
 const Stack = createNativeStackNavigator<MoreStackParamList>();

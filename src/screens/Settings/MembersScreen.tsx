@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { MoreStackParamList } from '@/navigation/MoreStackNavigator';
 import { useMembersStore } from '@/store/useMembersStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import { usePcoStore } from '@/store/usePcoStore';
@@ -24,7 +26,7 @@ export function MembersScreen() {
   const { members, isLoading, error, fetchMembers, updateMember } = useMembersStore();
   const { user } = useAuthStore();
   const { status: pcoStatus, people: pcoPeople, fetchPeople } = usePcoStore();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<MoreStackParamList>>();
 
   const [editTarget, setEditTarget] = useState<OrgMember | null>(null);
   const [editName, setEditName] = useState('');
@@ -287,7 +289,7 @@ export function MembersScreen() {
                   navigation.navigate('Training', {
                     screen: 'MemberQualifications',
                     params: { userId: editTarget.id, memberName: editTarget.displayName },
-                  } as never);
+                  });
                 }}
               >
                 <Text style={styles.qualificationsLinkText}>View / Manage Qualifications</Text>

@@ -16,9 +16,13 @@ async function requireAdmin(request: FastifyRequest) {
 
 // ── Qualification Types ───────────────────────────────────────────────────────
 
-export async function listQualificationTypes(request: FastifyRequest, reply: FastifyReply) {
+export async function listQualificationTypes(
+  request: FastifyRequest<{ Querystring: { activeOnly?: string } }>,
+  reply: FastifyReply,
+) {
+  const activeOnly = request.query.activeOnly === 'true';
   const types = await prisma.qualificationType.findMany({
-    where: { organizationId: request.organizationId },
+    where: { organizationId: request.organizationId, ...(activeOnly ? { isActive: true } : {}) },
     orderBy: { name: 'asc' },
   });
   reply.send({ qualificationTypes: types });
