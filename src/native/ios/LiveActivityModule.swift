@@ -86,8 +86,21 @@ class LiveActivityModule: NSObject {
         guard #available(iOS 16.2, *) else { resolve(nil); return }
 
         Task {
+            // End every live activity of our type. Some iOS builds ignore
+            // dismissalPolicy: .immediate unless an explicit final content is
+            // supplied, so build a terminal "isTransmitting=false, no speaker"
+            // state from each activity's current content before ending.
             for activity in Activity<GatherSafeActivityAttributes>.activities {
-                await activity.end(nil, dismissalPolicy: .immediate)
+                let current = activity.content.state
+                let finalState = GatherSafeActivityAttributes.ContentState(
+                    channelName: current.channelName,
+                    speakerName: nil,
+                    isTransmitting: false,
+                    memberCount: current.memberCount,
+                    alertLevel: nil
+                )
+                let finalContent = ActivityContent(state: finalState, staleDate: nil)
+                await activity.end(finalContent, dismissalPolicy: .immediate)
             }
             resolve(nil)
         }

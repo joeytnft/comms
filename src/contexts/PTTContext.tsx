@@ -19,6 +19,11 @@ import { ACCESS_TOKEN_KEY } from '@/config/constants';
 import { ENV as AppEnv } from '@/config/env';
 
 const LIVE_ACTIVITY_ID_KEY = 'ptt_live_activity_id';
+// Persisted so we can clean up after a cold launch from the Dynamic Island —
+// without these we have no way to tell the server the user left, so the room
+// is stuck showing them as present until iOS force-ends the PTT session.
+const PTT_GROUP_ID_KEY = 'ptt_stale_group_id';
+const PTT_CHANNEL_ID_KEY = 'ptt_stale_native_channel_id';
 
 // LiveKit (native only — tree-shaken on web)
 let Room: typeof import('livekit-client').Room | null = null;
@@ -81,11 +86,18 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   const nativePTTActiveRef = useRef(false);
   // Live Activity ID for the current PTT session (iOS 16.2+)
   const liveActivityIdRef = useRef<string | null>(null);
+  // Set once per transmission, so we never emit ptt:start twice when both
+  // startTransmitting (foreground) and onAudioActivated (background/island) fire.
+  const pttStartEmittedRef = useRef(false);
 
   // Always-current socket ref so native PTT callbacks (registered once) can emit
   // even when the socket reconnects and the `socket` variable changes identity.
   const socketRef = useRef(socket);
   useEffect(() => { socketRef.current = socket; }, [socket]);
+
+  // When the app cold-launches via the Live Activity, the socket isn't connected
+  // yet. We queue the leave emit here and flush it once connect() fires.
+  const pendingLeaveGroupIdRef = useRef<string | null>(null);
 
   // End the Live Activity, falling back to the MMKV-persisted ID if the in-memory
   // ref was lost (e.g. process was killed and restarted by iOS in the background).
@@ -96,16 +108,50 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     mmkvStorage.delete(LIVE_ACTIVITY_ID_KEY);
   }, []);
 
-  // On mount: if a Live Activity ID was persisted from a previous process run and
-  // we are not currently connected, the session ended abnormally — dismiss it now.
+  // On mount: if any PTT session artifacts were persisted from a previous process
+  // run and we are not currently connected, the session ended abnormally (typical
+  // case: user force-closed the app, then tapped the Live Activity to reopen it).
+  // Dismiss the pill, leave the native PTT channel that iOS auto-restored, and
+  // queue a ptt:leave for when the socket reconnects — otherwise the server keeps
+  // the user in the room indefinitely.
   useEffect(() => {
-    const storedId = mmkvStorage.getString(LIVE_ACTIVITY_ID_KEY);
-    if (storedId && !usePTTStore.getState().isConnected) {
-      liveActivityService.end(storedId);
+    if (usePTTStore.getState().isConnected) return;
+
+    const storedActivityId = mmkvStorage.getString(LIVE_ACTIVITY_ID_KEY);
+    const storedGroupId    = mmkvStorage.getString(PTT_GROUP_ID_KEY);
+    const storedChannelId  = mmkvStorage.getString(PTT_CHANNEL_ID_KEY);
+
+    if (storedActivityId) {
+      liveActivityService.end(storedActivityId);
       mmkvStorage.delete(LIVE_ACTIVITY_ID_KEY);
+    }
+    if (storedChannelId && USE_NATIVE_PTT) {
+      nativePTTService.leaveChannel(storedChannelId).catch(() => null);
+      mmkvStorage.delete(PTT_CHANNEL_ID_KEY);
+    }
+    if (storedGroupId) {
+      pendingLeaveGroupIdRef.current = storedGroupId;
+      mmkvStorage.delete(PTT_GROUP_ID_KEY);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Flush any pending ptt:leave once the socket becomes available.
+  useEffect(() => {
+    if (!socket) return;
+    const flush = () => {
+      const pending = pendingLeaveGroupIdRef.current;
+      if (!pending) return;
+      pendingLeaveGroupIdRef.current = null;
+      socket.emit('ptt:leave', { groupId: pending });
+    };
+    if (socket.connected) {
+      flush();
+    } else {
+      socket.once('connect', flush);
+      return () => { socket.off('connect', flush); };
+    }
+  }, [socket]);
 
   // ─── React to showLiveActivity toggle changes mid-session ──────────────────
   useEffect(() => {
@@ -149,6 +195,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     const unsubEnd = nativePTTService.onTransmissionEnded((_) => {
       const { currentGroupId, pttState } = usePTTStore.getState();
       transmittingRef.current = false;
+      pttStartEmittedRef.current = false;
       if (pttState !== 'transmitting') return;
       const durationMs = Date.now() - transmitStartedAtRef.current;
       usePTTStore.getState().setTransmitting(false);
@@ -165,11 +212,10 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       const s = socketRef.current;
       if (s && currentGroupId) {
         s.emit('ptt:stop', { groupId: currentGroupId });
-        pttRecorderService.stopAndUpload(currentGroupId).then((audioUrl) => {
-          s.emit('ptt:native_log', { groupId: currentGroupId, durationMs, ...(audioUrl ? { audioUrl } : {}) });
-        }).catch(() => {
-          s.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
-        });
+        // On iOS native PTT we rely on LiveKit server-side egress for audio
+        // (expo-av contends with LiveKit for the mic and uploads empty files).
+        // Just send the metadata; server attaches the egress URL when it completes.
+        s.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
       }
     });
 
@@ -187,13 +233,17 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         const { currentGroupId } = usePTTStore.getState();
         // Unmute first so the LiveKit track is live before server starts egress
         if (micTrackRef.current) { micTrackRef.current.unmute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null); }
-        // Emit ptt:start via socketRef — works even if socket reconnected since
-        // the callback was registered. Socket.IO buffers if briefly disconnected.
+        // Emit ptt:start if startTransmitting hasn't already done it. iOS only
+        // fires didActivateAudioSession reliably from background/island — in the
+        // foreground the session is often already active and this callback is
+        // skipped, which is why egress stopped starting when pressing the main
+        // channel button. startTransmitting now emits ptt:start too; this guard
+        // prevents a double-emit.
         const s = socketRef.current;
-        if (s && currentGroupId) {
+        if (s && currentGroupId && !pttStartEmittedRef.current) {
+          pttStartEmittedRef.current = true;
           s.emit('ptt:start', { groupId: currentGroupId });
         }
-        pttRecorderService.start().catch(() => null);
       }
       // For incoming audio, LiveKit auto-plays subscribed tracks — nothing to do here
     });
@@ -217,6 +267,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       usePTTStore.getState().disconnect();
       AudioSession?.stopAudioSession();
       endLiveActivity();
+      mmkvStorage.delete(PTT_GROUP_ID_KEY);
+      mmkvStorage.delete(PTT_CHANNEL_ID_KEY);
     });
 
     return () => {
@@ -401,6 +453,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
       const response = await usePTTStore.getState().fetchToken(groupId);
       usePTTStore.getState().setCurrentGroup(groupId, response.groupName);
+      // Persist so a cold launch from the Live Activity can tell the server we left.
+      mmkvStorage.setString(PTT_GROUP_ID_KEY, groupId);
 
       // Start the Live Activity pill (iOS 16.2+, no-op elsewhere; respects user preference)
       if (usePTTStore.getState().config.showLiveActivity) {
@@ -435,6 +489,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
             const resolvedId = await nativePTTService.joinChannel(groupId, response.groupName);
             nativePTTChannelIdRef.current = resolvedId;
             nativePTTActiveRef.current = true;
+            if (resolvedId) mmkvStorage.setString(PTT_CHANNEL_ID_KEY, resolvedId);
 
             // Register the ephemeral push token with the server once it arrives
             const unsubToken = nativePTTService.onPushTokenReceived(async (token) => {
@@ -624,6 +679,10 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     // Always reset store — this flips isConnected back to false so the UI
     // can render the group picker and the user isn't stuck on the PTT screen.
     usePTTStore.getState().disconnect();
+
+    // Drop the cold-launch cleanup breadcrumbs — we've already told the server.
+    mmkvStorage.delete(PTT_GROUP_ID_KEY);
+    mmkvStorage.delete(PTT_CHANNEL_ID_KEY);
   }, [socket, endLiveActivity]);
 
   // ─── startTransmitting ──────────────────────────────────────────────────────
@@ -668,9 +727,17 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       }).catch(() => null);
     } else if (nativePTTActiveRef.current) {
       if (nativePTTChannelIdRef.current) {
-        // Unmute immediately for instant audio; ptt:start and recorder are handled
-        // in onAudioActivated so egress begins only after the audio session is live.
+        // Unmute immediately for instant audio.
         if (micTrackRef.current) { micTrackRef.current.unmute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null); }
+        // Emit ptt:start here so LiveKit egress starts for foreground presses.
+        // onAudioActivated is unreliable in the foreground (audio session is
+        // already active so the framework skips the callback) — this was why
+        // main-channel presses produced no egress even though the island did.
+        // onAudioActivated still emits as a fallback, guarded by pttStartEmittedRef.
+        if (s && !pttStartEmittedRef.current) {
+          pttStartEmittedRef.current = true;
+          s.emit('ptt:start', { groupId: currentGroupId });
+        }
         nativePTTService.beginTransmitting(nativePTTChannelIdRef.current).catch((err) => {
           console.warn('[PTT] native beginTransmitting failed:', err);
         });
@@ -703,6 +770,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     // Always reset the local state on release so the button can't get stuck red.
     const durationMs = Date.now() - transmitStartedAtRef.current;
     transmittingRef.current = false;
+    pttStartEmittedRef.current = false;
     usePTTStore.getState().setTransmitting(false);
 
     const s = socketRef.current ?? socket;
@@ -716,11 +784,10 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         if (s) s.emit('ptt:stop', { groupId: currentGroupId });
         if (micTrackRef.current) { micTrackRef.current.mute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null); }
         nativePTTService.stopTransmitting(nativePTTChannelIdRef.current).catch(() => null);
-        pttRecorderService.stopAndUpload(currentGroupId).then((audioUrl) => {
-          if (s) s.emit('ptt:native_log', { groupId: currentGroupId, durationMs, ...(audioUrl ? { audioUrl } : {}) });
-        }).catch(() => {
-          if (s) s.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
-        });
+        // Server-side LiveKit egress handles the audio on iOS native PTT —
+        // expo-av recording is skipped because it returned empty files due to
+        // mic contention with LiveKit. Just send metadata.
+        if (s) s.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
       }
     } else {
       // iOS (PTT framework unavailable or init failed) or Android

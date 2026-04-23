@@ -10,9 +10,6 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
   Dimensions,
 } from 'react-native';
 
@@ -267,137 +264,148 @@ export function MemberQualificationsScreen() {
         </ScrollView>
       )}
 
-      {/* Award/Edit qualification modal */}
-      <Modal visible={showAwardModal} transparent animationType="slide" onRequestClose={() => setShowAwardModal(false)}>
+      {/* Award/Edit qualification modal.
+          Type-picker is rendered inline inside the same modal rather than as a
+          second Modal — stacked transparent modals with scroll views were
+          freezing the screen and preventing the list from populating. */}
+      <Modal
+        visible={showAwardModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => { setShowTypePicker(false); setShowAwardModal(false); }}
+      >
         <View style={styles.modalOverlay}>
-          <Pressable style={{ flex: 1 }} onPress={() => setShowAwardModal(false)} />
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <Pressable
+            style={{ flex: 1 }}
+            onPress={() => { setShowTypePicker(false); setShowAwardModal(false); }}
+          />
           <View style={styles.modalCard}>
-            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-              <Text style={styles.modalTitle}>
-                {editingQual ? 'Update Qualification' : 'Award Qualification'}
-              </Text>
-
-              {!editingQual && (
-                <>
-                  <Text style={styles.fieldLabel}>Qualification Type *</Text>
-                  <TouchableOpacity
-                    style={styles.selectBtn}
-                    onPress={() => setShowTypePicker(true)}
-                  >
-                    <Text
-                      style={[
-                        styles.selectText,
-                        !selectedTypeId && { color: COLORS.textSecondary },
-                      ]}
-                    >
-                      {selectedTypeName}
-                    </Text>
+            {showTypePicker ? (
+              <View style={{ flex: 1 }}>
+                <View style={styles.pickerHeader}>
+                  <TouchableOpacity onPress={() => setShowTypePicker(false)}>
+                    <Text style={styles.backText}>{'← Back'}</Text>
                   </TouchableOpacity>
-                </>
-              )}
-              {editingQual && (
-                <Text style={styles.editingQualName}>{editingQual.qualificationType.name}</Text>
-              )}
-
-              <Text style={styles.fieldLabel}>Date Earned *</Text>
-              <TextInput
-                style={styles.input}
-                value={earnedDate}
-                onChangeText={setEarnedDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={COLORS.textSecondary}
-                keyboardType="numeric"
-              />
-
-              <Text style={styles.fieldLabel}>Notes (optional)</Text>
-              <TextInput
-                style={[styles.input, styles.textarea]}
-                value={notes}
-                onChangeText={setNotes}
-                placeholder="Certification number, instructor, location..."
-                placeholderTextColor={COLORS.textSecondary}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-              />
-
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  style={styles.modalCancelBtn}
-                  onPress={() => setShowAwardModal(false)}
-                >
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.modalSaveBtn}
-                  onPress={handleSave}
-                  disabled={isSaving}
-                >
-                  {isSaving ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Text style={styles.modalSaveText}>Save</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
-
-      {/* Type picker modal */}
-      <Modal visible={showTypePicker} transparent animationType="slide" onRequestClose={() => setShowTypePicker(false)}>
-        <View style={styles.modalOverlay}>
-          <Pressable style={{ flex: 1 }} onPress={() => setShowTypePicker(false)} />
-          <View style={[styles.modalCard, styles.pickerCard]}>
-            <View style={styles.pickerHeader}>
-              <Text style={styles.modalTitle}>Select Qualification</Text>
-              <TouchableOpacity onPress={() => setShowTypePicker(false)}>
-                <Text style={styles.pickerDone}>Done</Text>
-              </TouchableOpacity>
-            </View>
-            {isLoadingTypes && qualificationTypes.length === 0 ? (
-              <ActivityIndicator color={COLORS.primary} style={{ margin: SPACING.lg }} />
-            ) : (
-              <FlatList
-                data={unearnedTypes}
-                keyExtractor={(t) => t.id}
-                keyboardShouldPersistTaps="handled"
-                style={styles.pickerList}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.typeRow}
-                    onPress={() => {
-                      setSelectedTypeId(item.id);
-                      setShowTypePicker(false);
-                    }}
-                  >
-                    <View style={styles.typeInfo}>
-                      <Text style={styles.typeName}>{item.name}</Text>
-                      {item.description ? (
-                        <Text style={styles.typeDesc}>{item.description}</Text>
-                      ) : null}
-                      <Text style={styles.typeValidity}>
-                        {item.validityDays > 0
-                          ? `Valid for ${item.validityDays} days`
-                          : 'Never expires'}
-                      </Text>
-                    </View>
-                    {selectedTypeId === item.id && (
-                      <Text style={styles.typeCheck}>✓</Text>
-                    )}
-                  </TouchableOpacity>
-                )}
-                ListEmptyComponent={
+                  <Text style={styles.modalTitle}>Select Qualification</Text>
+                  <View style={{ width: 60 }} />
+                </View>
+                {isLoadingTypes && qualificationTypes.length === 0 ? (
+                  <ActivityIndicator color={COLORS.primary} style={{ margin: SPACING.lg }} />
+                ) : unearnedTypes.length === 0 ? (
                   <Text style={styles.noTypes}>
                     {qualificationTypes.length === 0
                       ? 'No qualification types have been created yet. Add them via Training → Qualification Types.'
                       : 'All qualification types are already awarded to this member.'}
                   </Text>
-                }
-              />
+                ) : (
+                  <ScrollView
+                    style={styles.pickerList}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                  >
+                    {unearnedTypes.map((item) => (
+                      <TouchableOpacity
+                        key={item.id}
+                        style={styles.typeRow}
+                        onPress={() => {
+                          setSelectedTypeId(item.id);
+                          setShowTypePicker(false);
+                        }}
+                      >
+                        <View style={styles.typeInfo}>
+                          <Text style={styles.typeName}>{item.name}</Text>
+                          {item.description ? (
+                            <Text style={styles.typeDesc}>{item.description}</Text>
+                          ) : null}
+                          <Text style={styles.typeValidity}>
+                            {item.validityDays > 0
+                              ? `Valid for ${item.validityDays} days`
+                              : 'Never expires'}
+                          </Text>
+                        </View>
+                        {selectedTypeId === item.id && (
+                          <Text style={styles.typeCheck}>✓</Text>
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
+            ) : (
+              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <Text style={styles.modalTitle}>
+                  {editingQual ? 'Update Qualification' : 'Award Qualification'}
+                </Text>
+
+                {!editingQual && (
+                  <>
+                    <Text style={styles.fieldLabel}>Qualification Type *</Text>
+                    <TouchableOpacity
+                      style={styles.selectBtn}
+                      onPress={() => {
+                        if (qualificationTypes.length === 0 && !isLoadingTypes) {
+                          fetchActiveTypes();
+                        }
+                        setShowTypePicker(true);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.selectText,
+                          !selectedTypeId && { color: COLORS.textSecondary },
+                        ]}
+                      >
+                        {selectedTypeName}
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+                {editingQual && (
+                  <Text style={styles.editingQualName}>{editingQual.qualificationType.name}</Text>
+                )}
+
+                <Text style={styles.fieldLabel}>Date Earned *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={earnedDate}
+                  onChangeText={setEarnedDate}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={COLORS.textSecondary}
+                  keyboardType="numeric"
+                />
+
+                <Text style={styles.fieldLabel}>Notes (optional)</Text>
+                <TextInput
+                  style={[styles.input, styles.textarea]}
+                  value={notes}
+                  onChangeText={setNotes}
+                  placeholder="Certification number, instructor, location..."
+                  placeholderTextColor={COLORS.textSecondary}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={styles.modalCancelBtn}
+                    onPress={() => setShowAwardModal(false)}
+                  >
+                    <Text style={styles.modalCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.modalSaveBtn}
+                    onPress={handleSave}
+                    disabled={isSaving}
+                  >
+                    {isSaving ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <Text style={styles.modalSaveText}>Save</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
             )}
           </View>
         </View>
