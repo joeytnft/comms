@@ -621,21 +621,37 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // ─── startTransmitting ──────────────────────────────────────────────────────
   const startTransmitting = useCallback(() => {
     const { currentGroupId, pttState } = usePTTStore.getState();
-    if (!socket || !currentGroupId || pttState === 'transmitting') return;
+    if (!currentGroupId) {
+      console.warn('[PTT] startTransmitting: no current group — user not joined to a channel');
+      return;
+    }
+    if (pttState === 'transmitting') return;
+
+    // Optimistically flip the UI to "transmitting" FIRST, so the button turns red
+    // the instant the user presses it — independent of socket/native-framework state.
+    // Any downstream failure (socket down, native begin rejected) will reset via the
+    // appropriate failure callback, but we never want the button stuck green after press.
+    transmittingRef.current = true;
+    transmitStartedAtRef.current = Date.now();
+    usePTTStore.getState().setTransmitting(true);
+
+    const s = socketRef.current ?? socket;
+    if (!s) {
+      console.warn('[PTT] startTransmitting: socket unavailable — server will not start egress');
+    }
 
     if (Platform.OS === 'web') {
-      usePTTStore.getState().setTransmitting(true);
-      transmitStartedAtRef.current = Date.now();
-      socket.emit('ptt:start', { groupId: currentGroupId });
+      if (s) s.emit('ptt:start', { groupId: currentGroupId });
       navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
         const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
           ? 'audio/webm;codecs=opus'
           : 'audio/webm';
         const recorder = new MediaRecorder(stream, { mimeType });
         recorder.ondataavailable = (e) => {
-          if (e.data.size > 0 && socket) {
+          const s2 = socketRef.current ?? socket;
+          if (e.data.size > 0 && s2) {
             e.data.arrayBuffer().then((buf) => {
-              socket.emit('ptt:audio_chunk', { groupId: currentGroupId, chunk: buf, mimeType });
+              s2.emit('ptt:audio_chunk', { groupId: currentGroupId, chunk: buf, mimeType });
             });
           }
         };
@@ -644,21 +660,18 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       }).catch(() => null);
     } else if (nativePTTActiveRef.current) {
       if (nativePTTChannelIdRef.current) {
-        // Optimistically update UI immediately — native framework confirmation arrives
-        // via onTransmissionStarted (which no-ops when pttState is already 'transmitting').
-        transmittingRef.current = true;
-        transmitStartedAtRef.current = Date.now();
-        usePTTStore.getState().setTransmitting(true);
         // Unmute immediately for instant audio; ptt:start and recorder are handled
         // in onAudioActivated so egress begins only after the audio session is live.
         if (micTrackRef.current) { micTrackRef.current.unmute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null); }
-        nativePTTService.beginTransmitting(nativePTTChannelIdRef.current).catch(() => null);
+        nativePTTService.beginTransmitting(nativePTTChannelIdRef.current).catch((err) => {
+          console.warn('[PTT] native beginTransmitting failed:', err);
+        });
+      } else {
+        console.warn('[PTT] native PTT active but no channel id — cannot begin transmission');
       }
     } else {
       // iOS (PTT framework unavailable or init failed) or Android
-      usePTTStore.getState().setTransmitting(true);
-      transmitStartedAtRef.current = Date.now();
-      socket.emit('ptt:start', { groupId: currentGroupId });
+      if (s) s.emit('ptt:start', { groupId: currentGroupId });
       if (micTrackRef.current) { micTrackRef.current.unmute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null); }
       if (Platform.OS === 'android' && callUUIDRef.current) callKitService.setMuted(callUUIDRef.current, false);
       pttRecorderService.start().catch(() => null);
@@ -677,39 +690,39 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // ─── stopTransmitting ───────────────────────────────────────────────────────
   const stopTransmitting = useCallback(() => {
     const { currentGroupId, pttState } = usePTTStore.getState();
-    if (!socket || !currentGroupId || pttState !== 'transmitting') return;
+    if (!currentGroupId || pttState !== 'transmitting') return;
+
+    // Always reset the local state on release so the button can't get stuck red.
+    const durationMs = Date.now() - transmitStartedAtRef.current;
+    transmittingRef.current = false;
+    usePTTStore.getState().setTransmitting(false);
+
+    const s = socketRef.current ?? socket;
 
     if (Platform.OS === 'web') {
-      usePTTStore.getState().setTransmitting(false);
-      socket.emit('ptt:stop', { groupId: currentGroupId });
+      if (s) s.emit('ptt:stop', { groupId: currentGroupId });
       mediaRecorderRef.current?.stop();
       mediaRecorderRef.current = null;
     } else if (nativePTTActiveRef.current) {
       if (nativePTTChannelIdRef.current) {
-        // Optimistically stop — onTransmissionEnded will no-op if state already idle.
-        const durationMs = Date.now() - transmitStartedAtRef.current;
-        transmittingRef.current = false;
-        usePTTStore.getState().setTransmitting(false);
-        socket.emit('ptt:stop', { groupId: currentGroupId });
+        if (s) s.emit('ptt:stop', { groupId: currentGroupId });
         if (micTrackRef.current) { micTrackRef.current.mute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null); }
         nativePTTService.stopTransmitting(nativePTTChannelIdRef.current).catch(() => null);
         pttRecorderService.stopAndUpload(currentGroupId).then((audioUrl) => {
-          socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs, ...(audioUrl ? { audioUrl } : {}) });
+          if (s) s.emit('ptt:native_log', { groupId: currentGroupId, durationMs, ...(audioUrl ? { audioUrl } : {}) });
         }).catch(() => {
-          socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
+          if (s) s.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
         });
       }
     } else {
       // iOS (PTT framework unavailable or init failed) or Android
-      const durationMs = Date.now() - transmitStartedAtRef.current;
-      usePTTStore.getState().setTransmitting(false);
-      socket.emit('ptt:stop', { groupId: currentGroupId });
+      if (s) s.emit('ptt:stop', { groupId: currentGroupId });
       if (micTrackRef.current) { micTrackRef.current.mute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null); }
       if (Platform.OS === 'android' && callUUIDRef.current) callKitService.setMuted(callUUIDRef.current, true);
       pttRecorderService.stopAndUpload(currentGroupId).then((audioUrl) => {
-        socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs, ...(audioUrl ? { audioUrl } : {}) });
+        if (s) s.emit('ptt:native_log', { groupId: currentGroupId, durationMs, ...(audioUrl ? { audioUrl } : {}) });
       }).catch(() => {
-        socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
+        if (s) s.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
       });
     }
     // Update Live Activity — done transmitting

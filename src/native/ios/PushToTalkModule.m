@@ -41,10 +41,11 @@ RCT_EXPORT_MODULE(PushToTalkModule)
 
 - (NSArray<NSString *> *)supportedEvents {
     return @[
-        @"onPTTChannelJoined", @"onPTTChannelLeft",
-        @"onPTTTransmitStart", @"onPTTTransmitStop",
-        @"onPTTReceiveStart",  @"onPTTReceiveStop",
-        @"onPTTPushToken",     @"onPTTError",
+        @"onPTTChannelJoined",    @"onPTTChannelLeft",
+        @"onPTTTransmitStart",    @"onPTTTransmitStop",
+        @"onPTTReceiveStart",     @"onPTTReceiveStop",
+        @"onPTTPushToken",        @"onPTTError",
+        @"onPTTAudioActivated",   @"onPTTAudioDeactivated",
     ];
 }
 
@@ -320,15 +321,20 @@ RCT_EXPORT_METHOD(setServiceStatus:(NSString *)channelId
 - (void)channelManager:(PTChannelManager *)channelManager
     didActivateAudioSession:(AVAudioSession *)audioSession API_AVAILABLE(ios(16.0))
 {
-    // The PTT framework activated the audio session. Begin recording or
-    // playback via the app's audio layer (LiveKit/WebRTC) here.
-    // The framework manages audio session priority — do not activate it manually.
+    // Framework has activated the audio session — JS layer must now unmute the
+    // LiveKit mic track and tell the server to begin egress. Without this event,
+    // ptt:start is never emitted on iOS 16+ and no audio is recorded.
+    [self emit:@"onPTTAudioActivated" body:@{
+        @"channelId": _channelUUID.UUIDString ?: @"",
+    }];
 }
 
 - (void)channelManager:(PTChannelManager *)channelManager
     didDeactivateAudioSession:(AVAudioSession *)audioSession API_AVAILABLE(ios(16.0))
 {
-    // Audio session deactivated — stop recording or playback.
+    [self emit:@"onPTTAudioDeactivated" body:@{
+        @"channelId": _channelUUID.UUIDString ?: @"",
+    }];
 }
 
 // ─── PTChannelRestorationDelegate ────────────────────────────────────────────
