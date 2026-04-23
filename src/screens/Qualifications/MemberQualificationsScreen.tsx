@@ -207,7 +207,7 @@ export function MemberQualificationsScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backText}>{'< Back'}</Text>
+          <Text style={styles.backText}>{'← Back'}</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>
           {memberName ?? 'Qualifications'}
@@ -264,10 +264,10 @@ export function MemberQualificationsScreen() {
 
       {/* Award/Edit qualification modal */}
       <Modal visible={showAwardModal} transparent animationType="slide" onRequestClose={() => setShowAwardModal(false)}>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <Pressable style={{ flex: 1 }} onPress={() => setShowAwardModal(false)} />
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-            <View style={styles.modalCard}>
+          <View style={styles.modalCard}>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               <Text style={styles.modalTitle}>
                 {editingQual ? 'Update Qualification' : 'Award Qualification'}
               </Text>
@@ -335,9 +335,9 @@ export function MemberQualificationsScreen() {
                   )}
                 </TouchableOpacity>
               </View>
-            </View>
-          </KeyboardAvoidingView>
-        </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Type picker modal */}
@@ -494,14 +494,14 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: BORDER_RADIUS.lg,
     borderTopRightRadius: BORDER_RADIUS.lg,
     padding: SPACING.lg,
-    gap: SPACING.sm,
+    maxHeight: SCREEN_HEIGHT * 0.82,
   },
   pickerCard: {
     maxHeight: SCREEN_HEIGHT * 0.6,
     gap: 0,
   },
   pickerList: {
-    flexGrow: 0,
+    flex: 1,
   },
   modalTitle: { ...TYPOGRAPHY.h2, color: COLORS.textPrimary, marginBottom: SPACING.xs },
   editingQualName: { ...TYPOGRAPHY.body, fontWeight: '700', color: COLORS.primary, marginBottom: SPACING.xs },

@@ -142,13 +142,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
         encryptedContent: undefined,
       } as unknown as DecryptedMessage;
 
-      // Replace optimistic message with real one
+      // Replace optimistic message with real one; also filter any socket-received
+      // duplicate that may have arrived before the REST response (race condition).
       set((state) => ({
         messagesByGroup: {
           ...state.messagesByGroup,
-          [groupId]: (state.messagesByGroup[groupId] || []).map((m) =>
-            m.id === tempId ? decrypted : m,
-          ),
+          [groupId]: (state.messagesByGroup[groupId] || [])
+            .filter((m) => m.id !== message.id)
+            .map((m) => (m.id === tempId ? decrypted : m)),
         },
       }));
     } catch {

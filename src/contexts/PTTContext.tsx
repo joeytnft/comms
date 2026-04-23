@@ -82,6 +82,11 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // Live Activity ID for the current PTT session (iOS 16.2+)
   const liveActivityIdRef = useRef<string | null>(null);
 
+  // Always-current socket ref so native PTT callbacks (registered once) can emit
+  // even when the socket reconnects and the `socket` variable changes identity.
+  const socketRef = useRef(socket);
+  useEffect(() => { socketRef.current = socket; }, [socket]);
+
   // End the Live Activity, falling back to the MMKV-persisted ID if the in-memory
   // ref was lost (e.g. process was killed and restarted by iOS in the background).
   const endLiveActivity = useCallback(() => {
@@ -123,6 +128,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   }, [store.config.showLiveActivity]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── iOS native PTT setup ───────────────────────────────────────────────────
+  // Registered ONCE ([] deps) so callbacks are never torn down mid-transmission.
+  // All socket access goes through socketRef.current so reconnects are transparent.
   useEffect(() => {
     if (!USE_NATIVE_PTT) return;
 
@@ -133,8 +140,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       transmittingRef.current = true;
       transmitStartedAtRef.current = Date.now();
       usePTTStore.getState().setTransmitting(true);
-      // ptt:start is emitted in onAudioActivated so the LiveKit egress starts
-      // only after the mic is actually live — prevents silent recordings.
+      // ptt:start is emitted in onAudioActivated so egress begins only after
+      // the mic is confirmed live — prevents silent recordings.
       console.info(`[PTT] transmission started via ${source}`);
     });
 
@@ -146,12 +153,22 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       const durationMs = Date.now() - transmitStartedAtRef.current;
       usePTTStore.getState().setTransmitting(false);
       if (micTrackRef.current) { micTrackRef.current.mute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null); }
-      if (socket && currentGroupId) {
-        socket.emit('ptt:stop', { groupId: currentGroupId });
+      // Clear Live Activity immediately — must not be gated on socket state
+      const st = usePTTStore.getState();
+      liveActivityService.update(liveActivityIdRef.current, {
+        channelName: st.currentGroupName ?? '',
+        speakerName: null,
+        isTransmitting: false,
+        memberCount: st.connectedMemberIds.length,
+        alertLevel: null,
+      });
+      const s = socketRef.current;
+      if (s && currentGroupId) {
+        s.emit('ptt:stop', { groupId: currentGroupId });
         pttRecorderService.stopAndUpload(currentGroupId).then((audioUrl) => {
-          socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs, ...(audioUrl ? { audioUrl } : {}) });
+          s.emit('ptt:native_log', { groupId: currentGroupId, durationMs, ...(audioUrl ? { audioUrl } : {}) });
         }).catch(() => {
-          socket.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
+          s.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
         });
       }
     });
@@ -168,11 +185,13 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     const unsubActivated = nativePTTService.onAudioActivated(() => {
       if (transmittingRef.current) {
         const { currentGroupId } = usePTTStore.getState();
-        // Unmute mic first so the LiveKit track is live before we tell the server to start egress
+        // Unmute first so the LiveKit track is live before server starts egress
         if (micTrackRef.current) { micTrackRef.current.unmute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null); }
-        // Now emit ptt:start — egress begins on an active mic track, not a muted one
-        if (socket && currentGroupId) {
-          socket.emit('ptt:start', { groupId: currentGroupId });
+        // Emit ptt:start via socketRef — works even if socket reconnected since
+        // the callback was registered. Socket.IO buffers if briefly disconnected.
+        const s = socketRef.current;
+        if (s && currentGroupId) {
+          s.emit('ptt:start', { groupId: currentGroupId });
         }
         pttRecorderService.start().catch(() => null);
       }
@@ -188,8 +207,9 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     const unsubLeft = nativePTTService.onChannelLeft(() => {
       intentionalLeaveRef.current = true;
       const { currentGroupId } = usePTTStore.getState();
-      if (socket && currentGroupId) {
-        socket.emit('ptt:leave', { groupId: currentGroupId });
+      const s = socketRef.current;
+      if (s && currentGroupId) {
+        s.emit('ptt:leave', { groupId: currentGroupId });
       }
       roomRef.current?.disconnect();
       roomRef.current = null;
@@ -208,7 +228,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       unsubLeft();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket]);
+  }, []);
 
   // ─── Android: CallKit / ConnectionService setup ─────────────────────────────
   useEffect(() => {
@@ -601,7 +621,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // ─── startTransmitting ──────────────────────────────────────────────────────
   const startTransmitting = useCallback(() => {
     const { currentGroupId, pttState } = usePTTStore.getState();
-    if (!socket || !socket.connected || !currentGroupId || pttState === 'transmitting') return;
+    if (!socket || !currentGroupId || pttState === 'transmitting') return;
 
     if (Platform.OS === 'web') {
       usePTTStore.getState().setTransmitting(true);
@@ -629,7 +649,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         transmittingRef.current = true;
         transmitStartedAtRef.current = Date.now();
         usePTTStore.getState().setTransmitting(true);
-        socket.emit('ptt:start', { groupId: currentGroupId });
+        // Unmute immediately for instant audio; ptt:start and recorder are handled
+        // in onAudioActivated so egress begins only after the audio session is live.
         if (micTrackRef.current) { micTrackRef.current.unmute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null); }
         nativePTTService.beginTransmitting(nativePTTChannelIdRef.current).catch(() => null);
       }
@@ -656,7 +677,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // ─── stopTransmitting ───────────────────────────────────────────────────────
   const stopTransmitting = useCallback(() => {
     const { currentGroupId, pttState } = usePTTStore.getState();
-    if (!socket || !socket.connected || !currentGroupId || pttState !== 'transmitting') return;
+    if (!socket || !currentGroupId || pttState !== 'transmitting') return;
 
     if (Platform.OS === 'web') {
       usePTTStore.getState().setTransmitting(false);
