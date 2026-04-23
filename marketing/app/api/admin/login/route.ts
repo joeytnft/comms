@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_URL = process.env.RAILWAY_API_URL ?? 'http://localhost:3001';
+const API_URL = process.env.RAILWAY_API_URL ?? 'https://api.gathersafeapp.com';
 
 export async function POST(request: NextRequest) {
   let body: unknown;
