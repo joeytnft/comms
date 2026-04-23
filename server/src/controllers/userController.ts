@@ -85,7 +85,7 @@ export async function updateMe(
     if (!currentPassword) throw new ValidationError('Current password is required to set a new password');
     if (newPassword.length < 8) throw new ValidationError('New password must be at least 8 characters');
     const current = await prisma.user.findUnique({ where: { id: request.userId }, select: { passwordHash: true } });
-    const bcrypt = await import('bcrypt');
+    const bcrypt = await import('bcryptjs');
     const valid = await bcrypt.compare(currentPassword, current?.passwordHash ?? '');
     if (!valid) throw new ValidationError('Current password is incorrect');
     data.passwordHash = await bcrypt.hash(newPassword, 12);
