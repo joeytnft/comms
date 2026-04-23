@@ -74,7 +74,6 @@
       ],
       "./plugins/withPushToTalk",
       "./plugins/withLiveActivity",
-      "./plugins/withCriticalAlerts",
       "expo-location",
       "expo-camera",
       "expo-notifications",
