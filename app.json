@@ -40,7 +40,7 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSFaceIDUsageDescription": "GatherSafe uses Face ID to unlock the app quickly and securely."
       },
-      "buildNumber": "32"
+      "buildNumber": "33"
     },
     "android": {
       "package": "com.gathersafe2.www",
