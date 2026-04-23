@@ -3,6 +3,7 @@ import { secureStorage } from '@/utils/secureStorage';
 import { User, AuthTokens, LoginCredentials, RegisterData } from '@/types';
 import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY } from '@/config/constants';
 import { authService } from '@/services/authService';
+import { biometricAuth } from '@/utils/biometricAuth';
 
 interface Organization {
   id: string;
@@ -84,6 +85,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
     } finally {
       await clearTokens();
+      await biometricAuth.clearLoginCredentials();
       set({ user: null, isAuthenticated: false, isLoading: false });
     }
   },

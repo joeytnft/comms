@@ -128,15 +128,13 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
     // Transmission started from ANY source (screen, lock screen, Bluetooth accessory)
     const unsubStart = nativePTTService.onTransmissionStarted(({ source }) => {
-      const { currentGroupId, pttState } = usePTTStore.getState();
+      const { pttState } = usePTTStore.getState();
       if (pttState === 'transmitting') return;
       transmittingRef.current = true;
       transmitStartedAtRef.current = Date.now();
       usePTTStore.getState().setTransmitting(true);
-      if (socket && currentGroupId) {
-        socket.emit('ptt:start', { groupId: currentGroupId });
-      }
-      // Mic will be enabled in onAudioActivated (when iOS activates the session)
+      // ptt:start is emitted in onAudioActivated so the LiveKit egress starts
+      // only after the mic is actually live — prevents silent recordings.
       console.info(`[PTT] transmission started via ${source}`);
     });
 
@@ -169,8 +167,13 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     // iOS activates audio session — now safe to open mic or play audio
     const unsubActivated = nativePTTService.onAudioActivated(() => {
       if (transmittingRef.current) {
-        // User is transmitting — unmute mic and start local recording
+        const { currentGroupId } = usePTTStore.getState();
+        // Unmute mic first so the LiveKit track is live before we tell the server to start egress
         if (micTrackRef.current) { micTrackRef.current.unmute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null); }
+        // Now emit ptt:start — egress begins on an active mic track, not a muted one
+        if (socket && currentGroupId) {
+          socket.emit('ptt:start', { groupId: currentGroupId });
+        }
         pttRecorderService.start().catch(() => null);
       }
       // For incoming audio, LiveKit auto-plays subscribed tracks — nothing to do here
@@ -594,7 +597,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // ─── startTransmitting ──────────────────────────────────────────────────────
   const startTransmitting = useCallback(() => {
     const { currentGroupId, pttState } = usePTTStore.getState();
-    if (!socket || !currentGroupId || pttState === 'transmitting') return;
+    if (!socket || !socket.connected || !currentGroupId || pttState === 'transmitting') return;
 
     if (Platform.OS === 'web') {
       usePTTStore.getState().setTransmitting(true);
@@ -649,7 +652,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // ─── stopTransmitting ───────────────────────────────────────────────────────
   const stopTransmitting = useCallback(() => {
     const { currentGroupId, pttState } = usePTTStore.getState();
-    if (!socket || !currentGroupId || pttState !== 'transmitting') return;
+    if (!socket || !socket.connected || !currentGroupId || pttState !== 'transmitting') return;
 
     if (Platform.OS === 'web') {
       usePTTStore.getState().setTransmitting(false);

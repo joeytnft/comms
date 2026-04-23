@@ -13,7 +13,10 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  Dimensions,
 } from 'react-native';
+
+const SCREEN_HEIGHT = Dimensions.get('window').height;
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -339,9 +342,9 @@ export function MemberQualificationsScreen() {
 
       {/* Type picker modal */}
       <Modal visible={showTypePicker} transparent animationType="slide" onRequestClose={() => setShowTypePicker(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowTypePicker(false)}>
-          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-          <View style={[styles.modalCard, { maxHeight: '60%' }]}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={{ flex: 1 }} onPress={() => setShowTypePicker(false)} />
+          <View style={[styles.modalCard, styles.pickerCard]}>
             <View style={styles.pickerHeader}>
               <Text style={styles.modalTitle}>Select Qualification</Text>
               <TouchableOpacity onPress={() => setShowTypePicker(false)}>
@@ -354,6 +357,8 @@ export function MemberQualificationsScreen() {
               <FlatList
                 data={unearnedTypes}
                 keyExtractor={(t) => t.id}
+                keyboardShouldPersistTaps="handled"
+                style={styles.pickerList}
                 renderItem={({ item }) => (
                   <TouchableOpacity
                     style={styles.typeRow}
@@ -388,8 +393,7 @@ export function MemberQualificationsScreen() {
               />
             )}
           </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -491,6 +495,13 @@ const styles = StyleSheet.create({
     borderTopRightRadius: BORDER_RADIUS.lg,
     padding: SPACING.lg,
     gap: SPACING.sm,
+  },
+  pickerCard: {
+    maxHeight: SCREEN_HEIGHT * 0.6,
+    gap: 0,
+  },
+  pickerList: {
+    flexGrow: 0,
   },
   modalTitle: { ...TYPOGRAPHY.h2, color: COLORS.textPrimary, marginBottom: SPACING.xs },
   editingQualName: { ...TYPOGRAPHY.body, fontWeight: '700', color: COLORS.primary, marginBottom: SPACING.xs },
