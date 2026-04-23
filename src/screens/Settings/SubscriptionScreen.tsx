@@ -6,8 +6,10 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { useSubscriptionStore } from '@/store/useSubscriptionStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/common';
@@ -34,6 +36,7 @@ function formatLimit(value: number, label: string): string {
 }
 
 export function SubscriptionScreen() {
+  const navigation = useNavigation();
   const { user } = useAuth();
   const isOrgAdmin = user?.role === 'owner' || user?.role === 'admin';
 
@@ -83,8 +86,14 @@ export function SubscriptionScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Subscription</Text>
+        <View style={styles.backBtn} />
+      </View>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Subscription</Text>
 
         {/* GatherSafe Pro entitlement banner */}
         {isPro && (
@@ -241,14 +250,29 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray700,
+  },
+  headerTitle: {
+    ...TYPOGRAPHY.heading3,
+    color: COLORS.textPrimary,
+  },
+  backBtn: {
+    minWidth: 70,
+  },
+  backText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.info,
+  },
   content: {
     padding: SPACING.lg,
     paddingBottom: SPACING.xxl,
-  },
-  title: {
-    ...TYPOGRAPHY.heading2,
-    color: COLORS.textPrimary,
-    marginBottom: SPACING.lg,
   },
   proBanner: {
     backgroundColor: COLORS.accent,

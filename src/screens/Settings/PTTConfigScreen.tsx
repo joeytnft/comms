@@ -138,8 +138,8 @@ export function PTTConfigScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>Back</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>PTT Button</Text>
         <View style={{ width: 40 }} />
@@ -290,6 +290,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.gray700,
   },
+  backBtn: { minWidth: 70 },
   backText: { ...TYPOGRAPHY.body, color: COLORS.info },
   headerTitle: { ...TYPOGRAPHY.heading3, color: COLORS.textPrimary },
   content: { padding: SPACING.lg, paddingBottom: SPACING.xxl },

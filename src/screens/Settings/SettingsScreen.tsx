@@ -110,7 +110,7 @@ export function SettingsScreen() {
             <Text style={styles.settingLabel}>Current Plan</Text>
             <View style={styles.tierRow}>
               <Text style={styles.tierBadge}>{tierLabel()}</Text>
-              <Text style={styles.chevron}>{'>'}</Text>
+              <Text style={styles.chevron}>{'›'}</Text>
             </View>
           </Pressable>
         </View>
@@ -122,14 +122,14 @@ export function SettingsScreen() {
             onPress={() => navigation.navigate('TeamMap')}
           >
             <Text style={styles.settingLabel}>Team Map</Text>
-            <Text style={styles.chevron}>{'>'}</Text>
+            <Text style={styles.chevron}>{'›'}</Text>
           </Pressable>
           <Pressable
             style={styles.settingRow}
             onPress={() => navigation.navigate('Incidents')}
           >
             <Text style={styles.settingLabel}>Incidents</Text>
-            <Text style={styles.chevron}>{'>'}</Text>
+            <Text style={styles.chevron}>{'›'}</Text>
           </Pressable>
           {isOrgAdmin && (
             <Pressable
@@ -137,7 +137,7 @@ export function SettingsScreen() {
               onPress={() => navigation.navigate('Geofence')}
             >
               <Text style={styles.settingLabel}>Geofence</Text>
-              <Text style={styles.chevron}>{'>'}</Text>
+              <Text style={styles.chevron}>{'›'}</Text>
             </Pressable>
           )}
           <Pressable
@@ -145,14 +145,14 @@ export function SettingsScreen() {
             onPress={() => navigation.navigate('PTTConfig')}
           >
             <Text style={styles.settingLabel}>PTT Button</Text>
-            <Text style={styles.chevron}>{'>'}</Text>
+            <Text style={styles.chevron}>{'›'}</Text>
           </Pressable>
           <Pressable
             style={styles.settingRow}
             onPress={handleSchedulePress}
           >
             <Text style={styles.settingLabel}>Schedule & Check-In</Text>
-            <Text style={styles.chevron}>{'>'}</Text>
+            <Text style={styles.chevron}>{'›'}</Text>
           </Pressable>
           {isEnterprise && (
             <Pressable
@@ -160,7 +160,7 @@ export function SettingsScreen() {
               onPress={() => navigation.navigate('CampusManagement')}
             >
               <Text style={styles.settingLabel}>Campus Management</Text>
-              <Text style={styles.chevron}>{'>'}</Text>
+              <Text style={styles.chevron}>{'›'}</Text>
             </Pressable>
           )}
           {isOrgAdmin && (
@@ -169,7 +169,7 @@ export function SettingsScreen() {
               onPress={() => navigation.navigate('Members')}
             >
               <Text style={styles.settingLabel}>Manage Members</Text>
-              <Text style={styles.chevron}>{'>'}</Text>
+              <Text style={styles.chevron}>{'›'}</Text>
             </Pressable>
           )}
           {hasPcoAddon && (
@@ -178,7 +178,7 @@ export function SettingsScreen() {
               onPress={() => navigation.navigate('PlanningCenter')}
             >
               <Text style={styles.settingLabel}>Planning Center</Text>
-              <Text style={styles.chevron}>{'>'}</Text>
+              <Text style={styles.chevron}>{'›'}</Text>
             </Pressable>
           )}
           <Pressable
@@ -186,7 +186,7 @@ export function SettingsScreen() {
             onPress={() => navigation.navigate('Training')}
           >
             <Text style={styles.settingLabel}>Training Events</Text>
-            <Text style={styles.chevron}>{'>'}</Text>
+            <Text style={styles.chevron}>{'›'}</Text>
           </Pressable>
           {isOrgAdmin && (
             <Pressable
@@ -194,7 +194,7 @@ export function SettingsScreen() {
               onPress={() => navigation.navigate('Training', { screen: 'QualificationTypes' })}
             >
               <Text style={styles.settingLabel}>Qualification Types</Text>
-              <Text style={styles.chevron}>{'>'}</Text>
+              <Text style={styles.chevron}>{'›'}</Text>
             </Pressable>
           )}
         </View>
@@ -235,7 +235,7 @@ export function SettingsScreen() {
               <Text style={[styles.tierBadge, { color: isPinEnabled ? COLORS.success : COLORS.textMuted }]}>
                 {isPinEnabled ? 'Enabled' : 'Disabled'}
               </Text>
-              <Text style={styles.chevron}>{'>'}</Text>
+              <Text style={styles.chevron}>{'›'}</Text>
             </View>
           </Pressable>
           {isPinEnabled && biometricType !== null && (
@@ -259,7 +259,7 @@ export function SettingsScreen() {
                 <Text style={[styles.tierBadge, { color: isBiometricEnabled ? COLORS.success : COLORS.textMuted }]}>
                   {isBiometricEnabled ? 'Enabled' : 'Disabled'}
                 </Text>
-                <Text style={styles.chevron}>{'>'}</Text>
+                <Text style={styles.chevron}>{'›'}</Text>
               </View>
             </Pressable>
           )}
@@ -353,21 +353,22 @@ const styles = StyleSheet.create({
     ...SHADOWS.sm,
   },
   sectionTitle: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: SPACING.sm,
+    fontWeight: '600',
   },
   settingRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: SPACING.sm,
+    paddingVertical: SPACING.sm + 4,
   },
   settingLabel: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textSecondary,
+    color: COLORS.textPrimary,
   },
   settingValue: {
     ...TYPOGRAPHY.body,
@@ -389,7 +390,7 @@ const styles = StyleSheet.create({
   },
   chevron: {
     ...TYPOGRAPHY.body,
-    color: COLORS.textMuted,
+    color: COLORS.textSecondary,
   },
   logoutButton: {
     marginTop: SPACING.lg,

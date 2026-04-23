@@ -16,7 +16,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useQualificationStore } from '@/store/useQualificationStore';
 import { QualificationType } from '@/types';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
@@ -30,6 +30,7 @@ type FormState = {
 const EMPTY_FORM: FormState = { name: '', description: '', validityDays: '' };
 
 export function QualificationTypesScreen() {
+  const navigation = useNavigation();
   const { qualificationTypes, isLoading, fetchTypes, createType, updateType, deleteType } =
     useQualificationStore();
 
@@ -125,6 +126,9 @@ export function QualificationTypesScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Qualification Types</Text>
         <TouchableOpacity style={styles.addBtn} onPress={openCreate}>
           <Text style={styles.addBtnText}>+ Add</Text>
@@ -253,11 +257,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: COLORS.gray700,
   },
-  headerTitle: { ...TYPOGRAPHY.h2, color: COLORS.textPrimary },
+  backBtn: { minWidth: 70 },
+  backText: { ...TYPOGRAPHY.body, color: COLORS.info },
+  headerTitle: { ...TYPOGRAPHY.heading2, color: COLORS.textPrimary },
   addBtn: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.accent,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     borderRadius: BORDER_RADIUS.sm,
@@ -276,11 +282,11 @@ const styles = StyleSheet.create({
   cardLeft: { flex: 1 },
   cardName: { ...TYPOGRAPHY.body, fontWeight: '600', color: COLORS.textPrimary },
   cardDesc: { ...TYPOGRAPHY.caption, color: COLORS.textSecondary, marginTop: 2 },
-  cardValidity: { ...TYPOGRAPHY.caption, color: COLORS.primary, marginTop: 4 },
+  cardValidity: { ...TYPOGRAPHY.caption, color: COLORS.accent, marginTop: 4 },
   cardActions: { alignItems: 'flex-end', gap: SPACING.xs },
   actionBtn: { paddingVertical: 2 },
-  actionEdit: { ...TYPOGRAPHY.caption, color: COLORS.primary, fontWeight: '600' },
-  actionDelete: { ...TYPOGRAPHY.caption, color: COLORS.error },
+  actionEdit: { ...TYPOGRAPHY.caption, color: COLORS.accent, fontWeight: '600' },
+  actionDelete: { ...TYPOGRAPHY.caption, color: COLORS.danger },
   empty: {
     flex: 1,
     alignItems: 'center',
@@ -288,10 +294,10 @@ const styles = StyleSheet.create({
     padding: SPACING.xl,
     gap: SPACING.sm,
   },
-  emptyTitle: { ...TYPOGRAPHY.h3, color: COLORS.textPrimary, textAlign: 'center' },
+  emptyTitle: { ...TYPOGRAPHY.heading3, color: COLORS.textPrimary, textAlign: 'center' },
   emptySubtitle: { ...TYPOGRAPHY.body, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 22 },
   emptyBtn: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.accent,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.sm,
@@ -310,13 +316,13 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
     maxHeight: '85%',
   },
-  modalTitle: { ...TYPOGRAPHY.h2, color: COLORS.textPrimary, marginBottom: SPACING.sm },
+  modalTitle: { ...TYPOGRAPHY.heading2, color: COLORS.textPrimary, marginBottom: SPACING.sm },
   fieldLabel: { ...TYPOGRAPHY.body, fontWeight: '600', color: COLORS.textPrimary },
   input: {
     backgroundColor: COLORS.background,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.gray700,
     padding: SPACING.sm,
     color: COLORS.textPrimary,
     ...TYPOGRAPHY.body,
@@ -327,7 +333,7 @@ const styles = StyleSheet.create({
   modalCancelBtn: {
     flex: 1,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.gray700,
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     alignItems: 'center',
@@ -335,7 +341,7 @@ const styles = StyleSheet.create({
   modalCancelText: { ...TYPOGRAPHY.body, color: COLORS.textSecondary },
   modalSaveBtn: {
     flex: 2,
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.accent,
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     alignItems: 'center',

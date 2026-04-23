@@ -117,14 +117,19 @@ export function TrainingListScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Training Events</Text>
-        {isAdmin && (
+        {isAdmin ? (
           <TouchableOpacity
             style={styles.addButton}
             onPress={() => navigation.navigate('CreateTraining', {})}
           >
             <Text style={styles.addButtonText}>+ New</Text>
           </TouchableOpacity>
+        ) : (
+          <View style={styles.backBtn} />
         )}
       </View>
 
@@ -176,14 +181,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: COLORS.gray700,
   },
+  backBtn: { minWidth: 70 },
+  backText: { ...TYPOGRAPHY.body, color: COLORS.info },
   headerTitle: {
-    ...TYPOGRAPHY.h2,
+    ...TYPOGRAPHY.heading2,
     color: COLORS.textPrimary,
   },
   addButton: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.accent,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     borderRadius: BORDER_RADIUS.sm,
@@ -217,20 +224,20 @@ const styles = StyleSheet.create({
   dateBox: {
     width: 44,
     alignItems: 'center',
-    backgroundColor: COLORS.primary + '18',
+    backgroundColor: COLORS.accent + '18',
     borderRadius: BORDER_RADIUS.sm,
     paddingVertical: 4,
   },
   dateMonth: {
     fontSize: 10,
     fontWeight: '700',
-    color: COLORS.primary,
+    color: COLORS.accent,
     letterSpacing: 0.5,
   },
   dateDay: {
     fontSize: 20,
     fontWeight: '700',
-    color: COLORS.primary,
+    color: COLORS.accent,
     lineHeight: 24,
   },
   cardInfo: {
@@ -248,7 +255,7 @@ const styles = StyleSheet.create({
   },
   cardGroups: {
     ...TYPOGRAPHY.caption,
-    color: COLORS.primary,
+    color: COLORS.accent,
     marginTop: 2,
   },
   badge: {
@@ -279,7 +286,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.sm,
     paddingTop: SPACING.xs,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: COLORS.gray700,
   },
   cardCount: {
     ...TYPOGRAPHY.caption,
@@ -287,7 +294,7 @@ const styles = StyleSheet.create({
   },
   pastLabel: {
     ...TYPOGRAPHY.caption,
-    color: COLORS.textTertiary ?? COLORS.textSecondary,
+    color: COLORS.textMuted,
     fontStyle: 'italic',
   },
   empty: {

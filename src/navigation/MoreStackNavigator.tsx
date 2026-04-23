@@ -55,7 +55,7 @@ export function MoreStackNavigator() {
       <Stack.Screen
         name="Subscription"
         component={SubscriptionScreen}
-        options={{ title: 'Subscription' }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="TeamMap"

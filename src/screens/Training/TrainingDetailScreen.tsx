@@ -115,7 +115,7 @@ export function TrainingDetailScreen() {
   if (isLoading && !currentTraining) {
     return (
       <SafeAreaView style={styles.container}>
-        <ActivityIndicator color={COLORS.primary} style={{ marginTop: SPACING.xl }} />
+        <ActivityIndicator color={COLORS.accent} style={{ marginTop: SPACING.xl }} />
       </SafeAreaView>
     );
   }
@@ -246,7 +246,7 @@ export function TrainingDetailScreen() {
             disabled={isActing}
           >
             {isActing ? (
-              <ActivityIndicator color={COLORS.error} />
+              <ActivityIndicator color={COLORS.danger} />
             ) : (
               <Text style={styles.cancelBtnText}>Cancel Registration</Text>
             )}
@@ -347,17 +347,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: COLORS.gray700,
   },
   backBtn: { paddingVertical: SPACING.xs },
-  backText: { ...TYPOGRAPHY.body, color: COLORS.primary },
+  backText: { ...TYPOGRAPHY.body, color: COLORS.accent },
   headerActions: { flexDirection: 'row', gap: SPACING.sm },
   editBtn: { paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs },
-  editBtnText: { ...TYPOGRAPHY.body, color: COLORS.primary },
+  editBtnText: { ...TYPOGRAPHY.body, color: COLORS.accent },
   deleteBtn: { paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs },
-  deleteBtnText: { ...TYPOGRAPHY.body, color: COLORS.error },
+  deleteBtnText: { ...TYPOGRAPHY.body, color: COLORS.danger },
   content: { padding: SPACING.md, gap: SPACING.sm },
-  title: { ...TYPOGRAPHY.h1, color: COLORS.textPrimary, marginBottom: SPACING.sm },
+  title: { ...TYPOGRAPHY.heading1, color: COLORS.textPrimary, marginBottom: SPACING.sm },
   metaRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.sm },
   metaIcon: { fontSize: 16, width: 22 },
   metaText: { ...TYPOGRAPHY.body, color: COLORS.textSecondary, flex: 1 },
@@ -383,24 +383,24 @@ const styles = StyleSheet.create({
   primaryBtnAlt: { backgroundColor: COLORS.warning },
   primaryBtnText: { ...TYPOGRAPHY.body, color: '#fff', fontWeight: '700' },
   cancelBtn: {
-    backgroundColor: COLORS.error + '22',
+    backgroundColor: COLORS.danger + '22',
     borderWidth: 1,
-    borderColor: COLORS.error,
+    borderColor: COLORS.danger,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
     alignItems: 'center',
     marginTop: SPACING.md,
   },
-  cancelBtnText: { ...TYPOGRAPHY.body, color: COLORS.error, fontWeight: '700' },
+  cancelBtnText: { ...TYPOGRAPHY.body, color: COLORS.danger, fontWeight: '700' },
   adminBtn: {
     borderWidth: 1,
-    borderColor: COLORS.primary,
+    borderColor: COLORS.accent,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.sm,
     alignItems: 'center',
     marginTop: SPACING.sm,
   },
-  adminBtnText: { ...TYPOGRAPHY.body, color: COLORS.primary },
+  adminBtnText: { ...TYPOGRAPHY.body, color: COLORS.accent },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -413,9 +413,9 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
   },
   modalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md },
-  modalTitle: { ...TYPOGRAPHY.h2, color: COLORS.textPrimary },
+  modalTitle: { ...TYPOGRAPHY.heading2, color: COLORS.textPrimary },
   modalSubtitle: { ...TYPOGRAPHY.body, color: COLORS.textSecondary, marginBottom: SPACING.md },
-  modalCloseText: { ...TYPOGRAPHY.body, color: COLORS.primary },
+  modalCloseText: { ...TYPOGRAPHY.body, color: COLORS.accent },
   notesInput: {
     backgroundColor: COLORS.background,
     borderRadius: BORDER_RADIUS.sm,
@@ -425,7 +425,7 @@ const styles = StyleSheet.create({
     minHeight: 80,
     textAlignVertical: 'top',
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.gray700,
     marginBottom: SPACING.md,
   },
   modalActions: { flexDirection: 'row', gap: SPACING.sm },
@@ -452,17 +452,17 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: COLORS.gray700,
   },
   avatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: COLORS.primary + '33',
+    backgroundColor: COLORS.accent + '33',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { ...TYPOGRAPHY.body, fontWeight: '700', color: COLORS.primary },
+  avatarText: { ...TYPOGRAPHY.body, fontWeight: '700', color: COLORS.accent },
   signupInfo: { flex: 1 },
   signupName: { ...TYPOGRAPHY.body, color: COLORS.textPrimary, fontWeight: '600' },
   signupMeta: { ...TYPOGRAPHY.caption, color: COLORS.textSecondary },

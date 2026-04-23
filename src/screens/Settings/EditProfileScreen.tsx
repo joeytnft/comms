@@ -283,11 +283,12 @@ const styles = StyleSheet.create({
     ...SHADOWS.sm,
   },
   sectionTitle: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: SPACING.sm,
+    fontWeight: '600',
   },
   field: {
     paddingVertical: SPACING.sm,
@@ -298,9 +299,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   label: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.textSecondary,
     marginBottom: 4,
+    fontWeight: '500',
   },
   input: {
     ...TYPOGRAPHY.body,

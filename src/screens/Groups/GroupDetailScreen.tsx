@@ -155,6 +155,11 @@ export function GroupDetailScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.navBar}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
+      </View>
       <ScrollView contentContainerStyle={styles.content}>
         {/* Group header */}
         <View style={styles.groupHeader}>
@@ -372,6 +377,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  navBar: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray700,
+  },
+  backBtn: {},
+  backText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.info,
   },
   content: {
     padding: SPACING.lg,

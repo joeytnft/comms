@@ -43,7 +43,7 @@ export function TrainingStackNavigator() {
       <Stack.Screen
         name="QualificationTypes"
         component={QualificationTypesScreen}
-        options={{ title: 'Qualification Types' }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="MemberQualifications"

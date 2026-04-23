@@ -274,7 +274,7 @@ export function CreateTrainingScreen() {
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{isEdit ? 'Edit Training' : 'New Training'}</Text>
           <TouchableOpacity onPress={handleSave} disabled={isSaving} style={styles.saveBtn}>
-            {isSaving ? <ActivityIndicator color={COLORS.primary} size="small" /> : <Text style={styles.saveText}>Save</Text>}
+            {isSaving ? <ActivityIndicator color={COLORS.accent} size="small" /> : <Text style={styles.saveText}>Save</Text>}
           </TouchableOpacity>
         </View>
 
@@ -437,7 +437,7 @@ export function CreateTrainingScreen() {
                   <View style={[styles.checkbox, selectedGroupIds.includes(item.id) && styles.checkboxChecked]}>
                     {selectedGroupIds.includes(item.id) && <Text style={styles.checkmark}>✓</Text>}
                   </View>
-                  <View style={[styles.groupDot, { backgroundColor: item.iconColor ?? COLORS.primary }]} />
+                  <View style={[styles.groupDot, { backgroundColor: item.iconColor ?? COLORS.accent }]} />
                   <Text style={styles.pickerRowText}>{item.name}</Text>
                 </TouchableOpacity>
               )}
@@ -473,7 +473,7 @@ const cal = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   navBtn: { padding: SPACING.sm },
-  navText: { fontSize: 24, color: COLORS.primary, lineHeight: 28 },
+  navText: { fontSize: 24, color: COLORS.accent, lineHeight: 28 },
   monthLabel: { ...TYPOGRAPHY.body, fontWeight: '700', color: COLORS.textPrimary },
   weekRow: {
     flexDirection: 'row',
@@ -494,7 +494,7 @@ const cal = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 100,
   },
-  cellSelected: { backgroundColor: COLORS.primary },
+  cellSelected: { backgroundColor: COLORS.accent },
   cellText: { ...TYPOGRAPHY.bodySmall, color: COLORS.textPrimary },
   cellTextSelected: { color: '#fff', fontWeight: '700' },
   actions: {
@@ -505,7 +505,7 @@ const cal = StyleSheet.create({
   cancelBtn: {
     flex: 1,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.gray700,
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     alignItems: 'center',
@@ -513,7 +513,7 @@ const cal = StyleSheet.create({
   cancelText: { ...TYPOGRAPHY.body, color: COLORS.textSecondary },
   confirmBtn: {
     flex: 2,
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.accent,
     borderRadius: BORDER_RADIUS.sm,
     padding: SPACING.sm,
     alignItems: 'center',
@@ -532,13 +532,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: COLORS.gray700,
   },
   cancelBtn: { minWidth: 60 },
   cancelText: { ...TYPOGRAPHY.body, color: COLORS.textSecondary },
-  headerTitle: { ...TYPOGRAPHY.h3, color: COLORS.textPrimary },
+  headerTitle: { ...TYPOGRAPHY.heading3, color: COLORS.textPrimary },
   saveBtn: { minWidth: 60, alignItems: 'flex-end' },
-  saveText: { ...TYPOGRAPHY.body, color: COLORS.primary, fontWeight: '700' },
+  saveText: { ...TYPOGRAPHY.body, color: COLORS.accent, fontWeight: '700' },
   form: { padding: SPACING.md, gap: SPACING.sm, paddingBottom: SPACING.xl },
   field: { gap: 6 },
   timeRow: { flexDirection: 'row', gap: SPACING.sm },
@@ -548,7 +548,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderRadius: BORDER_RADIUS.sm,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.gray700,
     padding: SPACING.sm,
     color: COLORS.textPrimary,
     ...TYPOGRAPHY.body,
@@ -588,8 +588,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: SPACING.xs,
   },
-  pickerTitle: { ...TYPOGRAPHY.h3, color: COLORS.textPrimary },
-  pickerDone: { ...TYPOGRAPHY.body, color: COLORS.primary, fontWeight: '700' },
+  pickerTitle: { ...TYPOGRAPHY.heading3, color: COLORS.textPrimary },
+  pickerDone: { ...TYPOGRAPHY.body, color: COLORS.accent, fontWeight: '700' },
   pickerHint: { ...TYPOGRAPHY.caption, color: COLORS.textSecondary, marginBottom: SPACING.sm },
   pickerRow: {
     flexDirection: 'row',
@@ -597,18 +597,18 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: COLORS.gray700,
   },
   checkbox: {
     width: 22,
     height: 22,
     borderRadius: 4,
     borderWidth: 2,
-    borderColor: COLORS.border,
+    borderColor: COLORS.gray700,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkboxChecked: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  checkboxChecked: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
   checkmark: { color: '#fff', fontSize: 14, fontWeight: '700' },
   groupDot: { width: 10, height: 10, borderRadius: 5 },
   pickerRowText: { ...TYPOGRAPHY.body, color: COLORS.textPrimary },

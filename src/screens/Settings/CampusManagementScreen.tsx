@@ -4,7 +4,7 @@ import {
   TextInput, Modal, Alert, RefreshControl, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { useCampusStore } from '@/store/useCampusStore';
 import { Campus, OrgMemberWithCampus } from '@/types/campus';
@@ -12,6 +12,7 @@ import { geofenceService } from '@/services/geofenceService';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 
 export function CampusManagementScreen() {
+  const navigation = useNavigation();
   const {
     campuses, orgMembers,
     fetchCampuses, fetchOrgMembers,
@@ -218,6 +219,9 @@ export function CampusManagementScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
         <Text style={styles.title}>Campus Management</Text>
         <TouchableOpacity style={styles.addBtn} onPress={() => setShowCreate(true)}>
           <Text style={styles.addBtnText}>+ New</Text>
@@ -528,8 +532,11 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md,
+    borderBottomWidth: 1, borderBottomColor: COLORS.gray700,
   },
-  title: { ...TYPOGRAPHY.heading1, color: COLORS.textPrimary },
+  backBtn: { minWidth: 70 },
+  backText: { ...TYPOGRAPHY.body, color: COLORS.info },
+  title: { ...TYPOGRAPHY.heading3, color: COLORS.textPrimary },
   addBtn: {
     backgroundColor: COLORS.accent, paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm, borderRadius: BORDER_RADIUS.md,
