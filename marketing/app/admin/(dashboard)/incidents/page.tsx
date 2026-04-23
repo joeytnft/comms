@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Modal } from '@/components/admin/Modal';
 
 interface IncidentPhoto {
-  url: string;
+  encryptedUrl: string;
 }
 
 interface Incident {
@@ -225,9 +225,9 @@ export default function IncidentsPage() {
                 <p className="text-xs text-slate-500 mb-2">Photos ({selected.photos.length})</p>
                 <div className="flex gap-2 flex-wrap">
                   {selected.photos.map((p, i) => (
-                    <a key={i} href={p.url} target="_blank" rel="noopener noreferrer">
+                    <a key={i} href={p.encryptedUrl} target="_blank" rel="noopener noreferrer">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={p.url} alt={`Photo ${i + 1}`} className="w-20 h-20 object-cover rounded-xl border border-white/10 hover:border-blue-500/40 transition-colors" />
+                      <img src={p.encryptedUrl} alt={`Photo ${i + 1}`} className="w-20 h-20 object-cover rounded-xl border border-white/10 hover:border-blue-500/40 transition-colors" />
                     </a>
                   ))}
                 </div>
