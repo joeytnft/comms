@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { Nav } from '@/components/Nav';
-import { Footer } from '@/components/Footer';
+import { ConditionalNav } from '@/components/ConditionalNav';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://gathersafeapp.com'),
@@ -111,9 +110,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="bg-navy-950 text-white antialiased">
-        <Nav />
-        {children}
-        <Footer />
+        <ConditionalNav>{children}</ConditionalNav>
       </body>
     </html>
   );
