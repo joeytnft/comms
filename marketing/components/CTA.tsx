@@ -19,7 +19,7 @@ export function CTA() {
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-lg text-slate-400">
             Join security teams across the country who chose purpose-built tools over generic
-            apps. Start your free trial today with no credit card and no commitment.
+            apps. Purpose-built for how church security teams actually operate.
           </p>
 
           <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
@@ -27,7 +27,7 @@ export function CTA() {
               href="/pricing"
               className="btn-primary"
             >
-              Start 14-Day Free Trial
+              View Plans
             </a>
             <a
               href="mailto:hello@gathersafeapp.com"
@@ -38,7 +38,7 @@ export function CTA() {
           </div>
 
           <p className="mt-6 text-sm text-slate-600">
-            Starting at $8/month &nbsp;·&nbsp; iOS &amp; Android &nbsp;·&nbsp; Cancel anytime
+            Starting at $8/month &nbsp;·&nbsp; iOS &amp; Android
           </p>
         </div>
       </div>

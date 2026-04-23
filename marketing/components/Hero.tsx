@@ -60,7 +60,7 @@ export function Hero() {
         {/* CTAs */}
         <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
           <a href="/pricing" className="btn-primary">
-            Start 14-Day Free Trial
+            Get Started
           </a>
           <a href="/features" className="btn-secondary flex items-center gap-2">
             See All Features
@@ -72,7 +72,7 @@ export function Hero() {
 
         {/* Platform note */}
         <p className="mt-10 text-xs uppercase tracking-widest text-slate-600">
-          Available on iOS &amp; Android &nbsp;·&nbsp; No credit card required
+          Available on iOS &amp; Android
         </p>
       </div>
     </section>
