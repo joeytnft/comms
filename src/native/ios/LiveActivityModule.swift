@@ -32,9 +32,10 @@ class LiveActivityModule: NSObject {
         )
 
         do {
+            let staleDate = Date().addingTimeInterval(4 * 3600)
             let activity = try Activity<GatherSafeActivityAttributes>.request(
                 attributes: attrs,
-                content: ActivityContent(state: state, staleDate: nil),
+                content: ActivityContent(state: state, staleDate: staleDate),
                 pushType: nil
             )
             resolve(activity.id)
@@ -85,9 +86,8 @@ class LiveActivityModule: NSObject {
         guard #available(iOS 16.2, *) else { resolve(nil); return }
 
         Task {
-            for activity in Activity<GatherSafeActivityAttributes>.activities
-                where activity.id == activityId {
-                    await activity.end(nil, dismissalPolicy: .immediate)
+            for activity in Activity<GatherSafeActivityAttributes>.activities {
+                await activity.end(nil, dismissalPolicy: .immediate)
             }
             resolve(nil)
         }

@@ -63,11 +63,12 @@ export const liveActivityService = {
     }
   },
 
-  /** End and dismiss the Live Activity immediately. */
+  /** End and dismiss the Live Activity immediately. Ends ALL activities if ID is unknown. */
   async end(activityId: string | null): Promise<void> {
-    if (!isAvailable || !activityId) return;
+    if (!isAvailable) return;
     try {
-      await LiveActivityModule.endActivity(activityId);
+      // Pass empty string when ID is unknown — native side ends ALL activities.
+      await LiveActivityModule.endActivity(activityId ?? '');
     } catch (err) {
       console.warn('[LiveActivity] end failed:', err);
     }

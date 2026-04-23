@@ -558,6 +558,11 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // ─── leaveChannel ───────────────────────────────────────────────────────────
   const leaveChannel = useCallback(() => {
     const currentGroupId = usePTTStore.getState().currentGroupId;
+
+    // Always end the Live Activity first — this must not be gated on socket/group state
+    // because the island can get stuck if the socket is disconnected when leave is pressed.
+    endLiveActivity();
+
     if (!socket || !currentGroupId) return;
 
     intentionalLeaveRef.current = true;
@@ -591,7 +596,6 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
     socket.emit('ptt:leave', { groupId: currentGroupId });
     usePTTStore.getState().disconnect();
-    endLiveActivity();
   }, [socket, endLiveActivity]);
 
   // ─── startTransmitting ──────────────────────────────────────────────────────
