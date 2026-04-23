@@ -136,9 +136,14 @@ export function MemberQualificationsScreen() {
     setSelectedTypeId('');
     setEarnedDate(new Date().toISOString().split('T')[0]);
     setNotes('');
-    fetchActiveTypes(); // Always refresh so reactivated types appear immediately
+    // Only refetch when we have nothing cached and aren't already loading —
+    // avoids a race with the useFocusEffect fetch that can leave the picker
+    // empty if the refetch completes after the picker opens.
+    if (qualificationTypes.length === 0 && !isLoadingTypes) {
+      fetchActiveTypes();
+    }
     setShowAwardModal(true);
-  }, [fetchActiveTypes]);
+  }, [fetchActiveTypes, qualificationTypes.length, isLoadingTypes]);
 
   const openEdit = (qual: MemberQualification) => {
     setEditingQual(qual);
@@ -264,8 +269,9 @@ export function MemberQualificationsScreen() {
 
       {/* Award/Edit qualification modal */}
       <Modal visible={showAwardModal} transparent animationType="slide" onRequestClose={() => setShowAwardModal(false)}>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.modalOverlay}>
           <Pressable style={{ flex: 1 }} onPress={() => setShowAwardModal(false)} />
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.modalCard}>
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               <Text style={styles.modalTitle}>
@@ -337,7 +343,8 @@ export function MemberQualificationsScreen() {
               </View>
             </ScrollView>
           </View>
-        </KeyboardAvoidingView>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
 
       {/* Type picker modal */}

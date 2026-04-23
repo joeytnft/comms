@@ -222,12 +222,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
         encryptedContent: undefined,
       } as unknown as DecryptedMessage;
 
-      set((state) => ({
-        messagesByGroup: {
-          ...state.messagesByGroup,
-          [message.groupId]: [...(state.messagesByGroup[message.groupId] || []), decrypted],
-        },
-      }));
+      set((state) => {
+        const current = state.messagesByGroup[message.groupId] || [];
+        // Re-check inside set() — state may have changed during the async decrypt
+        // (e.g. REST response from our own sendMessage landed first). Without this,
+        // concurrent REST+socket paths each append a copy and the message duplicates.
+        if (current.some((m) => m.id === message.id)) {
+          return state;
+        }
+        return {
+          messagesByGroup: {
+            ...state.messagesByGroup,
+            [message.groupId]: [...current, decrypted],
+          },
+        };
+      });
     } catch (err: unknown) {
       console.warn('[Chat] Failed to decrypt received message:', err instanceof Error ? err.message : err);
     }
