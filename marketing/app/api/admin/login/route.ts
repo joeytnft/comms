@@ -39,18 +39,23 @@ export async function POST(request: NextRequest) {
   }
 
   const accessToken: string = data.tokens?.accessToken;
+  const refreshToken: string = data.tokens?.refreshToken;
   if (!accessToken) {
     return NextResponse.json({ error: 'Invalid server response' }, { status: 502 });
   }
 
-  const response = NextResponse.json({ user });
-  response.cookies.set('gs_admin_token', accessToken, {
+  const cookieOpts = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 7,
+    sameSite: 'lax' as const,
     path: '/',
-  });
+  };
+
+  const response = NextResponse.json({ user });
+  response.cookies.set('gs_admin_token', accessToken, { ...cookieOpts, maxAge: 60 * 15 });
+  if (refreshToken) {
+    response.cookies.set('gs_admin_refresh', refreshToken, { ...cookieOpts, maxAge: 60 * 60 * 24 * 7 });
+  }
 
   return response;
 }
