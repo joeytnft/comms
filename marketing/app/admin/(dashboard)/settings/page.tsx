@@ -135,7 +135,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="flex-1 p-8 max-w-3xl">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-3xl">
       {toast && (
         <div className="fixed top-6 right-6 z-50 bg-navy-800 border border-white/10 rounded-xl px-5 py-3 text-sm text-white shadow-xl">{toast}</div>
       )}
@@ -217,7 +217,7 @@ export default function SettingsPage() {
       <div className="bg-navy-900 border border-white/10 rounded-2xl p-6 mb-6">
         <h2 className="text-base font-semibold text-white mb-5">Your Profile</h2>
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1.5">Display Name</label>
               <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="w-full bg-navy-800 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition" />
@@ -247,7 +247,7 @@ export default function SettingsPage() {
             <label className="block text-sm font-medium text-slate-300 mb-1.5">Current Password</label>
             <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="••••••••" className="w-full bg-navy-800 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1.5">New Password</label>
               <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="••••••••" className="w-full bg-navy-800 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition" />

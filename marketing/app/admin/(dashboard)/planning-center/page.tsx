@@ -98,7 +98,7 @@ export default function PlanningCenterPage() {
 
   if (loading) {
     return (
-      <main className="flex-1 p-8">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8">
         <div className="h-8 bg-white/5 rounded w-48 mb-8 animate-pulse" />
         <div className="bg-navy-900 border border-white/10 rounded-2xl p-8 animate-pulse">
           <div className="h-6 bg-white/5 rounded w-64 mb-4" />
