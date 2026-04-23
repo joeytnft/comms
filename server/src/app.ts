@@ -62,6 +62,16 @@ export async function buildApp() {
       return;
     }
 
+    // JWT and other plugin errors that carry their own HTTP status (e.g. 401, 403)
+    const httpStatus = (error as { statusCode?: number }).statusCode;
+    if (typeof httpStatus === 'number' && httpStatus >= 400 && httpStatus < 500) {
+      reply.status(httpStatus).send({
+        error: error.name ?? 'ERROR',
+        message: error.message,
+      });
+      return;
+    }
+
     request.log.error(error);
     reply.status(500).send({
       error: 'INTERNAL_ERROR',
