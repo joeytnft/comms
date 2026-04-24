@@ -16,7 +16,8 @@
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); plugins=d.get\\('expo',{}\\).get\\('plugins',[]\\); print\\(json.dumps\\(plugins, indent=2\\)\\)\")",
       "Bash(sed -n '87,100p' src/contexts/PTTContext.tsx)",
       "Bash(sed -n '558,600p' src/contexts/PTTContext.tsx)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(git pull *)"
     ]
   }
 }
