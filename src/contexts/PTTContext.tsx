@@ -29,7 +29,7 @@ async function pttPost(groupId: string, endpoint: string, body?: Record<string, 
       'Content-Type': 'application/json',
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
     },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    body: JSON.stringify(body ?? {}),
   });
   if (!res.ok) console.warn(`[PTT] HTTP ${endpoint} returned ${res.status}`);
 }
