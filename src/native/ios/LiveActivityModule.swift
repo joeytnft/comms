@@ -86,10 +86,19 @@ class LiveActivityModule: NSObject {
         guard #available(iOS 16.2, *) else { resolve(nil); return }
 
         Task {
-            // End every live activity of our type. Some iOS builds ignore
-            // dismissalPolicy: .immediate unless an explicit final content is
-            // supplied, so build a terminal "isTransmitting=false, no speaker"
-            // state from each activity's current content before ending.
+            // Ending Live Activities cleanly is finicky on iOS.
+            //
+            //   - `dismissalPolicy: .immediate` can get ignored when the caller
+            //     hasn't also pushed an updated content — iOS waits for the
+            //     next content frame and then honors the policy.
+            //   - A nil `staleDate` means the system keeps the current card
+            //     rendered even after end() returns, which is what causes the
+            //     lock-screen banner to linger until the user swipes it.
+            //
+            // The fix: push a terminal content with a PAST stale date first,
+            // then call end() with the same content and .immediate. Marking
+            // the state stale forces iOS to dismiss rather than preserve.
+            let now = Date()
             for activity in Activity<GatherSafeActivityAttributes>.activities {
                 let current = activity.content.state
                 let finalState = GatherSafeActivityAttributes.ContentState(
@@ -99,7 +108,11 @@ class LiveActivityModule: NSObject {
                     memberCount: current.memberCount,
                     alertLevel: nil
                 )
-                let finalContent = ActivityContent(state: finalState, staleDate: nil)
+                let finalContent = ActivityContent(
+                    state: finalState,
+                    staleDate: now.addingTimeInterval(-1)
+                )
+                await activity.update(finalContent)
                 await activity.end(finalContent, dismissalPolicy: .immediate)
             }
             resolve(nil)

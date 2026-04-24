@@ -10,6 +10,8 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   Dimensions,
 } from 'react-native';
 
@@ -274,20 +276,24 @@ export function MemberQualificationsScreen() {
         animationType="slide"
         onRequestClose={() => { setShowTypePicker(false); setShowAwardModal(false); }}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          pointerEvents="box-none"
+        >
           <Pressable
-            style={{ flex: 1 }}
+            style={StyleSheet.absoluteFillObject}
             onPress={() => { setShowTypePicker(false); setShowAwardModal(false); }}
           />
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, showTypePicker && styles.modalCardPicker]}>
             {showTypePicker ? (
-              <View style={{ flex: 1 }}>
+              <>
                 <View style={styles.pickerHeader}>
-                  <TouchableOpacity onPress={() => setShowTypePicker(false)}>
-                    <Text style={styles.backText}>{'← Back'}</Text>
+                  <TouchableOpacity onPress={() => setShowTypePicker(false)} style={{ minWidth: 60 }}>
+                    <Text style={styles.pickerBack}>{'← Back'}</Text>
                   </TouchableOpacity>
                   <Text style={styles.modalTitle}>Select Qualification</Text>
-                  <View style={{ width: 60 }} />
+                  <View style={{ minWidth: 60 }} />
                 </View>
                 {isLoadingTypes && qualificationTypes.length === 0 ? (
                   <ActivityIndicator color={COLORS.primary} style={{ margin: SPACING.lg }} />
@@ -330,7 +336,7 @@ export function MemberQualificationsScreen() {
                     ))}
                   </ScrollView>
                 )}
-              </View>
+              </>
             ) : (
               <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
                 <Text style={styles.modalTitle}>
@@ -408,7 +414,7 @@ export function MemberQualificationsScreen() {
               </ScrollView>
             )}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -511,13 +517,17 @@ const styles = StyleSheet.create({
     padding: SPACING.lg,
     maxHeight: SCREEN_HEIGHT * 0.82,
   },
-  pickerCard: {
-    maxHeight: SCREEN_HEIGHT * 0.6,
-    gap: 0,
+  // Give the picker mode a concrete height so its inner ScrollView has room
+  // to render rows. Without this the card collapses to the header height
+  // because child flex:1 has no defined parent height to stretch into.
+  modalCardPicker: {
+    height: SCREEN_HEIGHT * 0.7,
+    maxHeight: SCREEN_HEIGHT * 0.7,
   },
   pickerList: {
-    flex: 1,
+    flexGrow: 0,
   },
+  pickerBack: { ...TYPOGRAPHY.body, color: COLORS.info, fontWeight: '600' },
   modalTitle: { ...TYPOGRAPHY.h2, color: COLORS.textPrimary, marginBottom: SPACING.xs },
   editingQualName: { ...TYPOGRAPHY.body, fontWeight: '700', color: COLORS.primary, marginBottom: SPACING.xs },
   fieldLabel: { ...TYPOGRAPHY.body, fontWeight: '600', color: COLORS.textPrimary },
