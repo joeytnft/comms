@@ -60,17 +60,19 @@ export async function webhookRoutes(app: FastifyInstance) {
 
     if (event.event === 'egress_ended' && event.egressInfo) {
       const { egressId, fileResults } = event.egressInfo;
-      const fileLocation = fileResults?.[0]?.location;
+      const rawLocation = fileResults?.[0]?.location ?? '';
 
-      if (!fileLocation) {
-        logger.debug({ egressId }, '[Webhook] egress_ended has no file result — skipping');
+      logger.info({ egressId, rawLocation, fileResultCount: fileResults?.length ?? 0 }, '[Webhook] egress_ended received');
+
+      if (!rawLocation) {
+        logger.warn({ egressId }, '[Webhook] egress_ended has no file location — recording may be empty or S3 upload failed');
         return reply.status(204).send();
       }
 
       // Look up userId + groupId from the reverse mapping set when egress started
       const metaRaw = await redis.get(`ptt:egress_meta:${egressId}`);
       if (!metaRaw) {
-        logger.debug({ egressId }, '[Webhook] No egress meta found — not a PTT egress');
+        logger.warn({ egressId }, '[Webhook] No egress meta in Redis — egress may have started before this deploy or TTL expired');
         return reply.status(204).send();
       }
 
@@ -83,19 +85,28 @@ export async function webhookRoutes(app: FastifyInstance) {
         return reply.status(204).send();
       }
 
-      // Construct Supabase public URL from the S3 key
+      // LiveKit returns the full S3 URI: s3://bucket-name/path/file.mp4
+      // Supabase getPublicUrl expects only the path within the bucket.
+      let storagePath = rawLocation;
+      if (storagePath.startsWith('s3://')) {
+        storagePath = storagePath.replace(/^s3:\/\/[^/]+\//, '');
+      }
+
+      logger.info({ egressId, userId, groupId, storagePath }, '[Webhook] Building public URL for PTT recording');
+
       const { data: { publicUrl } } = getSupabase()
         .storage
         .from(env.SUPABASE_PTT_BUCKET)
-        .getPublicUrl(fileLocation);
+        .getPublicUrl(storagePath);
 
-      // Find the most recent pttLog for this user+group that still has no audio URL
+      // Search up to 5 minutes back — the ptt:native_log socket event that creates
+      // the log arrives quickly but network delays can push the window in edge cases.
       const recentLog = await prisma.pttLog.findFirst({
         where: {
           groupId,
           senderId: userId,
           audioUrl: null,
-          createdAt: { gte: new Date(Date.now() - 120_000) },
+          createdAt: { gte: new Date(Date.now() - 300_000) },
         },
         orderBy: { createdAt: 'desc' },
       });
@@ -106,17 +117,17 @@ export async function webhookRoutes(app: FastifyInstance) {
           data: { audioUrl: publicUrl },
         });
 
-        // Emit real-time update so clients update the audio URL without a full refresh
         getIO()?.to(`ptt:${groupId}`).emit('ptt:log_updated', {
           id: recentLog.id,
           groupId,
           audioUrl: publicUrl,
         });
 
-        logger.info({ logId: recentLog.id, egressId }, '[Webhook] Backfilled PTT audio URL via webhook');
+        logger.info({ logId: recentLog.id, egressId, publicUrl }, '[Webhook] Backfilled PTT audio URL');
+      } else {
+        logger.warn({ egressId, userId, groupId }, '[Webhook] No matching pttLog found within 5 minutes — audio URL not backfilled');
       }
 
-      // Clean up the meta key
       await redis.del(`ptt:egress_meta:${egressId}`);
     }
 
