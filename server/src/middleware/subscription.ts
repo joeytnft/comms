@@ -98,8 +98,8 @@ export async function checkMemberLimit(request: FastifyRequest, _reply: FastifyR
   const body = request.body as { organizationCode?: string } | undefined;
   if (!body?.organizationCode) return; // Let the controller handle validation
 
-  const org = await prisma.organization.findUnique({
-    where: { inviteCode: body.organizationCode },
+  const org = await prisma.organization.findFirst({
+    where: { inviteCode: { equals: body.organizationCode, mode: 'insensitive' } },
     select: {
       id: true,
       subscriptionTier: true,

@@ -97,8 +97,8 @@ export async function register(
   }
   // FLOW 2: Join existing organization with org invite code
   else if (organizationCode) {
-    organization = await prisma.organization.findUnique({
-      where: { inviteCode: organizationCode },
+    organization = await prisma.organization.findFirst({
+      where: { inviteCode: { equals: organizationCode, mode: 'insensitive' } },
     });
     if (!organization) {
       throw new NotFoundError('Organization with that invite code');

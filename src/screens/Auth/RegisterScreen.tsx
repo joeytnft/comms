@@ -118,7 +118,7 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
                 onChangeText={setInviteCode}
                 placeholder="Group or organization invite code"
                 placeholderTextColor={COLORS.gray500}
-                autoCapitalize="characters"
+                autoCapitalize="none"
               />
               <Text style={styles.helperText}>
                 Use a group code (8 characters) to join a specific team, or an organization code to join the org without a group.
