@@ -1,12 +1,11 @@
 import { FastifyInstance } from 'fastify';
-import { WebhookReceiver, TrackType } from 'livekit-server-sdk';
+import { WebhookReceiver } from 'livekit-server-sdk';
 import { createClient } from '@supabase/supabase-js';
 import { prisma } from '../config/database';
 import { redis } from '../config/redis';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
 import { getIO } from '../config/socketIO';
-import { startTransmissionEgress } from '../services/ptt/livekitService';
 
 let _supabase: ReturnType<typeof createClient> | null = null;
 function getSupabase() {
@@ -41,23 +40,6 @@ export async function webhookRoutes(app: FastifyInstance) {
 
     logger.debug({ event: event.event }, '[Webhook] LiveKit event received');
 
-    // Trigger #3 — start egress when LiveKit confirms a track has been published
-    // in a PTT room. Completely independent of the socket layer; handles the race
-    // where ptt:start fires before the track SID is visible via listParticipants.
-    if (event.event === 'track_published' && event.participant && event.track && event.room) {
-      const roomName = event.room.name ?? '';
-      if (roomName.startsWith('ptt:')) {
-        const groupId = roomName.replace('ptt:', '');
-        const userId  = event.participant.identity ?? '';
-        if (userId && event.track.type === TrackType.AUDIO) {
-          logger.info(`[Webhook] track_published audio for ${userId} in ${roomName} — starting egress`);
-          startTransmissionEgress(groupId, userId).catch(
-            (err) => logger.warn({ err }, '[Webhook] track_published egress start failed'),
-          );
-        }
-      }
-    }
-
     if (event.event === 'egress_ended' && event.egressInfo) {
       const { egressId, fileResults } = event.egressInfo;
       const rawLocation = fileResults?.[0]?.location ?? '';
@@ -85,11 +67,16 @@ export async function webhookRoutes(app: FastifyInstance) {
         return reply.status(204).send();
       }
 
-      // LiveKit returns the full S3 URI: s3://bucket-name/path/file.mp4
-      // Supabase getPublicUrl expects only the path within the bucket.
+      // Extract the bucket-relative path from whatever format LiveKit delivers:
+      //   s3://bucket-name/path/file.mp4  (direct S3)
+      //   https://<project>.storage.supabase.co/storage/v1/s3/<bucket>/path/file.mp4  (Supabase S3 endpoint)
+      // Supabase getPublicUrl expects only the bucket-relative path.
       let storagePath = rawLocation;
       if (storagePath.startsWith('s3://')) {
         storagePath = storagePath.replace(/^s3:\/\/[^/]+\//, '');
+      } else if (storagePath.includes('/storage/v1/s3/')) {
+        const match = storagePath.match(/\/storage\/v1\/s3\/[^/]+\/(.+)$/);
+        if (match) storagePath = match[1];
       }
 
       logger.info({ egressId, userId, groupId, storagePath }, '[Webhook] Building public URL for PTT recording');
