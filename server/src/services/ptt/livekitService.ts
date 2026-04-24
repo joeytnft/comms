@@ -45,9 +45,31 @@ function buildOutput(groupId: string, userId: string): EncodedFileOutput | null 
   });
 }
 
+// How long to keep retrying listParticipants when the track hasn't appeared yet.
+// The mic track can take a few hundred ms to propagate after publish.
+const TRACK_POLL_INTERVAL_MS = 300;
+const TRACK_POLL_TIMEOUT_MS  = 1500;
+
+async function findAudioTrackSid(
+  rooms: RoomServiceClient,
+  roomName: string,
+  userId: string,
+): Promise<string | null> {
+  const deadline = Date.now() + TRACK_POLL_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const participants = await rooms.listParticipants(roomName);
+    const participant  = participants.find((p) => p.identity === userId);
+    const audioTrack   = participant?.tracks.find((t) => t.type === TrackType.AUDIO);
+    if (audioTrack?.sid) return audioTrack.sid;
+    await new Promise((r) => setTimeout(r, TRACK_POLL_INTERVAL_MS));
+  }
+  return null;
+}
+
 /**
  * Start a LiveKit TrackCompositeEgress for the transmitting user's audio track.
  * Stores the egress ID in Redis so stopTransmissionEgress can find it.
+ * Idempotent — skips silently if an egress is already active for this user+group.
  * Errors are logged but never thrown — egress is a best-effort backup.
  *
  * Idempotent: if an egress is already running for this (userId, groupId), this
@@ -64,27 +86,23 @@ export async function startTransmissionEgress(groupId: string, userId: string): 
   const output = buildOutput(groupId, userId);
   if (!output) return;
 
-  // Idempotency check — a second caller racing the first would otherwise leak
-  // an orphaned egress whose ID never lands in Redis.
-  const existingId = await redis.get(`ptt:egress:${userId}:${groupId}`);
-  if (existingId) {
-    logger.info(`[LiveKit] Egress ${existingId} already running for ${userId} / ${groupId} — skipping duplicate start`);
+  // Idempotency guard — one egress per user per group at a time
+  const existing = await redis.get(`ptt:egress:${userId}:${groupId}`);
+  if (existing) {
+    logger.debug(`[LiveKit] Egress already active for ${userId}/${groupId} — skipping`);
     return;
   }
 
   const roomName = `ptt:${groupId}`;
 
-  // Retry finding the audio track: the client pre-publishes a muted mic track
-  // during joinChannel, but there's a short window between the WS join
-  // completing and LiveKit reflecting the track on listParticipants.
-  let audioTrackSid: string | null = null;
+  let trackSid: string | null = null;
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
       const participants = await clients.rooms.listParticipants(roomName);
       const participant  = participants.find((p) => p.identity === userId);
       const audioTrack   = participant?.tracks.find((t) => t.type === TrackType.AUDIO);
       if (audioTrack?.sid) {
-        audioTrackSid = audioTrack.sid;
+        trackSid = audioTrack.sid;
         break;
       }
     } catch (err) {
@@ -92,7 +110,6 @@ export async function startTransmissionEgress(groupId: string, userId: string): 
     }
     await new Promise((r) => setTimeout(r, 300));
   }
-
   if (!audioTrackSid) {
     logger.warn(`[LiveKit] No published audio track for ${userId} in ${roomName} after 1.5s — egress skipped`);
     return;

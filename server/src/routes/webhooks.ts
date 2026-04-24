@@ -1,12 +1,12 @@
 import { FastifyInstance } from 'fastify';
-import { WebhookReceiver } from 'livekit-server-sdk';
+import { WebhookReceiver, TrackType } from 'livekit-server-sdk';
 import { createClient } from '@supabase/supabase-js';
 import { prisma } from '../config/database';
 import { redis } from '../config/redis';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
 import { getIO } from '../config/socketIO';
-import { startTransmissionEgress, stopTransmissionEgress } from '../services/ptt/livekitService';
+import { startTransmissionEgress, } from '../services/ptt/livekitService';
 
 let _supabase: ReturnType<typeof createClient> | null = null;
 function getSupabase() {
@@ -15,9 +15,10 @@ function getSupabase() {
 }
 
 export async function webhookRoutes(app: FastifyInstance) {
-  // Keep body as raw string — WebhookReceiver needs it for SHA-256 verification.
+  // LiveKit sends Content-Type: application/webhook+json (not application/json).
+  // Must be parsed as raw string — WebhookReceiver needs it for SHA-256 verification.
   // This parser is scoped to this plugin only and does not affect other routes.
-  app.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body, done) => {
+  app.addContentTypeParser('application/webhook+json', { parseAs: 'string' }, (_req, body, done) => {
     done(null, body);
   });
 
@@ -70,6 +71,23 @@ export async function webhookRoutes(app: FastifyInstance) {
       return reply.status(204).send();
     }
 
+    // Trigger #3 — start egress when LiveKit confirms a track has been published
+    // in a PTT room. Completely independent of the socket layer; handles the race
+    // where ptt:start fires before the track SID is visible via listParticipants.
+    if (event.event === 'track_published' && event.participant && event.track && event.room) {
+      const roomName = event.room.name ?? '';
+      if (roomName.startsWith('ptt:')) {
+        const groupId = roomName.replace('ptt:', '');
+        const userId  = event.participant.identity ?? '';
+        if (userId && event.track.type === TrackType.AUDIO) {
+          logger.info(`[Webhook] track_published audio for ${userId} in ${roomName} — starting egress`);
+          startTransmissionEgress(groupId, userId).catch(
+            (err) => logger.warn({ err }, '[Webhook] track_published egress start failed'),
+          );
+        }
+      }
+    }
+
     if (event.event === 'egress_ended' && event.egressInfo) {
       const { egressId, fileResults } = event.egressInfo;
       const fileLocation = fileResults?.[0]?.location;
@@ -98,7 +116,7 @@ export async function webhookRoutes(app: FastifyInstance) {
       // Construct Supabase public URL from the S3 key
       const { data: { publicUrl } } = getSupabase()
         .storage
-        .from(env.SUPABASE_STORAGE_BUCKET)
+        .from(env.SUPABASE_PTT_BUCKET)
         .getPublicUrl(fileLocation);
 
       // Find the most recent pttLog for this user+group that still has no audio URL
