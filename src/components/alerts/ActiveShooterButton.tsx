@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import * as Location from 'expo-location';
 import { useAlertStore } from '@/store/useAlertStore';
-import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/config/theme';
+import { SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/config/theme';
 
 const PRIME_TIMEOUT_MS = 3000;
 const THUMB_SIZE = 56;
@@ -53,8 +53,8 @@ function SwipeToConfirm({ onConfirm, disabled, active }: SwipeToConfirmProps) {
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => !disabledRef.current && trackWidthRef.current > 0,
-      onMoveShouldSetPanResponder: (_, { dx }) => !disabledRef.current && dx > 5,
-      onPanResponderMove: (_, { dx }) => {
+      onMoveShouldSetPanResponder: (_e, { dx }) => !disabledRef.current && dx > 5,
+      onPanResponderMove: (_e, { dx }) => {
         if (confirmedRef.current || disabledRef.current) return;
         const maxDrag = trackWidthRef.current - THUMB_SIZE - SWIPE_PADDING * 2;
         const clamped = Math.max(0, Math.min(dx, maxDrag));

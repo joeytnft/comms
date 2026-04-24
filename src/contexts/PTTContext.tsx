@@ -157,8 +157,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!store.isConnected) return;
     if (store.config.showLiveActivity) {
-      // User turned it ON while already connected — start one now if none running
-      if (!liveActivityIdRef.current) {
+      // Only start if not already running AND native PTT isn't owning the system UI
+      if (!liveActivityIdRef.current && !nativePTTActiveRef.current) {
         const orgName = useAuthStore.getState().organization?.name ?? 'GatherSafe';
         liveActivityService.start(store.currentGroupName ?? '', orgName)
           .then((id) => {
@@ -456,17 +456,6 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       // Persist so a cold launch from the Live Activity can tell the server we left.
       mmkvStorage.setString(PTT_GROUP_ID_KEY, groupId);
 
-      // Start the Live Activity pill (iOS 16.2+, no-op elsewhere; respects user preference)
-      if (usePTTStore.getState().config.showLiveActivity) {
-        const orgName = useAuthStore.getState().organization?.name ?? 'GatherSafe';
-        liveActivityService.start(response.groupName, orgName)
-          .then((id) => {
-            liveActivityIdRef.current = id;
-            if (id) mmkvStorage.setString(LIVE_ACTIVITY_ID_KEY, id);
-          })
-          .catch(() => null);
-      }
-
       if (Platform.OS === 'web') {
         try {
           await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -517,6 +506,21 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
             console.warn('[PTT] Native PTT init failed, using direct LiveKit mode:', nativeErr);
             nativePTTChannelIdRef.current = null;
           }
+        }
+
+        // Start the Live Activity ONLY when native PTT is not active.
+        // When native PTT is active the PTT framework owns the Dynamic Island and
+        // provides a built-in talk button — a competing Live Activity would intercept
+        // taps and reopen the app instead of letting the user transmit from the lock
+        // screen or Dynamic Island without opening the app.
+        if (!nativePTTActiveRef.current && usePTTStore.getState().config.showLiveActivity) {
+          const orgName = useAuthStore.getState().organization?.name ?? 'GatherSafe';
+          liveActivityService.start(response.groupName, orgName)
+            .then((id) => {
+              liveActivityIdRef.current = id;
+              if (id) mmkvStorage.setString(LIVE_ACTIVITY_ID_KEY, id);
+            })
+            .catch(() => null);
         }
 
         if (!nativePTTActiveRef.current && Platform.OS === 'android') {
