@@ -43,4 +43,18 @@ export async function organizationRoutes(app: FastifyInstance) {
     });
     reply.send({ organization: org });
   });
+
+  // Regenerate the org invite code — invalidates the old one immediately.
+  // Previously shared links/codes stop working. Only the org owner can do this.
+  app.post('/me/regenerate-invite', async (request: FastifyRequest, reply: FastifyReply) => {
+    await requireOwner(request.userId, request.organizationId);
+    const { nanoid } = await import('nanoid');
+    const newCode = nanoid(12);
+    const org = await prisma.organization.update({
+      where: { id: request.organizationId },
+      data: { inviteCode: newCode },
+      select: { id: true, inviteCode: true },
+    });
+    reply.send({ inviteCode: org.inviteCode });
+  });
 }

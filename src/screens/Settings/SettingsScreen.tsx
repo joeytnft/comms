@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert, Pressable, Share, TouchableOpacity, Linking, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAuthStore } from '@/store/useAuthStore';
+import { apiClient } from '@/api/client';
 import { useSubscriptionStore } from '@/store/useSubscriptionStore';
 import { useAppLock } from '@/contexts/AppLockContext';
 import { biometricAuth } from '@/utils/biometricAuth';
@@ -13,6 +15,7 @@ import { APP_VERSION } from '@/config/constants';
 export function SettingsScreen() {
   const { user, organization, logout } = useAuth();
   const { tierLabel, subscription, canUseFeature } = useSubscriptionStore();
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const { isPinEnabled, isBiometricEnabled, biometricType, refreshPinStatus, refreshBiometricStatus } = useAppLock();
   const biometricLabel = biometricType === 'faceId' ? 'Face ID' : 'Touch ID';
   const isEnterprise = subscription?.tier === 'PRO';
@@ -33,6 +36,31 @@ export function SettingsScreen() {
       return;
     }
     navigation.navigate('Schedule');
+  };
+
+  const handleRegenerateInvite = () => {
+    Alert.alert(
+      'Regenerate Invite Code',
+      'This will invalidate the current code. Anyone with the old code or link will no longer be able to join. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Regenerate',
+          style: 'destructive',
+          onPress: async () => {
+            setIsRegenerating(true);
+            try {
+              await apiClient.post('/organizations/me/regenerate-invite');
+              await useAuthStore.getState().refreshSession();
+            } catch {
+              Alert.alert('Error', 'Failed to regenerate invite code. Please try again.');
+            } finally {
+              setIsRegenerating(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleShareInvite = async () => {
@@ -214,9 +242,18 @@ export function SettingsScreen() {
               <TouchableOpacity style={styles.shareButton} onPress={handleShareInvite}>
                 <Text style={styles.shareButtonText}>Share</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.shareButton, styles.regenerateButton]}
+                onPress={handleRegenerateInvite}
+                disabled={isRegenerating}
+              >
+                <Text style={styles.shareButtonText}>
+                  {isRegenerating ? '...' : 'Regenerate'}
+                </Text>
+              </TouchableOpacity>
             </View>
             <Text style={styles.inviteHint}>
-              Share this code with team members so they can join your organization when registering.
+              This code can be used unlimited times. Regenerate it to invalidate old links.
             </Text>
           </View>
         )}
@@ -427,6 +464,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm + 4,
     borderRadius: BORDER_RADIUS.sm,
+  },
+  regenerateButton: {
+    backgroundColor: COLORS.gray700,
   },
   shareButtonText: {
     ...TYPOGRAPHY.bodySmall,
