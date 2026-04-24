@@ -153,17 +153,6 @@ export function setupPTTSocket(io: Server, socket: Socket) {
     });
 
     logger.info(`[PTT] ${userId} joined PTT room ${room}`);
-
-    // Start a session-scoped LiveKit egress as soon as the user joins the room.
-    // This is the safety net for the whole PTT session: even if the per-press
-    // ptt:start event never reaches the server (socket dropped, native PTT
-    // framework quirks, OTA mismatch, etc.), the user's audio is still being
-    // recorded. Egress is idempotent — calling startTransmissionEgress again
-    // from ptt:start is a no-op.
-    // Fire-and-forget; the retry inside already waits for the track to publish.
-    startTransmissionEgress(groupId, userId).catch(
-      (err) => logger.warn({ err }, '[PTT] Session egress start (on join) failed'),
-    );
   });
 
   socket.on('ptt:leave', async (data: { groupId: string }) => {
@@ -173,11 +162,6 @@ export function setupPTTSocket(io: Server, socket: Socket) {
     socket.leave(room);
     socket.to(room).emit('ptt:member_left', { userId, groupId });
     logger.info(`[PTT] ${userId} left PTT room ${room}`);
-
-    // Stop the session egress — paired with the start in ptt:join.
-    stopTransmissionEgress(userId, groupId).catch(
-      (err) => logger.warn({ err }, '[PTT] Session egress stop (on leave) failed'),
-    );
   });
 
   socket.on('ptt:start', async (data: { groupId: string; mimeType?: string }) => {
