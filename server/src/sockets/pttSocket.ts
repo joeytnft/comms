@@ -164,10 +164,16 @@ export function setupPTTSocket(io: Server, socket: Socket) {
   });
 
   socket.on('ptt:start', async (data: { groupId: string; mimeType?: string }) => {
-    if (!data || !isValidGroupId(data.groupId)) return;
+    if (!data || !isValidGroupId(data.groupId)) {
+      logger.warn({ userId, data }, '[PTT] ptt:start rejected — invalid payload');
+      return;
+    }
     const { groupId } = data;
     const room = `ptt:${groupId}`;
     const mimeType = data.mimeType || 'audio/webm';
+    // Always log at info so we can tell from Railway whether the event reached
+    // the server when debugging egress start failures.
+    logger.info(`[PTT] ptt:start received from ${userId} for ${room}`);
 
     // Persist session metadata + clear any stale chunks from a prior session.
     // Both keys are given a 2-hour TTL so Redis self-cleans if ptt:stop never fires.
@@ -220,12 +226,15 @@ export function setupPTTSocket(io: Server, socket: Socket) {
         });
       }
 
-      // Start server-side LiveKit egress as backup for native clients that drop.
+      // Start server-side LiveKit egress — this is the only path that actually
+      // records audio for iOS native PTT, since the client can't capture its
+      // own mic while LiveKit owns it.
+      logger.info(`[PTT] invoking startTransmissionEgress for ${userId} / ${groupId}`);
       startTransmissionEgress(groupId, userId).catch(
         (err) => logger.warn({ err }, '[PTT] Egress start failed'),
       );
 
-      logger.debug(`[PTT] ${userId} started transmitting in ${room}`);
+      logger.info(`[PTT] ${userId} started transmitting in ${room}`);
     } catch (error) {
       logger.error({ err: error }, '[PTT] Error starting transmission');
       socket.emit('ptt:error', { message: 'Failed to start transmission' });
