@@ -61,7 +61,14 @@ export async function createAlert(params: {
     select: ALERT_SELECT,
   });
 
-  if (params.groupIds && params.groupIds.length > 0) {
+  // Active Shooter alerts bypass group targeting entirely — they always broadcast
+  // to the entire organization regardless of which group triggered them.
+  const shouldTargetGroups =
+    params.alertType !== 'ACTIVE_SHOOTER' &&
+    params.groupIds != null &&
+    params.groupIds.length > 0;
+
+  if (shouldTargetGroups) {
     // Fan-out: for every targeted sub-group, also include its lead group so
     // lead-group members always receive the alert.
     const groups = await prisma.group.findMany({
@@ -78,12 +85,9 @@ export async function createAlert(params: {
       data: [...allTargetIds].map((groupId) => ({ alertId: alert.id, groupId })),
       skipDuplicates: true,
     });
-
-    // Re-fetch with targets populated
-    return prisma.alert.findUniqueOrThrow({ where: { id: alert.id }, select: ALERT_SELECT });
   }
 
-  // Send push notifications — Critical Alert path for active shooter events
+  // Send push notifications — always fires regardless of group targeting
   const triggererName = alert.triggeredBy?.displayName ?? 'Unknown';
   if (params.alertType === 'ACTIVE_SHOOTER') {
     sendCriticalAlertPushNotification(params.organizationId, alert.id, triggererName).catch(
@@ -99,6 +103,9 @@ export async function createAlert(params: {
     ).catch(() => {});
   }
 
+  if (shouldTargetGroups) {
+    return prisma.alert.findUniqueOrThrow({ where: { id: alert.id }, select: ALERT_SELECT });
+  }
   return alert;
 }
 

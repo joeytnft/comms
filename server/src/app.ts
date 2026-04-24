@@ -5,6 +5,8 @@ import rateLimit from '@fastify/rate-limit';
 import jwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
 import { Server } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
+import { redis } from './config/redis';
 import { env } from './config/env';
 import { logger } from './utils/logger';
 import { AppError } from './utils/errors';
@@ -145,6 +147,12 @@ export async function buildApp() {
       pingInterval: 25_000,
       pingTimeout:  60_000,
     });
+
+    // Redis adapter — enables room broadcasts across multiple server instances.
+    // pub and sub must be separate connections (ioredis requirement).
+    const pubClient = redis;
+    const subClient = redis.duplicate();
+    io.adapter(createAdapter(pubClient, subClient));
 
     setIO(io);
     setupSocketHandlers(io);
