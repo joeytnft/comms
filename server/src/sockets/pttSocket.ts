@@ -359,9 +359,18 @@ export function setupPTTSocket(io: Server, socket: Socket) {
     for (const room of socket.rooms) {
       if (room.startsWith('ptt:')) {
         const groupId = room.replace('ptt:', '');
-        socket.to(room).emit('ptt:member_left', { userId, groupId });
-        // Ensure session egress is torn down when the socket drops abruptly —
-        // otherwise the recording runs until TTL.
+        io.to(room).emit('ptt:member_left', { userId, groupId });
+
+        // If the user dropped mid-transmission, tell peers immediately so their
+        // UI clears the active-speaker indicator rather than spinning forever.
+        const sessionKey = `ptt:session:${userId}:${groupId}`;
+        redis.get(sessionKey).then((sessionData) => {
+          if (sessionData) {
+            io.to(room).emit('ptt:stopped', { groupId, userId, endedAt: new Date().toISOString() });
+            redis.del(sessionKey).catch(() => null);
+          }
+        }).catch(() => null);
+
         stopTransmissionEgress(userId, groupId).catch(
           (err) => logger.warn({ err }, '[PTT] Egress stop on disconnect failed'),
         );

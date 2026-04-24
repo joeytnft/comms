@@ -149,8 +149,10 @@ async function sendPTTPush(deviceToken: string, payload: PTTPushPayload): Promis
       if (status === 200) {
         resolve();
       } else {
-        logger.warn({ status, responseBody, deviceToken }, '[APNs] PTT push failed');
-        reject(new Error(`APNs returned ${status}: ${responseBody}`));
+        let apnsReason = responseBody;
+        try { apnsReason = JSON.parse(responseBody)?.reason ?? responseBody; } catch { /* raw */ }
+        logger.warn({ status, apnsReason, deviceToken: `${deviceToken.slice(0, 8)}…` }, '[APNs] PTT push failed');
+        reject(new Error(`APNs ${status}: ${apnsReason}`));
       }
     });
 
