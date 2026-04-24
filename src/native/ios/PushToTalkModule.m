@@ -8,6 +8,7 @@
 #if __has_include(<PushToTalk/PushToTalk.h>)
 #import <PushToTalk/PushToTalk.h>
 #import <AVFoundation/AVFoundation.h>
+#import <CommonCrypto/CommonCrypto.h>
 #define PTTM_HAS_FRAMEWORK 1
 #endif
 
@@ -64,6 +65,38 @@ RCT_EXPORT_MODULE(PushToTalkModule)
     if (_hasListeners) [self sendEventWithName:name body:body];
 }
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+// Returns a well-formed, deterministic UUID for any string (UUID v5, DNS namespace).
+// Group IDs are CUIDs — not valid UUIDs — so we can't pass them directly to
+// CXChannelAction/PTChannelManager which requires an RFC 4122 UUID.  Using a
+// deterministic derivation means the same UUID is produced every app launch for
+// the same group, which allows PTChannelManager to restore the channel after a
+// crash or reboot without UUID mismatch.
++ (NSUUID *)channelUUIDForID:(NSString *)channelId {
+    // Fast path: channelId is already a valid UUID string.
+    NSUUID *parsed = [[NSUUID alloc] initWithUUIDString:channelId];
+    if (parsed) return parsed;
+
+    // UUID v5: SHA1(namespace || name), then set version/variant bits.
+    // Namespace: OID (6ba7b812-9dad-11d1-80b4-00c04fd430c8)
+    uint8_t ns[16] = {
+        0x6b, 0xa7, 0xb8, 0x12, 0x9d, 0xad, 0x11, 0xd1,
+        0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8,
+    };
+    NSData *name = [channelId dataUsingEncoding:NSUTF8StringEncoding];
+    NSMutableData *buf = [NSMutableData dataWithBytes:ns length:sizeof(ns)];
+    [buf appendData:name];
+
+    uint8_t sha[CC_SHA1_DIGEST_LENGTH];
+    CC_SHA1(buf.bytes, (CC_LONG)buf.length, sha);
+
+    sha[6] = (sha[6] & 0x0F) | 0x50; // version 5
+    sha[8] = (sha[8] & 0x3F) | 0x80; // variant RFC 4122
+
+    return [[NSUUID alloc] initWithUUIDBytes:sha];
+}
+
 // ─── JS-facing methods ────────────────────────────────────────────────────────
 
 RCT_EXPORT_METHOD(initialize:(NSString *)channelId
@@ -73,7 +106,7 @@ RCT_EXPORT_METHOD(initialize:(NSString *)channelId
 {
 #ifdef PTTM_HAS_FRAMEWORK
     if (@available(iOS 16.0, *)) {
-        _channelUUID       = [[NSUUID alloc] initWithUUIDString:channelId] ?: [NSUUID UUID];
+        _channelUUID       = [PushToTalkModule channelUUIDForID:channelId];
         _channelDescriptor = [[PTChannelDescriptor alloc] initWithName:channelName image:nil];
         __weak typeof(self) weak = self;
         [PTChannelManager channelManagerWithDelegate:self
