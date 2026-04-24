@@ -324,11 +324,24 @@ RCT_EXPORT_METHOD(setServiceStatus:(NSString *)channelId
            channelUUID:(NSUUID *)channelUUID
     receivedEphemeralPushToken:(NSData *)pushToken API_AVAILABLE(ios(16.0))
 {
+    [self _emitPushToken:pushToken channelUUID:channelUUID];
+}
+
+// iOS 26 removed the channelUUID parameter from this delegate callback.
+// Both selectors must be implemented so the app survives on iOS 16-25 and iOS 26+.
+- (void)channelManager:(PTChannelManager *)channelManager
+    receivedEphemeralPushToken:(NSData *)pushToken API_AVAILABLE(ios(16.0))
+{
+    [self _emitPushToken:pushToken channelUUID:_channelUUID];
+}
+
+- (void)_emitPushToken:(NSData *)pushToken channelUUID:(NSUUID *)channelUUID API_AVAILABLE(ios(16.0))
+{
     NSMutableString *hex = [NSMutableString stringWithCapacity:pushToken.length * 2];
     const unsigned char *b = (const unsigned char *)pushToken.bytes;
     for (NSUInteger i = 0; i < pushToken.length; i++) [hex appendFormat:@"%02x", b[i]];
     [self emit:@"onPTTPushToken" body:@{
-        @"channelId": channelUUID.UUIDString,
+        @"channelId": channelUUID.UUIDString ?: @"",
         @"token": hex,
     }];
 }
