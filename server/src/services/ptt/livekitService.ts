@@ -48,7 +48,7 @@ function buildOutput(groupId: string, userId: string): EncodedFileOutput | null 
 // How long to keep retrying listParticipants when the track hasn't appeared yet.
 // The mic track can take a few hundred ms to propagate after publish.
 const TRACK_POLL_INTERVAL_MS = 300;
-const TRACK_POLL_TIMEOUT_MS  = 1500;
+const TRACK_POLL_TIMEOUT_MS  = 5000;
 
 async function findAudioTrackSid(
   rooms: RoomServiceClient,

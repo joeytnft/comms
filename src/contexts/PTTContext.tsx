@@ -489,15 +489,14 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         nativePTTActiveRef.current = false;
         if (USE_NATIVE_PTT) {
           try {
-            // requestJoinChannel returns the resolved UUID
-            const resolvedId = await nativePTTService.joinChannel(groupId, response.groupName);
-            nativePTTChannelIdRef.current = resolvedId;
-            nativePTTActiveRef.current = true;
-            if (resolvedId) mmkvStorage.setString(PTT_CHANNEL_ID_KEY, resolvedId);
-
-            // Register the ephemeral push token with the server once it arrives
-            const unsubToken = nativePTTService.onPushTokenReceived(async (token) => {
-              unsubToken();
+            // Register push token listener BEFORE joinChannel — iOS can fire the
+            // token callback within milliseconds of the channel joining, so the
+            // listener must already be in place or the token is silently missed and
+            // notifyTransmissionStopped has nothing to send to.
+            let unsubToken: (() => void) | null = null;
+            unsubToken = nativePTTService.onPushTokenReceived(async (token) => {
+              unsubToken?.();
+              unsubToken = null;
               try {
                 const accessToken = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
                 await fetch(`${AppEnv.apiUrl}/ptt/${groupId}/register-token`, {
@@ -513,6 +512,11 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
               }
             });
 
+            const resolvedId = await nativePTTService.joinChannel(groupId, response.groupName);
+            nativePTTChannelIdRef.current = resolvedId;
+            nativePTTActiveRef.current = true;
+            if (resolvedId) mmkvStorage.setString(PTT_CHANNEL_ID_KEY, resolvedId);
+
             // Report service as "ready" in system UI
             nativePTTService.setServiceStatus(resolvedId, 'ready').catch(() => null);
           } catch (nativeErr) {
@@ -523,12 +527,13 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        // Start the Live Activity ONLY when native PTT is not active.
-        // When native PTT is active the PTT framework owns the Dynamic Island and
-        // provides a built-in talk button — a competing Live Activity would intercept
-        // taps and reopen the app instead of letting the user transmit from the lock
-        // screen or Dynamic Island without opening the app.
-        if (!nativePTTActiveRef.current && usePTTStore.getState().config.showLiveActivity) {
+        // Start the Live Activity for the lock screen status regardless of whether
+        // native PTT is active. When native PTT IS active, the PTT framework takes
+        // priority in the Dynamic Island (transmit button), but it provides no lock
+        // screen expanded view — our Live Activity fills that gap. The Dynamic Island
+        // compact/minimal views in our widget have no widgetURL so they don't
+        // intercept the PTT framework's tap-to-transmit gesture.
+        if (usePTTStore.getState().config.showLiveActivity) {
           const orgName = useAuthStore.getState().organization?.name ?? 'GatherSafe';
           liveActivityService.start(response.groupName, orgName)
             .then((id) => {
@@ -651,7 +656,17 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
   // ─── leaveChannel ───────────────────────────────────────────────────────────
   const leaveChannel = useCallback(() => {
-    const currentGroupId = usePTTStore.getState().currentGroupId;
+    const { currentGroupId, pttState } = usePTTStore.getState();
+
+    // If the user leaves while transmitting, fire an HTTP stop before tearing down.
+    // Without this the server-side egress keeps recording until the socket drops and
+    // the disconnect handler cleans it up — which can be seconds later.
+    if (pttState === 'transmitting' && currentGroupId) {
+      pttPost(currentGroupId, 'stop').catch(() => null);
+      transmittingRef.current = false;
+      pttStartEmittedRef.current = false;
+      usePTTStore.getState().setTransmitting(false);
+    }
 
     // Always end the Live Activity first — must not be gated on socket/group state
     // because the island can get stuck if the socket is disconnected when leave is pressed.
