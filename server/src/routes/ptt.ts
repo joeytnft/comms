@@ -19,4 +19,11 @@ export async function pttRoutes(app: FastifyInstance) {
 
   // Client-side PTT audio upload (replaces LiveKit egress)
   app.post('/:groupId/audio', pttController.uploadAudio);
+
+  // HTTP replacements for socket events that iOS audio session activation drops.
+  // ptt:start / ptt:stop / ptt:native_log arrive via HTTP so a fresh TCP
+  // connection is used each time, bypassing the stale WebSocket.
+  app.post('/:groupId/start',      pttController.transmitStart);
+  app.post('/:groupId/stop',       pttController.transmitStop);
+  app.post('/:groupId/native-log', pttController.nativeLog);
 }
