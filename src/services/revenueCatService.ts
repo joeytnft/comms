@@ -35,6 +35,7 @@ function loadSDK(): AnySDK {
   _sdkChecked = true;
   if (!NativeModules.RNPurchases) return null;
   try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const mod = require('react-native-purchases');
     // LOG_LEVEL is a named export, not a property of the default Purchases class.
     // Merge it onto the SDK reference so callers can do sdk.LOG_LEVEL.
@@ -52,6 +53,7 @@ function loadUI(): { sdk: typeof RevenueCatUI; PAYWALL_RESULT: typeof PAYWALL_RE
   }
   if (!NativeModules.RNPurchases) return null;
   try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const mod = require('react-native-purchases-ui');
     _RevenueCatUI = mod.default ?? mod;
     _PAYWALL_RESULT = mod.PAYWALL_RESULT;

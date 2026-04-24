@@ -50,7 +50,7 @@ import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/th
 async function playAlertTone() {
   try {
     Vibration.vibrate([0, 300, 100, 300, 100, 600]);
-  } catch {}
+  } catch { /* audio unavailable */ }
 }
 
 const EMOJI_OPTIONS = ['🚨','⚠️','🆘','🔔','💥','🛑','☢️','🧯','🩺','👮','🚒','🚑','🔫','💊','🏃','📢','🌪️','🌊','💣','🔴'];
@@ -119,7 +119,7 @@ export function AlertsScreen() {
   useEffect(() => {
     SecureStore.getItemAsync(CUSTOM_ALERT_TYPES_KEY).then((json) => {
       if (json) {
-        try { setCustomTypes(JSON.parse(json)); } catch {}
+        try { setCustomTypes(JSON.parse(json)); } catch { /* ignore invalid JSON */ }
       }
     });
   }, []);

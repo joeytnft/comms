@@ -76,7 +76,7 @@ export const geofenceService = {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
-    } catch {}
+    } catch { /* ignore network errors on geofence clear */ }
   },
 
   async startGeofencing(geofence: Geofence): Promise<void> {
@@ -105,7 +105,7 @@ export const geofenceService = {
     if (Platform.OS === 'web') return;
     try {
       await Location.stopGeofencingAsync(GEOFENCE_TASK);
-    } catch {}
+    } catch { /* task may not be running */ }
   },
 
   async isGeofencingActive(): Promise<boolean> {

@@ -262,6 +262,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   clearGroup: (groupId: string) => {
     set((state) => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { [groupId]: _, ...rest } = state.messagesByGroup;
       return { messagesByGroup: rest };
     });
