@@ -11,6 +11,14 @@
 #define PTTM_HAS_FRAMEWORK 1
 #endif
 
+// WebRTC audio session — needed to sync the WebRTC stack with the PTT framework's
+// audio session lifecycle. Without these calls LiveKit cannot capture or play audio
+// on iOS native PTT (same pattern used by CallKit integrations).
+#if __has_include(<WebRTC/RTCAudioSession.h>)
+#import <WebRTC/RTCAudioSession.h>
+#define PTTM_HAS_WEBRTC 1
+#endif
+
 // ─── Interface ────────────────────────────────────────────────────────────────
 
 @interface PushToTalkModule : RCTEventEmitter <RCTBridgeModule>
@@ -321,9 +329,15 @@ RCT_EXPORT_METHOD(setServiceStatus:(NSString *)channelId
 - (void)channelManager:(PTChannelManager *)channelManager
     didActivateAudioSession:(AVAudioSession *)audioSession API_AVAILABLE(ios(16.0))
 {
-    // Framework has activated the audio session — JS layer must now unmute the
-    // LiveKit mic track and tell the server to begin egress. Without this event,
-    // ptt:start is never emitted on iOS 16+ and no audio is recorded.
+    // Notify the WebRTC stack that the audio session is now active.
+    // This is required for both directions:
+    //   Transmitting — LiveKit can capture mic audio
+    //   Receiving    — LiveKit can render incoming audio from remote participants
+    // Without this call the 2-way radio function is silent on iOS native PTT.
+    // (CallKit integrations do the same via RTCAudioSession.audioSessionDidActivate())
+#ifdef PTTM_HAS_WEBRTC
+    [[RTCAudioSession sharedInstance] audioSessionDidActivate:audioSession];
+#endif
     [self emit:@"onPTTAudioActivated" body:@{
         @"channelId": _channelUUID.UUIDString ?: @"",
     }];
@@ -332,6 +346,10 @@ RCT_EXPORT_METHOD(setServiceStatus:(NSString *)channelId
 - (void)channelManager:(PTChannelManager *)channelManager
     didDeactivateAudioSession:(AVAudioSession *)audioSession API_AVAILABLE(ios(16.0))
 {
+    // Notify WebRTC the session is going away so it releases audio resources cleanly.
+#ifdef PTTM_HAS_WEBRTC
+    [[RTCAudioSession sharedInstance] audioSessionDidDeactivate:audioSession];
+#endif
     [self emit:@"onPTTAudioDeactivated" body:@{
         @"channelId": _channelUUID.UUIDString ?: @"",
     }];
