@@ -40,6 +40,13 @@
     PTChannelManager    *_channelManager;
     NSUUID              *_channelUUID;
     PTChannelDescriptor *_channelDescriptor;
+    // Set in didJoinChannelWithUUID delegate. When iOS restores a channel after
+    // a crash or reboot the framework rejoins on its own — calling
+    // requestJoinChannelWithUUID again raises because only one channel may be
+    // joined at a time, and @try/@catch around that call is unreliable across
+    // the framework's internal dispatch boundaries. Tracking join state lets us
+    // skip the redundant join request entirely.
+    BOOL _isChannelJoined;
 #endif
     BOOL _hasListeners;
 }
@@ -106,7 +113,8 @@ RCT_EXPORT_METHOD(initialize:(NSString *)channelId
 {
 #ifdef PTTM_HAS_FRAMEWORK
     if (@available(iOS 16.0, *)) {
-        _channelUUID       = [PushToTalkModule channelUUIDForID:channelId];
+        NSUUID *targetUUID = [PushToTalkModule channelUUIDForID:channelId];
+        _channelUUID       = targetUUID;
         _channelDescriptor = [[PTChannelDescriptor alloc] initWithName:channelName image:nil];
         __weak typeof(self) weak = self;
         [PTChannelManager channelManagerWithDelegate:self
@@ -116,14 +124,36 @@ RCT_EXPORT_METHOD(initialize:(NSString *)channelId
             __strong typeof(weak) strong = weak;
             if (!strong) { resolve(nil); return; }
             strong->_channelManager = mgr;
+
+            // If iOS already restored this channel (crash recovery / reboot), the
+            // framework rejoined on its own — calling requestJoinChannelWithUUID
+            // again raises an uncatchable NSException from CXChannelAction and
+            // terminates the process. Skip the join request in that case and
+            // return the existing UUID directly.
+            if (strong->_isChannelJoined && [strong->_channelUUID isEqual:targetUUID]) {
+                resolve(targetUUID.UUIDString);
+                return;
+            }
+
             @try {
-                [mgr requestJoinChannelWithUUID:strong->_channelUUID
+                [mgr requestJoinChannelWithUUID:targetUUID
                                      descriptor:strong->_channelDescriptor];
-                resolve(strong->_channelUUID.UUIDString);
+                resolve(targetUUID.UUIDString);
             } @catch (NSException *exception) {
-                reject(@"PTT_JOIN_ERROR",
-                       exception.reason ?: @"Failed to join PTT channel",
-                       nil);
+                // Treat "already joined" exceptions as success — the channel is
+                // still usable, we just didn't know it was already joined (e.g.
+                // restoration delegate hadn't fired yet). Any other exception is
+                // a real failure.
+                NSString *reason = exception.reason ?: @"";
+                if ([reason containsString:@"already"] ||
+                    [reason containsString:@"exist"]) {
+                    strong->_isChannelJoined = YES;
+                    resolve(targetUUID.UUIDString);
+                } else {
+                    reject(@"PTT_JOIN_ERROR",
+                           exception.reason ?: @"Failed to join PTT channel",
+                           nil);
+                }
             }
         }];
         return;
@@ -179,8 +209,9 @@ RCT_EXPORT_METHOD(leaveChannel:(NSString *)channelId
             return;
         }
         [_channelManager leaveChannelWithUUID:_channelUUID];
-        _channelManager = nil;
-        _channelUUID    = nil;
+        _channelManager   = nil;
+        _channelUUID      = nil;
+        _isChannelJoined  = NO;
         resolve(nil);
         return;
     }
@@ -257,6 +288,12 @@ RCT_EXPORT_METHOD(setServiceStatus:(NSString *)channelId
     didJoinChannelWithUUID:(NSUUID *)channelUUID
                     reason:(PTChannelJoinReason)reason API_AVAILABLE(ios(16.0))
 {
+    _isChannelJoined = YES;
+    // Fires for restoration reason too — on cold launch after a crash, iOS
+    // rejoins the channel on our behalf. Make sure our cached UUID matches
+    // what the framework restored, otherwise subsequent transmit calls use
+    // the wrong UUID and silently no-op.
+    if (!_channelUUID) _channelUUID = channelUUID;
     [self emit:@"onPTTChannelJoined" body:@{@"channelId": channelUUID.UUIDString}];
 }
 
@@ -264,6 +301,7 @@ RCT_EXPORT_METHOD(setServiceStatus:(NSString *)channelId
     didLeaveChannelWithUUID:(NSUUID *)channelUUID
                      reason:(PTChannelLeaveReason)reason API_AVAILABLE(ios(16.0))
 {
+    _isChannelJoined = NO;
     _channelUUID = nil;
     [self emit:@"onPTTChannelLeft" body:@{@"channelId": channelUUID.UUIDString}];
 }
@@ -323,6 +361,7 @@ RCT_EXPORT_METHOD(setServiceStatus:(NSString *)channelId
     failedToJoinChannelWithUUID:(NSUUID *)channelUUID
                           error:(NSError *)error API_AVAILABLE(ios(16.0))
 {
+    _isChannelJoined = NO;
     [self emit:@"onPTTError" body:@{
         @"channelId": channelUUID.UUIDString,
         @"error": error.localizedDescription,
