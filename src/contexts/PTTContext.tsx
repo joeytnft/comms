@@ -650,6 +650,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       socket.emit('ptt:join', { groupId });
       usePTTStore.getState().setConnected(true);
       usePTTStore.getState().fetchParticipants(groupId);
+      usePTTLogStore.getState().fetchLogs(groupId);
     },
     [socket],
   );

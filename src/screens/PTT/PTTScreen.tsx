@@ -46,10 +46,10 @@ export function PTTScreen() {
   }, [error]);
 
   useEffect(() => {
-    if (currentGroupId && showLog) {
+    if (currentGroupId) {
       fetchLogs(currentGroupId);
     }
-  }, [currentGroupId, showLog]);
+  }, [currentGroupId]);
 
   const handlePlayLog = useCallback(async (log: PttLog) => {
     if (!log.audioUrl) return;
