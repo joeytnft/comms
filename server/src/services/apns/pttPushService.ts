@@ -31,17 +31,29 @@ let cachedJWT: string | null = null;
 let cachedJWTIssuedAt = 0;
 const JWT_TTL_SECONDS = 55 * 60; // Refresh 5 min before the 60-min APNs limit
 
+// Normalize a PEM-encoded private key read from an env var.
+// Hosting platforms (Railway, Fly.io, Docker, Heroku) usually surface multi-line
+// env vars with literal "\n" sequences rather than real newlines. OpenSSL 3
+// rejects those with ERR_OSSL_UNSUPPORTED / "DECODER routines::unsupported"
+// because the PEM body is no longer base64-decodable. Also strip any CR chars
+// that sneak in from Windows-style line endings.
+function normalizePemKey(raw: string): string {
+  return raw.replace(/\\n/g, '\n').replace(/\r/g, '').trim();
+}
+
 function buildJWT(): string {
   const now = Math.floor(Date.now() / 1000);
   if (cachedJWT && now - cachedJWTIssuedAt < JWT_TTL_SECONDS) return cachedJWT;
 
   const keyId  = env.APNS_KEY_ID;
   const teamId = env.APNS_TEAM_ID;
-  const key    = env.APNS_KEY;
+  const rawKey = env.APNS_KEY;
 
-  if (!keyId || !teamId || !key) {
+  if (!keyId || !teamId || !rawKey) {
     throw new Error('APNS_KEY_ID, APNS_TEAM_ID, and APNS_KEY env vars are required for PTT pushes');
   }
+
+  const key = normalizePemKey(rawKey);
 
   const header  = base64url(JSON.stringify({ alg: 'ES256', kid: keyId }));
   const payload = base64url(JSON.stringify({ iss: teamId, iat: now }));
