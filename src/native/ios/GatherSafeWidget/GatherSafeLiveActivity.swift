@@ -185,13 +185,20 @@ struct ExpandedView: View {
 struct GatherSafeLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: GatherSafeActivityAttributes.self) { context in
-            // Lock screen / StandBy
+            // Lock screen / StandBy — deep-link into the PTT screen on tap.
             // containerBackground is required on iOS 17+ for the banner to appear.
             // .lockScreenBackground() resolves to containerBackground (iOS 17+) or
             // .background() (iOS 16.2–16.x) — see helper extension above.
             ExpandedView(attributes: context.attributes, state: context.state)
                 .lockScreenBackground()
+                .widgetURL(URL(string: "gathersafe://ptt"))
         } dynamicIsland: { context in
+            // NOTE: No .widgetURL on the Dynamic Island block.
+            // When iOS native PTT (PTChannelManager) is active it owns the Dynamic
+            // Island and provides a built-in talk button. Adding a widgetURL here
+            // intercepts that tap and reopens the app instead — the Live Activity
+            // is only started on this device when native PTT is NOT active, so the
+            // Dynamic Island taps are handled by the PTT framework directly.
             DynamicIsland {
                 // Expanded Dynamic Island (press & hold)
                 DynamicIslandExpandedRegion(.leading) {
@@ -218,7 +225,6 @@ struct GatherSafeLiveActivity: Widget {
             } minimal: {
                 MinimalView(state: context.state)
             }
-            .widgetURL(URL(string: "gathersafe://ptt"))
             .keylineTint(micColor(state: context.state))
         }
     }
