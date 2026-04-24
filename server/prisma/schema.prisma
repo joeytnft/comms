@@ -753,9 +753,11 @@ model Geofence {
   organizationId String
   campusId       String   @unique
   name           String
+  type           String   @default("circle") // "circle" | "polygon"
   latitude       Float
   longitude      Float
-  radius         Float    // metres
+  radius         Float    // metres (bounding circle for polygons)
+  polygon        Json?    // GeoJSON ring: [[lng,lat], ...] for polygon type
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

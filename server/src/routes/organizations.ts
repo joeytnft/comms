@@ -44,6 +44,25 @@ export async function organizationRoutes(app: FastifyInstance) {
     reply.send({ organization: org });
   });
 
+  // List campuses for this org — used by the admin panel.
+  app.get('/me/campuses', async (request: FastifyRequest, reply: FastifyReply) => {
+    const campuses = await prisma.campus.findMany({
+      where: { organizationId: request.organizationId },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        address: true,
+        createdAt: true,
+        geofence: {
+          select: { id: true, name: true, type: true, latitude: true, longitude: true, radius: true, polygon: true, updatedAt: true },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+    reply.send({ campuses });
+  });
+
   // Regenerate the org invite code — invalidates the old one immediately.
   // Previously shared links/codes stop working. Only the org owner can do this.
   app.post('/me/regenerate-invite', async (request: FastifyRequest, reply: FastifyReply) => {
