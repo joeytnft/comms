@@ -17,7 +17,13 @@
       "Bash(sed -n '87,100p' src/contexts/PTTContext.tsx)",
       "Bash(sed -n '558,600p' src/contexts/PTTContext.tsx)",
       "Bash(git commit *)",
-      "Bash(git pull *)"
+      "Bash(git pull *)",
+      "Bash(claude mcp *)",
+      "Bash(npx claude *)",
+      "Bash(python3 -m json.tool)"
+    ],
+    "additionalDirectories": [
+      "/home/joe7432/.claude"
     ]
   }
 }
