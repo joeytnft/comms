@@ -66,7 +66,7 @@ interface PTTContextType {
   currentGroupId: string | null;
   currentGroupName: string | null;
   activeSpeaker: { userId: string; displayName: string } | null;
-  connectedMemberIds: number;
+  connectedMemberCount: number;
   startTransmitting: () => void;
   stopTransmitting: () => void;
   joinChannel: (groupId: string) => Promise<void>;
@@ -166,6 +166,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       return () => { socket.off('connect', flush); };
     }
     flush();
+    return undefined;
   }, [socket]);
 
   // ─── React to showLiveActivity toggle changes mid-session ──────────────────
@@ -784,7 +785,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       channelName: currentGroupName ?? '',
       speakerName: null,
       isTransmitting: true,
-      memberCount: connectedMemberIds,
+      memberCount: connectedMemberIds.length,
       alertLevel: null,
     });
   }, [socket]);
@@ -830,7 +831,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       channelName: currentGroupName ?? '',
       speakerName: null,
       isTransmitting: false,
-      memberCount: connectedMemberIds,
+      memberCount: connectedMemberIds.length,
       alertLevel: null,
     });
   }, [socket]);
@@ -857,7 +858,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         currentGroupId: store.currentGroupId,
         currentGroupName: store.currentGroupName,
         activeSpeaker: store.activeSpeaker,
-        connectedMemberIds: store.connectedMemberIds.length,
+        connectedMemberCount: store.connectedMemberIds.length,
         startTransmitting,
         stopTransmitting,
         joinChannel,
