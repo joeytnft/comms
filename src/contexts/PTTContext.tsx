@@ -688,6 +688,15 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // ─── startTransmitting ──────────────────────────────────────────────────────
   const startTransmitting = useCallback(() => {
     const { currentGroupId, pttState } = usePTTStore.getState();
+    console.info('[PTT] startTransmitting invoked', {
+      currentGroupId,
+      pttState,
+      socketReady: !!(socketRef.current ?? socket),
+      socketConnected: (socketRef.current ?? socket)?.connected,
+      nativePTTActive: nativePTTActiveRef.current,
+      nativePTTChannelId: nativePTTChannelIdRef.current,
+      pttStartEmitted: pttStartEmittedRef.current,
+    });
     if (!currentGroupId) {
       console.warn('[PTT] startTransmitting: no current group — user not joined to a channel');
       return;
@@ -736,7 +745,10 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         // onAudioActivated still emits as a fallback, guarded by pttStartEmittedRef.
         if (s && !pttStartEmittedRef.current) {
           pttStartEmittedRef.current = true;
+          console.info('[PTT] emit ppt:start (native path)', { currentGroupId, socketConnected: s.connected });
           s.emit('ptt:start', { groupId: currentGroupId });
+        } else {
+          console.warn('[PTT] ppt:start NOT emitted (native path)', { hasSocket: !!s, alreadyEmitted: pttStartEmittedRef.current });
         }
         nativePTTService.beginTransmitting(nativePTTChannelIdRef.current).catch((err) => {
           console.warn('[PTT] native beginTransmitting failed:', err);
@@ -746,7 +758,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       }
     } else {
       // iOS (PTT framework unavailable or init failed) or Android
-      if (s) s.emit('ptt:start', { groupId: currentGroupId });
+      if (s) {
+        console.info('[PTT] emit ppt:start (fallback path)', { currentGroupId, socketConnected: s.connected });
+        s.emit('ptt:start', { groupId: currentGroupId });
+      } else {
+        console.warn('[PTT] ppt:start NOT emitted (fallback path) — no socket');
+      }
       if (micTrackRef.current) { micTrackRef.current.unmute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null); }
       if (Platform.OS === 'android' && callUUIDRef.current) callKitService.setMuted(callUUIDRef.current, false);
       pttRecorderService.start().catch(() => null);
