@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,14 +9,192 @@ import {
   Vibration,
   ActivityIndicator,
   Platform,
+  PanResponder,
+  LayoutChangeEvent,
 } from 'react-native';
 import * as Location from 'expo-location';
 import { useAlertStore } from '@/store/useAlertStore';
 import { COLORS, SPACING, BORDER_RADIUS, TYPOGRAPHY } from '@/config/theme';
 
-const PRIME_TIMEOUT_MS = 3000; // reset to idle after 3s if second tap doesn't come
+const PRIME_TIMEOUT_MS = 3000;
+const THUMB_SIZE = 56;
+const SWIPE_PADDING = 4;
+// User must drag at least 85% of the track before release triggers confirm
+const SWIPE_THRESHOLD = 0.85;
 
 type ButtonState = 'idle' | 'primed';
+
+// ─── Swipe-to-confirm bar ─────────────────────────────────────────────────────
+
+interface SwipeToConfirmProps {
+  onConfirm: () => void;
+  disabled: boolean;
+  active: boolean; // resets the bar each time the modal opens
+}
+
+function SwipeToConfirm({ onConfirm, disabled, active }: SwipeToConfirmProps) {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const trackWidthRef = useRef(0);
+  const confirmedRef = useRef(false);
+  const disabledRef = useRef(disabled);
+  const onConfirmRef = useRef(onConfirm);
+  const dragX = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => { disabledRef.current = disabled; }, [disabled]);
+  useEffect(() => { onConfirmRef.current = onConfirm; }, [onConfirm]);
+
+  // Reset every time the modal opens
+  useEffect(() => {
+    if (!active) return;
+    confirmedRef.current = false;
+    dragX.setValue(0);
+  }, [active, dragX]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => !disabledRef.current && trackWidthRef.current > 0,
+      onMoveShouldSetPanResponder: (_, { dx }) => !disabledRef.current && dx > 5,
+      onPanResponderMove: (_, { dx }) => {
+        if (confirmedRef.current || disabledRef.current) return;
+        const maxDrag = trackWidthRef.current - THUMB_SIZE - SWIPE_PADDING * 2;
+        const clamped = Math.max(0, Math.min(dx, maxDrag));
+        dragX.setValue(clamped);
+
+        if (maxDrag > 0 && clamped >= maxDrag * SWIPE_THRESHOLD) {
+          confirmedRef.current = true;
+          Vibration.vibrate(Platform.OS === 'android' ? [0, 100, 60, 100] : [80]);
+          Animated.timing(dragX, {
+            toValue: maxDrag,
+            duration: 80,
+            useNativeDriver: false,
+          }).start(() => onConfirmRef.current());
+        }
+      },
+      onPanResponderRelease: () => {
+        if (!confirmedRef.current) {
+          Animated.spring(dragX, {
+            toValue: 0,
+            useNativeDriver: false,
+            friction: 6,
+            tension: 80,
+          }).start();
+        }
+      },
+      onPanResponderTerminate: () => {
+        if (!confirmedRef.current) {
+          Animated.spring(dragX, {
+            toValue: 0,
+            useNativeDriver: false,
+            friction: 6,
+            tension: 80,
+          }).start();
+        }
+      },
+    }),
+  ).current;
+
+  const handleLayout = useCallback((e: LayoutChangeEvent) => {
+    const w = e.nativeEvent.layout.width;
+    trackWidthRef.current = w;
+    setTrackWidth(w);
+  }, []);
+
+  const maxDrag = Math.max(0, trackWidth - THUMB_SIZE - SWIPE_PADDING * 2);
+  const fillWidth =
+    trackWidth > 0
+      ? dragX.interpolate({
+          inputRange: [0, maxDrag || 1],
+          outputRange: [THUMB_SIZE + SWIPE_PADDING * 2, trackWidth],
+          extrapolate: 'clamp',
+        })
+      : THUMB_SIZE + SWIPE_PADDING * 2;
+
+  return (
+    <View
+      style={swipeStyles.track}
+      onLayout={handleLayout}
+      accessible
+      accessibilityRole="adjustable"
+      accessibilityLabel="Slide to confirm alert"
+      accessibilityHint="Slide from left to right to send the active shooter alert"
+    >
+      {/* Growing red fill behind the label */}
+      <Animated.View style={[swipeStyles.fill, { width: fillWidth }]} />
+
+      {/* Centered label — stays visible above the fill */}
+      <Text style={swipeStyles.label} numberOfLines={1}>
+        {disabled ? 'SENDING…' : 'SLIDE TO CONFIRM →'}
+      </Text>
+
+      {/* Draggable thumb */}
+      {trackWidth > 0 && (
+        <Animated.View
+          style={[swipeStyles.thumb, { transform: [{ translateX: dragX }] }]}
+          {...panResponder.panHandlers}
+        >
+          {disabled ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={swipeStyles.thumbArrow}>▶▶</Text>
+          )}
+        </Animated.View>
+      )}
+    </View>
+  );
+}
+
+const swipeStyles = StyleSheet.create({
+  track: {
+    width: '100%',
+    height: THUMB_SIZE + SWIPE_PADDING * 2,
+    borderRadius: (THUMB_SIZE + SWIPE_PADDING * 2) / 2,
+    backgroundColor: '#3B0000',
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#7F1D1D',
+  },
+  fill: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#7F1D1D',
+    borderRadius: (THUMB_SIZE + SWIPE_PADDING * 2) / 2,
+    right: undefined, // override absoluteFillObject right so width controls it
+  },
+  label: {
+    position: 'absolute',
+    fontSize: 12,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.55)',
+    letterSpacing: 1.5,
+    textAlign: 'center',
+    pointerEvents: 'none',
+  },
+  thumb: {
+    position: 'absolute',
+    left: SWIPE_PADDING,
+    top: SWIPE_PADDING,
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
+    borderRadius: THUMB_SIZE / 2,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 4,
+    zIndex: 2,
+  },
+  thumbArrow: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+});
+
+// ─── Main button ──────────────────────────────────────────────────────────────
 
 export function ActiveShooterButton() {
   const { triggerAlert } = useAlertStore();
@@ -25,7 +203,6 @@ export function ActiveShooterButton() {
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [isSending, setIsSending] = useState(false);
 
-  // Pulse animation for the primed state
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const primeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pulseLoop = useRef<Animated.CompositeAnimation | null>(null);
@@ -55,13 +232,11 @@ export function ActiveShooterButton() {
     if (isSending) return;
 
     if (buttonState === 'idle') {
-      // First tap — prime it
       Vibration.vibrate(Platform.OS === 'android' ? [0, 80] : 80);
       setButtonState('primed');
       startPulse();
       primeTimer.current = setTimeout(resetToIdle, PRIME_TIMEOUT_MS);
     } else {
-      // Second tap — open confirmation modal
       if (primeTimer.current) clearTimeout(primeTimer.current);
       stopPulse();
       Vibration.vibrate(Platform.OS === 'android' ? [0, 80, 80, 80] : [80, 80, 80]);
@@ -77,7 +252,6 @@ export function ActiveShooterButton() {
   const handleConfirm = useCallback(async () => {
     setIsSending(true);
     try {
-      // Grab the freshest position available; don't block if permission is absent
       let latitude: number | undefined;
       let longitude: number | undefined;
       try {
@@ -115,12 +289,10 @@ export function ActiveShooterButton() {
           onPress={handlePress}
           activeOpacity={0.85}
           accessibilityLabel="Active Shooter Alert Button"
-          accessibilityHint="Double tap to arm, then confirm to broadcast an active shooter alert to all teams"
+          accessibilityHint="Double tap to arm, then slide to confirm and broadcast an active shooter alert to all teams"
           accessibilityRole="button"
         >
-          {/* Pulsing border ring when primed */}
           {isPrimed && <View style={styles.primedRing} />}
-
           <Text style={styles.warningIcon}>⚠</Text>
           <Text style={styles.label}>ACTIVE SHOOTER</Text>
           <Text style={styles.sublabel}>
@@ -129,7 +301,6 @@ export function ActiveShooterButton() {
         </TouchableOpacity>
       </Animated.View>
 
-      {/* Confirmation modal */}
       <Modal visible={confirmVisible} transparent animationType="fade" statusBarTranslucent>
         <View style={styles.overlay}>
           <View style={styles.modalCard}>
@@ -149,18 +320,11 @@ export function ActiveShooterButton() {
               Only confirm if there is an active threat.
             </Text>
 
-            <TouchableOpacity
-              style={styles.confirmBtn}
-              onPress={handleConfirm}
+            <SwipeToConfirm
+              onConfirm={handleConfirm}
               disabled={isSending}
-              activeOpacity={0.8}
-            >
-              {isSending ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.confirmBtnText}>SEND ALERT NOW</Text>
-              )}
-            </TouchableOpacity>
+              active={confirmVisible}
+            />
 
             <TouchableOpacity
               style={styles.cancelBtn}
@@ -270,23 +434,6 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     textAlign: 'center',
     fontStyle: 'italic',
-  },
-  confirmBtn: {
-    width: '100%',
-    backgroundColor: '#B91C1C',
-    borderRadius: BORDER_RADIUS.md,
-    paddingVertical: SPACING.md,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#EF4444',
-    minHeight: 52,
-    justifyContent: 'center',
-  },
-  confirmBtnText: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: 1.5,
   },
   cancelBtn: {
     width: '100%',
