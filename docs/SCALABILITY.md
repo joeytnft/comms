@@ -4,6 +4,25 @@ Current architecture: Socket.IO + Redis adapter, LiveKit Cloud SFU, PostgreSQL/P
 
 ---
 
+## Real-World Concurrency
+
+All limits below are based on **registered users**, not simultaneous active users. For a PTT security app the realistic concurrency profile is:
+
+- Idle users hold a socket connection but consume near-zero CPU/bandwidth
+- PTT transmissions are short bursts (5–30 seconds), not sustained streams
+- Active situations spike usage but are **localized to specific groups**, not org-wide
+- A conservative estimate: **~20% of registered users active at any moment**
+
+| Registered users | Realistic concurrent active | Concurrent PTT transmissions |
+|---|---|---|
+| 10,000 | 2,000 | < 50 |
+| 100,000 | 20,000 | < 500 |
+| 1,000,000 | 200,000 | < 5,000 |
+
+**Practical impact:** The bottlenecks below are almost all driven by socket *connections* (even idle ones hold a connection), not by actual PTT activity. LiveKit costs are driven by transmitted minutes — at 1-2% of users actually speaking at any moment, the bill is a fraction of the worst-case estimate.
+
+---
+
 ## 10,000 Users — Ready Now
 
 The current stack handles this with the Redis adapter in place. No structural changes needed.
@@ -51,9 +70,11 @@ The current stack handles this with the Redis adapter in place. No structural ch
 
 ## 1,000,000 Users — Structural Changes Required
 
+> At 20% concurrency this is equivalent to managing 200k active users and ~5k simultaneous PTT streams — still large, but nowhere near the theoretical worst case.
+
 ### Socket.IO — The Main Wall
 
-At 1M connections across ~100 instances, every PTT room broadcast fans out through Redis pub/sub to all 100 instances simultaneously. Redis becomes the choke point.
+At 1M registered users you'll have ~1M persistent socket connections (idle users stay connected) spread across ~100 instances. Every PTT room broadcast fans out through Redis pub/sub to all 100 instances simultaneously. Redis becomes the choke point.
 
 **Option A — Group-sharded socket routing (recommended)**
 Route all members of a PTT group to the same instance pool using consistent hashing on `groupId`. Broadcasts stay local; Redis pub/sub only handles cross-shard edge cases. This keeps the existing Socket.IO stack and avoids a rewrite.
@@ -61,20 +82,22 @@ Route all members of a PTT group to the same instance pool using consistent hash
 **Option B — Dedicated real-time platform**
 Migrate signaling to Ably or Pusher — platforms built specifically for this scale. Significant rewrite but removes the need to manage socket infrastructure entirely.
 
-### PostgreSQL — Distributed Strategy Required
+### PostgreSQL — Manageable with Partitioning
 
-Single Postgres (even with replicas) cannot absorb the write volume from 1M active users.
+At 20% concurrency, single Postgres with read replicas can handle 1M registered users. A distributed DB is only needed if you approach true worst-case simultaneous activity. Immediate requirements:
+
+- Time-based **partitioning** on `pttLog` (partition by month)
+- **Cold storage archival** — move logs older than 90 days to cheap object storage
+- Separate **OLAP store** (e.g. BigQuery, ClickHouse) for analytics queries so they don't hit the transactional DB
+- Multiple read replicas
+
+If you genuinely hit worst-case simultaneous load (all 1M active at once), then distributed DB options become relevant:
 
 | Option | Notes |
 |---|---|
 | **Citus** (Postgres extension) | Horizontal sharding, stays in the Postgres ecosystem |
 | **PlanetScale** | MySQL-based, built-in sharding, good DX |
 | **CockroachDB** | Distributed Postgres-compatible, geo-replication |
-
-Additional requirements:
-- Time-based **partitioning** on `pttLog` (partition by month)
-- **Cold storage archival** — move logs older than 90 days to cheap object storage
-- Separate **OLAP store** (e.g. BigQuery, ClickHouse) for analytics queries so they don't hit the transactional DB
 
 ### Redis — Cluster Required
 
@@ -85,7 +108,8 @@ Additional requirements:
 
 ### LiveKit — Self-Hosted, Multi-Region
 
-- LiveKit Cloud costs become significant at 1M users — self-host a LiveKit cluster
+- At 20% concurrency LiveKit Cloud costs are driven by ~5k concurrent streams, not 1M users — manageable, but worth modelling against self-hosted cost at this stage
+- Self-host a LiveKit cluster when Cloud costs exceed ~$3–5k/month
 - Deploy regional clusters for latency: US, EU, Asia
 - Use LiveKit's built-in load balancing across regions based on participant location
 
