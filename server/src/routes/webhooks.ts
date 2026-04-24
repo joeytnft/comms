@@ -6,6 +6,7 @@ import { redis } from '../config/redis';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
 import { getIO } from '../config/socketIO';
+import { startTransmissionEgress, stopTransmissionEgress } from '../services/ptt/livekitService';
 
 let _supabase: ReturnType<typeof createClient> | null = null;
 function getSupabase() {
@@ -37,7 +38,37 @@ export async function webhookRoutes(app: FastifyInstance) {
       return reply.status(401).send({ error: 'Invalid webhook signature' });
     }
 
-    logger.debug({ event: event.event }, '[Webhook] LiveKit event received');
+    logger.info({ event: event.event, room: event.room?.name }, '[Webhook] LiveKit event received');
+
+    // Safety-net egress control driven by LiveKit itself, independent of any
+    // socket event from the client. If the client's ptt:join / ptt:start never
+    // reach the server, LiveKit's own track_published webhook will still start
+    // egress — because participants only publish tracks when they successfully
+    // joined the room.
+    if (event.event === 'track_published' && event.room?.name?.startsWith('ptt:') && event.track?.type === 1 /* AUDIO */) {
+      const groupId = event.room.name.replace(/^ptt:/, '');
+      const userId  = event.participant?.identity;
+      if (userId && groupId) {
+        logger.info(`[Webhook] track_published audio for ${userId} in ${event.room.name} — starting egress`);
+        startTransmissionEgress(groupId, userId).catch(
+          (err) => logger.warn({ err }, '[Webhook] Egress start via track_published failed'),
+        );
+      }
+      return reply.status(204).send();
+    }
+
+    if ((event.event === 'track_unpublished' || event.event === 'participant_left')
+        && event.room?.name?.startsWith('ptt:')) {
+      const groupId = event.room.name.replace(/^ptt:/, '');
+      const userId  = event.participant?.identity;
+      if (userId && groupId) {
+        logger.info(`[Webhook] ${event.event} for ${userId} in ${event.room.name} — stopping egress`);
+        stopTransmissionEgress(userId, groupId).catch(
+          (err) => logger.warn({ err }, '[Webhook] Egress stop via webhook failed'),
+        );
+      }
+      return reply.status(204).send();
+    }
 
     if (event.event === 'egress_ended' && event.egressInfo) {
       const { egressId, fileResults } = event.egressInfo;
