@@ -49,6 +49,11 @@ function buildOutput(groupId: string, userId: string): EncodedFileOutput | null 
  * Start a LiveKit TrackCompositeEgress for the transmitting user's audio track.
  * Stores the egress ID in Redis so stopTransmissionEgress can find it.
  * Errors are logged but never thrown — egress is a best-effort backup.
+ *
+ * Idempotent: if an egress is already running for this (userId, groupId), this
+ * call is a no-op. Also retries finding the audio track for up to 1.5s — when
+ * triggered from ptt:join the track publish can still be in flight for a few
+ * hundred ms, and without the retry the egress would silently skip.
  */
 export async function startTransmissionEgress(groupId: string, userId: string): Promise<void> {
   const clients = getClients();
@@ -59,22 +64,46 @@ export async function startTransmissionEgress(groupId: string, userId: string): 
   const output = buildOutput(groupId, userId);
   if (!output) return;
 
-  try {
-    const roomName     = `ptt:${groupId}`;
-    const participants = await clients.rooms.listParticipants(roomName);
-    const participant  = participants.find((p) => p.identity === userId);
-    const audioTrack   = participant?.tracks.find((t) => t.type === TrackType.AUDIO);
+  // Idempotency check — a second caller racing the first would otherwise leak
+  // an orphaned egress whose ID never lands in Redis.
+  const existingId = await redis.get(`ptt:egress:${userId}:${groupId}`);
+  if (existingId) {
+    logger.info(`[LiveKit] Egress ${existingId} already running for ${userId} / ${groupId} — skipping duplicate start`);
+    return;
+  }
 
-    if (!audioTrack?.sid) {
-      logger.warn(`[LiveKit] No published audio track for ${userId} in ${roomName} — egress skipped. Check mic track is published before ptt:start fires.`);
-      return;
+  const roomName = `ptt:${groupId}`;
+
+  // Retry finding the audio track: the client pre-publishes a muted mic track
+  // during joinChannel, but there's a short window between the WS join
+  // completing and LiveKit reflecting the track on listParticipants.
+  let audioTrackSid: string | null = null;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const participants = await clients.rooms.listParticipants(roomName);
+      const participant  = participants.find((p) => p.identity === userId);
+      const audioTrack   = participant?.tracks.find((t) => t.type === TrackType.AUDIO);
+      if (audioTrack?.sid) {
+        audioTrackSid = audioTrack.sid;
+        break;
+      }
+    } catch (err) {
+      logger.warn({ err, attempt, roomName }, '[LiveKit] listParticipants failed during egress start');
     }
+    await new Promise((r) => setTimeout(r, 300));
+  }
 
-    logger.info(`[LiveKit] Starting egress for ${userId} in ${roomName}, track ${audioTrack.sid}, bucket ${env.SUPABASE_PTT_BUCKET}, region ${env.SUPABASE_S3_REGION}`);
+  if (!audioTrackSid) {
+    logger.warn(`[LiveKit] No published audio track for ${userId} in ${roomName} after 1.5s — egress skipped`);
+    return;
+  }
+
+  try {
+    logger.info(`[LiveKit] Starting egress for ${userId} in ${roomName}, track ${audioTrackSid}, bucket ${env.SUPABASE_PTT_BUCKET}, region ${env.SUPABASE_S3_REGION}`);
     const egress = await clients.egress.startTrackCompositeEgress(
       roomName,
       output,
-      audioTrack.sid,
+      audioTrackSid,
     );
 
     await redis.setex(`ptt:egress:${userId}:${groupId}`, 3600, egress.egressId);
