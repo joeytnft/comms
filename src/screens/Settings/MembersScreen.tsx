@@ -363,7 +363,6 @@ const styles = StyleSheet.create({
   badgeAdmin: { backgroundColor: COLORS.warning + '33' },
   badgeMember: { backgroundColor: COLORS.gray700 },
   roleText: { ...TYPOGRAPHY.caption, color: COLORS.textSecondary, fontWeight: '600' },
-  chevron: { ...TYPOGRAPHY.body, color: COLORS.textMuted },
   emptyContainer: { alignItems: 'center', paddingTop: SPACING.xxl },
   emptyText: { ...TYPOGRAPHY.body, color: COLORS.textMuted },
   sectionHeader: {

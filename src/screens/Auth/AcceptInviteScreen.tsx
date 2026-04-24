@@ -37,13 +37,13 @@ export function AcceptInviteScreen({ navigation, route }: { navigation: any; rou
 
     setLoading(true);
     try {
-      const { user, tokens } = await apiClient.post<{
+      const { user } = await apiClient.post<{
         user: { id: string; email: string; displayName: string; organizationId: string; campusId: string | null };
         tokens: { accessToken: string; refreshToken: string };
       }>(ENDPOINTS.AUTH.ACCEPT_INVITE, { token: token.trim(), password });
 
-      // Log in immediately with the returned tokens
-      await login(user.email, password);
+      // Log in immediately with the returned credentials
+      await login({ email: user.email, password });
     } catch (error: any) {
       Alert.alert('Error', error?.response?.data?.message || 'This invite link is invalid or has expired.');
     } finally {

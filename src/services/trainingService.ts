@@ -4,23 +4,19 @@ import { TrainingEvent, TrainingSignup, CreateTrainingData, UpdateTrainingData }
 
 export const trainingService = {
   async listTrainings(): Promise<{ trainings: TrainingEvent[] }> {
-    const response = await apiClient.get(ENDPOINTS.TRAINING.LIST);
-    return response;
+    return apiClient.get<{ trainings: TrainingEvent[] }>(ENDPOINTS.TRAINING.LIST);
   },
 
   async getTraining(id: string): Promise<{ training: TrainingEvent }> {
-    const response = await apiClient.get(ENDPOINTS.TRAINING.GET(id));
-    return response;
+    return apiClient.get<{ training: TrainingEvent }>(ENDPOINTS.TRAINING.GET(id));
   },
 
   async createTraining(data: CreateTrainingData): Promise<{ training: TrainingEvent }> {
-    const response = await apiClient.post(ENDPOINTS.TRAINING.CREATE, data);
-    return response;
+    return apiClient.post<{ training: TrainingEvent }>(ENDPOINTS.TRAINING.CREATE, data);
   },
 
   async updateTraining(id: string, data: UpdateTrainingData): Promise<{ training: TrainingEvent }> {
-    const response = await apiClient.put(ENDPOINTS.TRAINING.UPDATE(id), data);
-    return response;
+    return apiClient.put<{ training: TrainingEvent }>(ENDPOINTS.TRAINING.UPDATE(id), data);
   },
 
   async deleteTraining(id: string): Promise<void> {
@@ -28,8 +24,7 @@ export const trainingService = {
   },
 
   async signUp(trainingId: string, notes?: string): Promise<{ signup: TrainingSignup }> {
-    const response = await apiClient.post(ENDPOINTS.TRAINING.SIGNUP(trainingId), { notes });
-    return response;
+    return apiClient.post<{ signup: TrainingSignup }>(ENDPOINTS.TRAINING.SIGNUP(trainingId), { notes });
   },
 
   async cancelSignup(trainingId: string): Promise<void> {
@@ -37,7 +32,6 @@ export const trainingService = {
   },
 
   async listSignups(trainingId: string): Promise<{ signups: TrainingSignup[] }> {
-    const response = await apiClient.get(ENDPOINTS.TRAINING.LIST_SIGNUPS(trainingId));
-    return response;
+    return apiClient.get<{ signups: TrainingSignup[] }>(ENDPOINTS.TRAINING.LIST_SIGNUPS(trainingId));
   },
 };

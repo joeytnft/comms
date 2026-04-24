@@ -33,7 +33,7 @@ interface PcoState {
   clearError: () => void;
 }
 
-export const usePcoStore = create<PcoState>((set, get) => ({
+export const usePcoStore = create<PcoState>((set, _get) => ({
   status: null,
   people: [],
   teams: [],

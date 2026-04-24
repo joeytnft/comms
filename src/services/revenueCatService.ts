@@ -1,6 +1,5 @@
 import { Platform, NativeModules } from 'react-native';
 // Type-only imports are erased at runtime — safe even when the native module is absent.
-import type Purchases from 'react-native-purchases';
 import type {
   CustomerInfo,
   PurchasesOfferings,
