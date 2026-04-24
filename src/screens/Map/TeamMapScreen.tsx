@@ -14,7 +14,7 @@ import { TeamMapView } from '@/components/map/TeamMapView';
 import { geofenceService } from '@/services/geofenceService';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 
-const MemberCard = memo(({ item }: { item: TeamMemberLocation }) => {
+const MemberCard = memo(function MemberCard({ item }: { item: TeamMemberLocation }) {
   const isOnline = Date.now() - new Date(item.updatedAt).getTime() < 300_000;
   const seconds = Math.floor((Date.now() - new Date(item.updatedAt).getTime()) / 1000);
   let timeSince = 'Unknown';

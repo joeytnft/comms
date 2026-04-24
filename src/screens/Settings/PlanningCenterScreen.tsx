@@ -264,7 +264,7 @@ export function PlanningCenterScreen() {
               </View>
             )}
             {activeTab === 'people' && !isSyncing && people.length === 0 && (
-              <Text style={styles.emptyHint}>Tap "Import People" to pull your PCO roster and create app accounts</Text>
+              <Text style={styles.emptyHint}>{'Tap "Import People" to pull your PCO roster and create app accounts'}</Text>
             )}
 
             {/* ── Teams Tab ── */}
@@ -294,7 +294,7 @@ export function PlanningCenterScreen() {
               </View>
             )}
             {activeTab === 'teams' && !isSyncing && teams.length === 0 && (
-              <Text style={styles.emptyHint}>Tap "Sync Teams" to pull your PCO service teams</Text>
+              <Text style={styles.emptyHint}>{'Tap "Sync Teams" to pull your PCO service teams'}</Text>
             )}
 
             {/* ── Services Tab ── */}
@@ -359,14 +359,14 @@ export function PlanningCenterScreen() {
               </View>
             )}
             {activeTab === 'services' && !isSyncing && plans.length === 0 && (
-              <Text style={styles.emptyHint}>Tap "Sync Services" to pull upcoming service plans</Text>
+              <Text style={styles.emptyHint}>{'Tap "Sync Services" to pull upcoming service plans'}</Text>
             )}
           </>
         ) : (
           <View style={styles.connectCard}>
             <Text style={styles.connectTitle}>Connect to Planning Center</Text>
             <Text style={styles.connectBody}>
-              Sync your congregation roster and service schedules. Imported people automatically get app access — they'll receive an email to set their password.
+              {"Sync your congregation roster and service schedules. Imported people automatically get app access — they'll receive an email to set their password."}
             </Text>
             <View style={styles.featureList}>
               {[
@@ -397,7 +397,7 @@ export function PlanningCenterScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
             <Text style={styles.modalTitle}>
-              Link "{linkModalTeam?.name}" to a Group
+              {`Link "${linkModalTeam?.name}" to a Group`}
             </Text>
             <Text style={styles.modalSub}>
               Members of this PCO team will be automatically added to the selected GatherSafe group on each sync.

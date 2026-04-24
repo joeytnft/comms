@@ -1,9 +1,9 @@
 import { Vibration, Platform } from 'react-native';
 import { Audio } from 'expo-av';
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const START_SOUND = require('@/assets/sounds/ptt_start.wav');
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const STOP_SOUND = require('@/assets/sounds/ptt_stop.wav');
 
 let startSound: Audio.Sound | null = null;

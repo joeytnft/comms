@@ -47,10 +47,12 @@ let RoomEvent: typeof import('livekit-client').RoomEvent | null = null;
 let createLocalAudioTrack: typeof import('livekit-client').createLocalAudioTrack | null = null;
 let AudioSession: typeof import('@livekit/react-native').AudioSession | null = null;
 if (Platform.OS !== 'web') {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const lk = require('livekit-client');
   Room = lk.Room;
   RoomEvent = lk.RoomEvent;
   createLocalAudioTrack = lk.createLocalAudioTrack;
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const rnLk = require('@livekit/react-native');
   AudioSession = rnLk.AudioSession;
 }

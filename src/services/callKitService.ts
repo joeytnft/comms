@@ -20,6 +20,7 @@ import { Platform } from 'react-native';
 let RNCallKeep: typeof import('react-native-callkeep').default | null = null;
 if (Platform.OS !== 'web') {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     RNCallKeep = require('react-native-callkeep').default;
   } catch {
     // Native module not linked yet (Expo Go) — PTT will still work in foreground

@@ -420,7 +420,7 @@ export function ServiceDetailScreen({ navigation, route }: Props) {
         {currentService.assignments.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyText}>No one assigned yet</Text>
-            {isAdmin && <Text style={styles.emptyHint}>Tap "+ Assign" to add volunteers</Text>}
+            {isAdmin && <Text style={styles.emptyHint}>{'Tap "+ Assign" to add volunteers'}</Text>}
           </View>
         )}
       </ScrollView>

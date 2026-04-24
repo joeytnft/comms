@@ -138,7 +138,7 @@ export function RegisterScreen({ navigation }: { navigation: any }) {
                 placeholderTextColor={COLORS.gray500}
               />
               <Text style={styles.helperText}>
-                You'll be the admin and can invite team members later.
+                {"You'll be the admin and can invite team members later."}
               </Text>
             </View>
           )}
