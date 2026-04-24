@@ -233,16 +233,24 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         const { currentGroupId } = usePTTStore.getState();
         // Unmute first so the LiveKit track is live before server starts egress
         if (micTrackRef.current) { micTrackRef.current.unmute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null); }
-        // Emit ptt:start if startTransmitting hasn't already done it. iOS only
-        // fires didActivateAudioSession reliably from background/island — in the
-        // foreground the session is often already active and this callback is
-        // skipped, which is why egress stopped starting when pressing the main
-        // channel button. startTransmitting now emits ptt:start too; this guard
-        // prevents a double-emit.
+        // Emit ptt:start now that the audio session is confirmed live. This is the
+        // most reliable emit point on iOS — the socket is stable here because the
+        // audio session handoff (which can briefly pause the network stack) has
+        // already completed. The guard prevents a double-emit when startTransmitting
+        // already emitted it in the foreground path.
+        const emitStart = () => {
+          const s = socketRef.current;
+          if (s && currentGroupId && !pttStartEmittedRef.current) {
+            pttStartEmittedRef.current = true;
+            s.emit('ptt:start', { groupId: currentGroupId });
+          }
+        };
         const s = socketRef.current;
-        if (s && currentGroupId && !pttStartEmittedRef.current) {
-          pttStartEmittedRef.current = true;
-          s.emit('ptt:start', { groupId: currentGroupId });
+        if (s?.connected) {
+          emitStart();
+        } else if (s) {
+          // Socket is in the middle of reconnecting — wait for it then flush
+          s.once('connect', emitStart);
         }
       }
       // For incoming audio, LiveKit auto-plays subscribed tracks — nothing to do here
