@@ -47,10 +47,12 @@ let RoomEvent: typeof import('livekit-client').RoomEvent | null = null;
 let createLocalAudioTrack: typeof import('livekit-client').createLocalAudioTrack | null = null;
 let AudioSession: typeof import('@livekit/react-native').AudioSession | null = null;
 if (Platform.OS !== 'web') {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const lk = require('livekit-client');
   Room = lk.Room;
   RoomEvent = lk.RoomEvent;
   createLocalAudioTrack = lk.createLocalAudioTrack;
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const rnLk = require('@livekit/react-native');
   AudioSession = rnLk.AudioSession;
 }
@@ -66,7 +68,7 @@ interface PTTContextType {
   currentGroupId: string | null;
   currentGroupName: string | null;
   activeSpeaker: { userId: string; displayName: string } | null;
-  connectedMemberIds: number;
+  connectedMemberCount: number;
   startTransmitting: () => void;
   stopTransmitting: () => void;
   joinChannel: (groupId: string) => Promise<void>;
@@ -166,6 +168,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       return () => { socket.off('connect', flush); };
     }
     flush();
+    return undefined;
   }, [socket]);
 
   // ─── React to showLiveActivity toggle changes mid-session ──────────────────
@@ -784,7 +787,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       channelName: currentGroupName ?? '',
       speakerName: null,
       isTransmitting: true,
-      memberCount: connectedMemberIds,
+      memberCount: connectedMemberIds.length,
       alertLevel: null,
     });
   }, [socket]);
@@ -830,7 +833,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       channelName: currentGroupName ?? '',
       speakerName: null,
       isTransmitting: false,
-      memberCount: connectedMemberIds,
+      memberCount: connectedMemberIds.length,
       alertLevel: null,
     });
   }, [socket]);
@@ -857,7 +860,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         currentGroupId: store.currentGroupId,
         currentGroupName: store.currentGroupName,
         activeSpeaker: store.activeSpeaker,
-        connectedMemberIds: store.connectedMemberIds.length,
+        connectedMemberCount: store.connectedMemberIds.length,
         startTransmitting,
         stopTransmitting,
         joinChannel,

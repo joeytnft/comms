@@ -135,7 +135,7 @@ export function SubscriptionScreen() {
         </View>
 
         <Text style={styles.billingNote}>
-          Only the account creator is billed. Invited members use the organization's subscription.
+          {"Only the account creator is billed. Invited members use the organization's subscription."}
         </Text>
 
         {/* Upgrade / manage CTA — only org owners and admins can purchase */}
@@ -159,7 +159,7 @@ export function SubscriptionScreen() {
         ) : isPro ? (
           <View style={styles.memberNotice}>
             <Text style={styles.memberNoticeText}>
-              Your organization's subscription covers your access.
+              {"Your organization's subscription covers your access."}
             </Text>
           </View>
         ) : null}

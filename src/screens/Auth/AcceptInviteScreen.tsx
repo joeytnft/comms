@@ -64,7 +64,7 @@ export function AcceptInviteScreen({ navigation, route }: { navigation: any; rou
         <View style={styles.header}>
           <Text style={styles.title}>Set Your Password</Text>
           <Text style={styles.subtitle}>
-            You've been invited to GatherSafe. Set a password to activate your account and get started.
+            {"You've been invited to GatherSafe. Set a password to activate your account and get started."}
           </Text>
         </View>
 

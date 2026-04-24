@@ -400,7 +400,7 @@ export function ScheduleScreen() {
           {pcoPlans.length === 0 && !pcoSyncing && (
             <View style={styles.emptyState}>
               <Text style={styles.emptyTitle}>No plans synced yet</Text>
-              <Text style={styles.emptySubtitle}>Tap "Sync PCO" to pull your upcoming services from Planning Center</Text>
+              <Text style={styles.emptySubtitle}>{'Tap "Sync PCO" to pull your upcoming services from Planning Center'}</Text>
             </View>
           )}
         </ScrollView>
@@ -485,7 +485,7 @@ export function ScheduleScreen() {
             {templates.length === 0
               ? <View style={styles.emptyCard}>
                   <Text style={styles.emptyText}>No recurring templates</Text>
-                  {isAdmin && <Text style={styles.emptyHint}>Tap "+ Recurring" to set up a weekly schedule</Text>}
+                  {isAdmin && <Text style={styles.emptyHint}>{'Tap "+ Recurring" to set up a weekly schedule'}</Text>}
                 </View>
               : templates.map(renderTemplateCard)
             }
