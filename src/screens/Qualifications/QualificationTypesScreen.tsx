@@ -8,7 +8,6 @@ import {
   Modal,
   TextInput,
   Alert,
-  Switch,
   RefreshControl,
   ActivityIndicator,
   KeyboardAvoidingView,

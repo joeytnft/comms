@@ -15,14 +15,13 @@ import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navig
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTrainingStore } from '@/store/useTrainingStore';
 import { useAuthStore } from '@/store/useAuthStore';
-import { TrainingSignup } from '@/types';
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
+import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '@/config/theme';
 import { TrainingStackParamList } from '@/navigation/TrainingStackNavigator';
 
 type Nav = NativeStackNavigationProp<TrainingStackParamList>;
 type RouteT = RouteProp<TrainingStackParamList, 'TrainingDetail'>;
 
-function Avatar({ name, url }: { name: string; url: string | null }) {
+function Avatar({ name, url: _url }: { name: string; url: string | null }) {
   return (
     <View style={styles.avatar}>
       <Text style={styles.avatarText}>{name.charAt(0).toUpperCase()}</Text>

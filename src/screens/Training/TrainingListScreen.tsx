@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   RefreshControl,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -27,11 +26,6 @@ function TrainingCard({
   onPress: () => void;
 }) {
   const start = new Date(training.startDate);
-  const dateStr = start.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
   const timeStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
   const signupStatus = training.mySignup?.status;

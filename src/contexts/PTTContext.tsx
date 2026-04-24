@@ -66,7 +66,7 @@ interface PTTContextType {
   currentGroupId: string | null;
   currentGroupName: string | null;
   activeSpeaker: { userId: string; displayName: string } | null;
-  connectedMemberCount: number;
+  connectedMemberIds: number;
   startTransmitting: () => void;
   stopTransmitting: () => void;
   joinChannel: (groupId: string) => Promise<void>;
@@ -161,12 +161,11 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       pendingLeaveGroupIdRef.current = null;
       socket.emit('ptt:leave', { groupId: pending });
     };
-    if (socket.connected) {
-      flush();
-    } else {
+    if (!socket.connected) {
       socket.once('connect', flush);
       return () => { socket.off('connect', flush); };
     }
+    flush();
   }, [socket]);
 
   // ─── React to showLiveActivity toggle changes mid-session ──────────────────
@@ -344,12 +343,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         Vibration.vibrate(100);
       }
       // Update Live Activity to show who is speaking
-      const { currentGroupName, connectedMemberCount } = usePTTStore.getState();
+      const { currentGroupName, connectedMemberIds } = usePTTStore.getState();
       liveActivityService.update(liveActivityIdRef.current, {
         channelName: currentGroupName ?? '',
         speakerName: data.displayName,
         isTransmitting: false,
-        memberCount: connectedMemberCount,
+        memberCount: connectedMemberIds.length,
         alertLevel: null,
       });
     };
@@ -361,12 +360,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         nativePTTService.clearActiveRemoteParticipant(nativePTTChannelIdRef.current).catch(() => null);
       }
       // Clear Live Activity speaker
-      const { currentGroupName, connectedMemberCount } = usePTTStore.getState();
+      const { currentGroupName, connectedMemberIds } = usePTTStore.getState();
       liveActivityService.update(liveActivityIdRef.current, {
         channelName: currentGroupName ?? '',
         speakerName: null,
         isTransmitting: false,
-        memberCount: connectedMemberCount,
+        memberCount: connectedMemberIds.length,
         alertLevel: null,
       });
     };
@@ -631,7 +630,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
             noiseSuppression: true,
             autoGainControl: true,
           });
-          await room.localParticipant.publishTrack(micTrack, { dtx: true, audioBitrate: 16_000 });
+          await room.localParticipant.publishTrack(micTrack, { dtx: true });
           micTrack.mute();
           micTrackRef.current = micTrack;
         } catch (trackErr) {
@@ -780,12 +779,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       pttRecorderService.start().catch(() => null);
     }
     // Update Live Activity to show "You are speaking"
-    const { currentGroupName, connectedMemberCount } = usePTTStore.getState();
+    const { currentGroupName, connectedMemberIds } = usePTTStore.getState();
     liveActivityService.update(liveActivityIdRef.current, {
       channelName: currentGroupName ?? '',
       speakerName: null,
       isTransmitting: true,
-      memberCount: connectedMemberCount,
+      memberCount: connectedMemberIds,
       alertLevel: null,
     });
   }, [socket]);
@@ -826,12 +825,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       });
     }
     // Update Live Activity — done transmitting
-    const { currentGroupName, connectedMemberCount } = usePTTStore.getState();
+    const { currentGroupName, connectedMemberIds } = usePTTStore.getState();
     liveActivityService.update(liveActivityIdRef.current, {
       channelName: currentGroupName ?? '',
       speakerName: null,
       isTransmitting: false,
-      memberCount: connectedMemberCount,
+      memberCount: connectedMemberIds,
       alertLevel: null,
     });
   }, [socket]);
@@ -858,7 +857,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         currentGroupId: store.currentGroupId,
         currentGroupName: store.currentGroupName,
         activeSpeaker: store.activeSpeaker,
-        connectedMemberCount: store.connectedMemberIds.length,
+        connectedMemberIds: store.connectedMemberIds.length,
         startTransmitting,
         stopTransmitting,
         joinChannel,

@@ -59,7 +59,7 @@ export const notificationService = {
           contentType: Notifications.AndroidAudioContentType.SONIFICATION,
           flags: {
             enforceAudibility: true,
-            requestHardwareAv: false,
+            requestHardwareAudioVideoSynchronization: false,
           },
         },
       });

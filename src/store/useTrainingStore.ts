@@ -21,7 +21,7 @@ interface TrainingState {
   clearError: () => void;
 }
 
-export const useTrainingStore = create<TrainingState>((set, get) => ({
+export const useTrainingStore = create<TrainingState>((set, _get) => ({
   trainings: [],
   currentTraining: null,
   signups: [],
