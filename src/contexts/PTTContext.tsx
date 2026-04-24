@@ -18,6 +18,22 @@ import { mmkvStorage } from '@/utils/mmkv';
 import { ACCESS_TOKEN_KEY } from '@/config/constants';
 import { ENV as AppEnv } from '@/config/env';
 
+// HTTP helper for ptt:start / ptt:stop / ptt:native_log.
+// Uses a fresh TCP connection each call so iOS audio session activation (which
+// silently breaks the long-lived WebSocket) does not cause events to be lost.
+async function pttPost(groupId: string, endpoint: string, body?: Record<string, unknown>): Promise<void> {
+  const accessToken = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
+  const res = await fetch(`${AppEnv.apiUrl}/ptt/${groupId}/${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+  if (!res.ok) console.warn(`[PTT] HTTP ${endpoint} returned ${res.status}`);
+}
+
 const LIVE_ACTIVITY_ID_KEY = 'ptt_live_activity_id';
 // Persisted so we can clean up after a cold launch from the Dynamic Island —
 // without these we have no way to tell the server the user left, so the room
@@ -209,13 +225,11 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         memberCount: st.connectedMemberIds.length,
         alertLevel: null,
       });
-      const s = socketRef.current;
-      if (s && currentGroupId) {
-        s.emit('ptt:stop', { groupId: currentGroupId });
-        // On iOS native PTT we rely on LiveKit server-side egress for audio
-        // (expo-av contends with LiveKit for the mic and uploads empty files).
-        // Just send the metadata; server attaches the egress URL when it completes.
-        s.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
+      if (currentGroupId) {
+        pttPost(currentGroupId, 'stop').catch(() => null);
+        // On iOS native PTT we rely on LiveKit server-side egress for audio.
+        // Just send metadata; server attaches the egress URL via egress_ended webhook.
+        pttPost(currentGroupId, 'native-log', { durationMs }).catch(() => null);
       }
     });
 
@@ -233,24 +247,15 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         const { currentGroupId } = usePTTStore.getState();
         // Unmute first so the LiveKit track is live before server starts egress
         if (micTrackRef.current) { micTrackRef.current.unmute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null); }
-        // Emit ptt:start now that the audio session is confirmed live. This is the
-        // most reliable emit point on iOS — the socket is stable here because the
-        // audio session handoff (which can briefly pause the network stack) has
-        // already completed. The guard prevents a double-emit when startTransmitting
-        // already emitted it in the foreground path.
-        const emitStart = () => {
-          const s = socketRef.current;
-          if (s && currentGroupId && !pttStartEmittedRef.current) {
-            pttStartEmittedRef.current = true;
-            s.emit('ptt:start', { groupId: currentGroupId });
-          }
-        };
-        const s = socketRef.current;
-        if (s?.connected) {
-          emitStart();
-        } else if (s) {
-          // Socket is in the middle of reconnecting — wait for it then flush
-          s.once('connect', emitStart);
+        // HTTP ptt:start after audio session is confirmed live.
+        // Using HTTP instead of socket because the iOS audio session handoff
+        // reliably breaks the WebSocket at this moment — HTTP uses a fresh TCP
+        // connection so it reaches the server regardless of socket state.
+        // Guard prevents double-emit when startTransmitting already fired it
+        // (foreground case where audio session was already active).
+        if (currentGroupId && !pttStartEmittedRef.current) {
+          pttStartEmittedRef.current = true;
+          pttPost(currentGroupId, 'start').catch(() => null);
         }
       }
       // For incoming audio, LiveKit auto-plays subscribed tracks — nothing to do here
@@ -755,12 +760,10 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         // already active so the framework skips the callback) — this was why
         // main-channel presses produced no egress even though the island did.
         // onAudioActivated still emits as a fallback, guarded by pttStartEmittedRef.
-        if (s && !pttStartEmittedRef.current) {
+        if (!pttStartEmittedRef.current) {
           pttStartEmittedRef.current = true;
-          console.info('[PTT] emit ppt:start (native path)', { currentGroupId, socketConnected: s.connected });
-          s.emit('ptt:start', { groupId: currentGroupId });
-        } else {
-          console.warn('[PTT] ppt:start NOT emitted (native path)', { hasSocket: !!s, alreadyEmitted: pttStartEmittedRef.current });
+          console.info('[PTT] HTTP ptt:start (native foreground path)', { currentGroupId });
+          pttPost(currentGroupId, 'start').catch(() => null);
         }
         nativePTTService.beginTransmitting(nativePTTChannelIdRef.current).catch((err) => {
           console.warn('[PTT] native beginTransmitting failed:', err);
@@ -770,12 +773,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       }
     } else {
       // iOS (PTT framework unavailable or init failed) or Android
-      if (s) {
-        console.info('[PTT] emit ppt:start (fallback path)', { currentGroupId, socketConnected: s.connected });
-        s.emit('ptt:start', { groupId: currentGroupId });
-      } else {
-        console.warn('[PTT] ppt:start NOT emitted (fallback path) — no socket');
-      }
+      console.info('[PTT] HTTP ptt:start (fallback path)', { currentGroupId });
+      pttPost(currentGroupId, 'start').catch(() => null);
       if (micTrackRef.current) { micTrackRef.current.unmute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null); }
       if (Platform.OS === 'android' && callUUIDRef.current) callKitService.setMuted(callUUIDRef.current, false);
       pttRecorderService.start().catch(() => null);
@@ -810,23 +809,20 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       mediaRecorderRef.current = null;
     } else if (nativePTTActiveRef.current) {
       if (nativePTTChannelIdRef.current) {
-        if (s) s.emit('ptt:stop', { groupId: currentGroupId });
+        pttPost(currentGroupId, 'stop').catch(() => null);
         if (micTrackRef.current) { micTrackRef.current.mute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null); }
         nativePTTService.stopTransmitting(nativePTTChannelIdRef.current).catch(() => null);
-        // Server-side LiveKit egress handles the audio on iOS native PTT —
-        // expo-av recording is skipped because it returned empty files due to
-        // mic contention with LiveKit. Just send metadata.
-        if (s) s.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
+        pttPost(currentGroupId, 'native-log', { durationMs }).catch(() => null);
       }
     } else {
       // iOS (PTT framework unavailable or init failed) or Android
-      if (s) s.emit('ptt:stop', { groupId: currentGroupId });
+      pttPost(currentGroupId, 'stop').catch(() => null);
       if (micTrackRef.current) { micTrackRef.current.mute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null); }
       if (Platform.OS === 'android' && callUUIDRef.current) callKitService.setMuted(callUUIDRef.current, true);
       pttRecorderService.stopAndUpload(currentGroupId).then((audioUrl) => {
-        if (s) s.emit('ptt:native_log', { groupId: currentGroupId, durationMs, ...(audioUrl ? { audioUrl } : {}) });
+        pttPost(currentGroupId, 'native-log', { durationMs, ...(audioUrl ? { audioUrl } : {}) }).catch(() => null);
       }).catch(() => {
-        if (s) s.emit('ptt:native_log', { groupId: currentGroupId, durationMs });
+        pttPost(currentGroupId, 'native-log', { durationMs }).catch(() => null);
       });
     }
     // Update Live Activity — done transmitting
