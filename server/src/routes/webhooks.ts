@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { WebhookReceiver } from 'livekit-server-sdk';
+import { WebhookReceiver, TrackType } from 'livekit-server-sdk';
 import { createClient } from '@supabase/supabase-js';
 import { prisma } from '../config/database';
 import { redis } from '../config/redis';
@@ -15,9 +15,10 @@ function getSupabase() {
 }
 
 export async function webhookRoutes(app: FastifyInstance) {
-  // Keep body as raw string — WebhookReceiver needs it for SHA-256 verification.
+  // LiveKit sends Content-Type: application/webhook+json (not application/json).
+  // Must be parsed as raw string — WebhookReceiver needs it for SHA-256 verification.
   // This parser is scoped to this plugin only and does not affect other routes.
-  app.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body, done) => {
+  app.addContentTypeParser('application/webhook+json', { parseAs: 'string' }, (_req, body, done) => {
     done(null, body);
   });
 
@@ -48,8 +49,7 @@ export async function webhookRoutes(app: FastifyInstance) {
       if (roomName.startsWith('ptt:')) {
         const groupId = roomName.replace('ptt:', '');
         const userId  = event.participant.identity ?? '';
-        const trackKind = event.track.kind; // 0 = audio, 1 = video
-        if (userId && trackKind === 0) {
+        if (userId && event.track.type === TrackType.AUDIO) {
           logger.info(`[Webhook] track_published audio for ${userId} in ${roomName} — starting egress`);
           startTransmissionEgress(groupId, userId).catch(
             (err) => logger.warn({ err }, '[Webhook] track_published egress start failed'),
