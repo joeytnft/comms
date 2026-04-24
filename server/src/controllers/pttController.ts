@@ -233,7 +233,7 @@ export async function transmitStart(
   try {
     const socketsInRoom = await (io?.in(room).fetchSockets() ?? Promise.resolve([]));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const onlineIds = new Set(socketsInRoom.map((s) => (s as any).user?.userId as string | undefined).filter(Boolean));
+    const onlineIds = new Set(socketsInRoom.map((s) => (s as any).user?.userId as string | undefined).filter((id): id is string => typeof id === 'string'));
     const pushTokens = await prisma.pttPushToken.findMany({
       where: { groupId, NOT: { userId: { in: [...onlineIds] } } },
       select: { token: true },
