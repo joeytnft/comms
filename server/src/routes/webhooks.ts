@@ -6,6 +6,7 @@ import { redis } from '../config/redis';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
 import { getIO } from '../config/socketIO';
+import { startTransmissionEgress } from '../services/ptt/livekitService';
 
 let _supabase: ReturnType<typeof createClient> | null = null;
 function getSupabase() {
@@ -39,6 +40,24 @@ export async function webhookRoutes(app: FastifyInstance) {
 
     logger.debug({ event: event.event }, '[Webhook] LiveKit event received');
 
+    // Trigger #3 — start egress when LiveKit confirms a track has been published
+    // in a PTT room. Completely independent of the socket layer; handles the race
+    // where ptt:start fires before the track SID is visible via listParticipants.
+    if (event.event === 'track_published' && event.participant && event.track && event.room) {
+      const roomName = event.room.name ?? '';
+      if (roomName.startsWith('ptt:')) {
+        const groupId = roomName.replace('ptt:', '');
+        const userId  = event.participant.identity ?? '';
+        const trackKind = event.track.kind; // 0 = audio, 1 = video
+        if (userId && trackKind === 0) {
+          logger.info(`[Webhook] track_published audio for ${userId} in ${roomName} — starting egress`);
+          startTransmissionEgress(groupId, userId).catch(
+            (err) => logger.warn({ err }, '[Webhook] track_published egress start failed'),
+          );
+        }
+      }
+    }
+
     if (event.event === 'egress_ended' && event.egressInfo) {
       const { egressId, fileResults } = event.egressInfo;
       const fileLocation = fileResults?.[0]?.location;
@@ -67,7 +86,7 @@ export async function webhookRoutes(app: FastifyInstance) {
       // Construct Supabase public URL from the S3 key
       const { data: { publicUrl } } = getSupabase()
         .storage
-        .from(env.SUPABASE_STORAGE_BUCKET)
+        .from(env.SUPABASE_PTT_BUCKET)
         .getPublicUrl(fileLocation);
 
       // Find the most recent pttLog for this user+group that still has no audio URL

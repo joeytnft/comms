@@ -153,6 +153,13 @@ export function setupPTTSocket(io: Server, socket: Socket) {
     });
 
     logger.info(`[PTT] ${userId} joined PTT room ${room}`);
+
+    // Trigger #1 — start session-scoped egress at join time.
+    // This covers the case where ptt:start fires before the mic track is published;
+    // the retry loop in startTransmissionEgress handles the race.
+    startTransmissionEgress(groupId, userId).catch(
+      (err) => logger.warn({ err }, '[PTT] Join-triggered egress start failed'),
+    );
   });
 
   socket.on('ptt:leave', (data: { groupId: string }) => {
@@ -160,6 +167,9 @@ export function setupPTTSocket(io: Server, socket: Socket) {
     const room = `ptt:${data.groupId}`;
     socket.leave(room);
     socket.to(room).emit('ptt:member_left', { userId, groupId: data.groupId });
+    stopTransmissionEgress(userId, data.groupId).catch(
+      (err) => logger.warn({ err }, '[PTT] Leave-triggered egress stop failed'),
+    );
     logger.info(`[PTT] ${userId} left PTT room ${room}`);
   });
 
@@ -359,6 +369,9 @@ export function setupPTTSocket(io: Server, socket: Socket) {
       if (room.startsWith('ptt:')) {
         const groupId = room.replace('ptt:', '');
         socket.to(room).emit('ptt:member_left', { userId, groupId });
+        stopTransmissionEgress(userId, groupId).catch(
+          (err) => logger.warn({ err }, '[PTT] Disconnect-triggered egress stop failed'),
+        );
       }
     }
   });
