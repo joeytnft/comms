@@ -9,6 +9,7 @@ export async function generateLiveKitToken(
   userId: string,
   displayName: string,
   groupId: string,
+  canPublish = true,
 ): Promise<string> {
   const roomName = `ptt:${groupId}`;
 
@@ -21,9 +22,9 @@ export async function generateLiveKitToken(
   token.addGrant({
     room: roomName,
     roomJoin: true,
-    canPublish: true,
+    canPublish,
     canSubscribe: true,
-    canPublishData: true,
+    canPublishData: canPublish,
   });
 
   return token.toJwt();

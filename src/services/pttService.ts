@@ -1,11 +1,20 @@
 import { apiClient } from '@/api/client';
 import { ENDPOINTS } from '@/api/endpoints';
 
+export interface PTTSubGroupRoom {
+  groupId: string;
+  groupName: string;
+  token: string;
+  roomName: string;
+}
+
 export interface PTTTokenResponse {
   token: string;
   roomName: string;
   livekitUrl: string;
   groupName: string;
+  /** Present only when the joined group is a LEAD group. Listen-only tokens for every sub-group. */
+  subGroupRooms?: PTTSubGroupRoom[];
 }
 
 export interface PTTParticipant {

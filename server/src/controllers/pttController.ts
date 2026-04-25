@@ -40,7 +40,7 @@ export async function getToken(
     },
     include: {
       user: { select: { displayName: true } },
-      group: { select: { name: true, organizationId: true } },
+      group: { select: { name: true, organizationId: true, type: true } },
     },
   });
 
@@ -55,11 +55,32 @@ export async function getToken(
 
   const token = await generateLiveKitToken(userId, membership.user.displayName, groupId);
 
+  // Lead group members receive listen-only tokens for every sub-group so they
+  // can hear sub-group transmissions without being able to publish into those rooms.
+  let subGroupRooms: Array<{ groupId: string; groupName: string; token: string; roomName: string }> | undefined;
+  if (membership.group.type === 'LEAD') {
+    const subGroups = await prisma.group.findMany({
+      where: { parentGroupId: groupId },
+      select: { id: true, name: true },
+    });
+    if (subGroups.length > 0) {
+      subGroupRooms = await Promise.all(
+        subGroups.map(async (sg) => ({
+          groupId: sg.id,
+          groupName: sg.name,
+          token: await generateLiveKitToken(userId, membership.user.displayName, sg.id, false),
+          roomName: getRoomName(sg.id),
+        })),
+      );
+    }
+  }
+
   reply.send({
     token,
     roomName: getRoomName(groupId),
     livekitUrl: env.LIVEKIT_URL,
     groupName: membership.group.name,
+    ...(subGroupRooms ? { subGroupRooms } : {}),
   });
 }
 
