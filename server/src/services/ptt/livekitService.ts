@@ -3,6 +3,7 @@ import {
   RoomServiceClient,
   EncodedFileOutput,
   EncodedFileType,
+  EgressStatus,
   S3Upload,
   TrackType,
 } from 'livekit-server-sdk';
@@ -81,11 +82,33 @@ export async function startTransmissionEgress(groupId: string, userId: string): 
   const output = buildOutput(groupId, userId);
   if (!output) return;
 
-  // Idempotency guard — one egress per user per group at a time
-  const existing = await redis.get(`ptt:egress:${userId}:${groupId}`);
+  // Idempotency guard — one egress per user per group at a time.
+  // We verify the stored egress is still alive before skipping: a quick start/stop
+  // race (or a crash) can leave a stale key for up to 1 hour, silently blocking all
+  // future recordings.
+  const egressKey = `ptt:egress:${userId}:${groupId}`;
+  const existing  = await redis.get(egressKey);
   if (existing) {
-    logger.debug(`[LiveKit] Egress already active for ${userId}/${groupId} — skipping`);
-    return;
+    try {
+      const list = await clients.egress.listEgress({ egressId: existing });
+      const info = list[0];
+      const TERMINAL = new Set([
+        EgressStatus.EGRESS_COMPLETE,
+        EgressStatus.EGRESS_FAILED,
+        EgressStatus.EGRESS_ABORTED,
+        EgressStatus.EGRESS_LIMIT_REACHED,
+      ]);
+      const isStale = !info || TERMINAL.has(info.status);
+      if (!isStale) {
+        logger.debug(`[LiveKit] Egress already active for ${userId}/${groupId} (${existing}) — skipping`);
+        return;
+      }
+      logger.info(`[LiveKit] Stale egress key for ${userId}/${groupId} (status: ${info?.status ?? 'not found'}) — clearing and restarting`);
+      await redis.del(egressKey);
+    } catch (verifyErr) {
+      logger.warn({ err: verifyErr }, '[LiveKit] Could not verify existing egress — clearing stale key and restarting');
+      await redis.del(egressKey);
+    }
   }
 
   try {
