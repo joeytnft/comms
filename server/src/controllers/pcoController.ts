@@ -21,12 +21,16 @@ import { ValidationError, NotFoundError } from '../utils/errors';
 const PCO_SCOPES = 'people services';
 const VERIFIER_TTL = 600; // 10 min
 const APP_DEEP_LINK = 'gathersafe://integrations/pco';
+const WEB_ADMIN_BASE = 'https://gathersafeapp.com/admin/planning-center';
 const INVITE_EXPIRY_DAYS = 7;
 const SALT_ROUNDS = 12;
 
 // ─── Initiate OAuth ────────────────────────────────────────────────────────────
 
-export async function initiateConnect(request: FastifyRequest, reply: FastifyReply) {
+export async function initiateConnect(
+  request: FastifyRequest<{ Querystring: { source?: string } }>,
+  reply: FastifyReply,
+) {
   if (!env.PCO_CLIENT_ID) {
     throw new ValidationError('Planning Center integration is not configured on this server');
   }
@@ -36,6 +40,8 @@ export async function initiateConnect(request: FastifyRequest, reply: FastifyRep
 
   await redis.setex(`pco:verifier:${request.userId}`, VERIFIER_TTL, verifier);
 
+  const source = request.query.source === 'web' ? 'web' : 'mobile';
+
   const params = new URLSearchParams({
     client_id: env.PCO_CLIENT_ID,
     redirect_uri: env.PCO_REDIRECT_URI ?? '',
@@ -43,7 +49,7 @@ export async function initiateConnect(request: FastifyRequest, reply: FastifyRep
     scope: PCO_SCOPES,
     code_challenge: challenge,
     code_challenge_method: 'S256',
-    state: Buffer.from(JSON.stringify({ userId: request.userId, orgId: request.organizationId })).toString('base64url'),
+    state: Buffer.from(JSON.stringify({ userId: request.userId, orgId: request.organizationId, source })).toString('base64url'),
   });
 
   const authorizeUrl = `https://api.planningcenteronline.com/oauth/authorize?${params}`;
@@ -64,17 +70,26 @@ export async function handleCallback(
 
   let userId: string;
   let orgId: string;
+  let source: string = 'mobile';
   try {
     const decoded = JSON.parse(Buffer.from(state, 'base64url').toString());
     userId = decoded.userId;
     orgId = decoded.orgId;
+    source = decoded.source ?? 'mobile';
   } catch {
     return reply.redirect(`${APP_DEEP_LINK}/error?reason=invalid_state`);
   }
 
+  const successRedirect = source === 'web'
+    ? `${WEB_ADMIN_BASE}?connected=true`
+    : `${APP_DEEP_LINK}/success`;
+  const errorRedirect = (reason: string) => source === 'web'
+    ? `${WEB_ADMIN_BASE}?error=${encodeURIComponent(reason)}`
+    : `${APP_DEEP_LINK}/error?reason=${encodeURIComponent(reason)}`;
+
   const verifier = await redis.get(`pco:verifier:${userId}`);
   if (!verifier) {
-    return reply.redirect(`${APP_DEEP_LINK}/error?reason=verifier_expired`);
+    return reply.redirect(errorRedirect('verifier_expired'));
   }
   await redis.del(`pco:verifier:${userId}`);
 
@@ -111,10 +126,12 @@ export async function handleCallback(
       data: { pcoIntegrationEnabled: true },
     });
 
-    reply.redirect(`${APP_DEEP_LINK}/success?org=${encodeURIComponent(orgInfo.name)}`);
+    reply.redirect(source === 'web'
+      ? `${successRedirect}&org=${encodeURIComponent(orgInfo.name)}`
+      : `${APP_DEEP_LINK}/success?org=${encodeURIComponent(orgInfo.name)}`);
   } catch (err) {
     request.log.error(err, '[PCO] Callback error');
-    reply.redirect(`${APP_DEEP_LINK}/error?reason=token_exchange_failed`);
+    reply.redirect(errorRedirect('token_exchange_failed'));
   }
 }
 

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 interface PcoConnection {
   id: string;
@@ -21,6 +22,25 @@ interface PcoPerson {
   email?: string;
   status: string;
   matchedUserId?: string;
+}
+
+function OAuthResultHandler({ onToast }: { onToast: (msg: string) => void }) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  useEffect(() => {
+    const connected = searchParams.get('connected');
+    const oauthError = searchParams.get('error');
+    if (connected === 'true') {
+      onToast('Planning Center connected successfully!');
+      router.replace('/admin/planning-center');
+    } else if (oauthError) {
+      onToast(`Connection failed: ${oauthError}`);
+      router.replace('/admin/planning-center');
+    }
+  }, [searchParams, router, onToast]);
+
+  return null;
 }
 
 export default function PlanningCenterPage() {
@@ -68,10 +88,10 @@ export default function PlanningCenterPage() {
   const handleConnect = async () => {
     setConnecting(true);
     try {
-      const res = await fetch('/api/admin/proxy/integrations/pco/connect', { method: 'POST' });
+      const res = await fetch('/api/admin/proxy/integrations/pco/connect?source=web', { method: 'POST' });
       const data = res.ok ? await res.json() : {};
-      if (data.authUrl) {
-        window.location.href = data.authUrl;
+      if (data.authorizeUrl) {
+        window.location.href = data.authorizeUrl;
       } else {
         showToast('Failed to start OAuth flow');
       }
@@ -112,6 +132,9 @@ export default function PlanningCenterPage() {
 
   return (
     <main className="flex-1 p-8">
+      <Suspense fallback={null}>
+        <OAuthResultHandler onToast={showToast} />
+      </Suspense>
       {toast && (
         <div className="fixed top-6 right-6 z-50 bg-navy-800 border border-white/10 rounded-xl px-5 py-3 text-sm text-white shadow-xl">{toast}</div>
       )}
