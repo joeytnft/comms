@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 
 interface PcoConnection {
@@ -24,6 +24,25 @@ interface PcoPerson {
   matchedUserId?: string;
 }
 
+function OAuthResultHandler({ onToast }: { onToast: (msg: string) => void }) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  useEffect(() => {
+    const connected = searchParams.get('connected');
+    const oauthError = searchParams.get('error');
+    if (connected === 'true') {
+      onToast('Planning Center connected successfully!');
+      router.replace('/admin/planning-center');
+    } else if (oauthError) {
+      onToast(`Connection failed: ${oauthError}`);
+      router.replace('/admin/planning-center');
+    }
+  }, [searchParams, router, onToast]);
+
+  return null;
+}
+
 export default function PlanningCenterPage() {
   const [connection, setConnection] = useState<PcoConnection | null>(null);
   const [people, setPeople] = useState<PcoPerson[]>([]);
@@ -32,8 +51,6 @@ export default function PlanningCenterPage() {
   const [connecting, setConnecting] = useState(false);
   const [toast, setToast] = useState('');
   const [activeTab, setActiveTab] = useState<'overview' | 'people'>('overview');
-  const searchParams = useSearchParams();
-  const router = useRouter();
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
 
@@ -67,18 +84,6 @@ export default function PlanningCenterPage() {
   }, []);
 
   useEffect(() => { fetchConnection(); }, [fetchConnection]);
-
-  useEffect(() => {
-    const connected = searchParams.get('connected');
-    const oauthError = searchParams.get('error');
-    if (connected === 'true') {
-      showToast('Planning Center connected successfully!');
-      router.replace('/admin/planning-center');
-    } else if (oauthError) {
-      showToast(`Connection failed: ${oauthError}`);
-      router.replace('/admin/planning-center');
-    }
-  }, [searchParams, router]);
 
   const handleConnect = async () => {
     setConnecting(true);
@@ -127,6 +132,9 @@ export default function PlanningCenterPage() {
 
   return (
     <main className="flex-1 p-8">
+      <Suspense fallback={null}>
+        <OAuthResultHandler onToast={showToast} />
+      </Suspense>
       {toast && (
         <div className="fixed top-6 right-6 z-50 bg-navy-800 border border-white/10 rounded-xl px-5 py-3 text-sm text-white shadow-xl">{toast}</div>
       )}
