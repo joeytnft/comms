@@ -13,6 +13,7 @@ import { PinSetupScreen } from '@/screens/Auth/PinSetupScreen';
 import { EditProfileScreen } from '@/screens/Settings/EditProfileScreen';
 import { MembersScreen } from '@/screens/Settings/MembersScreen';
 import { PlanningCenterScreen } from '@/screens/Settings/PlanningCenterScreen';
+import { NotificationSettingsScreen } from '@/screens/Settings/NotificationSettingsScreen';
 import { NavigatorScreenParams } from '@react-navigation/native';
 import { COLORS } from '@/config/theme';
 
@@ -30,6 +31,7 @@ export type MoreStackParamList = {
   Members: undefined;
   PlanningCenter: undefined;
   Training: NavigatorScreenParams<TrainingStackParamList> | undefined;
+  NotificationSettings: undefined;
 };
 
 const Stack = createNativeStackNavigator<MoreStackParamList>();
@@ -105,6 +107,11 @@ export function MoreStackNavigator() {
       <Stack.Screen
         name="Training"
         component={TrainingStackNavigator}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="NotificationSettings"
+        component={NotificationSettingsScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>
