@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 interface PcoConnection {
   id: string;
@@ -31,6 +32,8 @@ export default function PlanningCenterPage() {
   const [connecting, setConnecting] = useState(false);
   const [toast, setToast] = useState('');
   const [activeTab, setActiveTab] = useState<'overview' | 'people'>('overview');
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
 
@@ -65,13 +68,25 @@ export default function PlanningCenterPage() {
 
   useEffect(() => { fetchConnection(); }, [fetchConnection]);
 
+  useEffect(() => {
+    const connected = searchParams.get('connected');
+    const oauthError = searchParams.get('error');
+    if (connected === 'true') {
+      showToast('Planning Center connected successfully!');
+      router.replace('/admin/planning-center');
+    } else if (oauthError) {
+      showToast(`Connection failed: ${oauthError}`);
+      router.replace('/admin/planning-center');
+    }
+  }, [searchParams, router]);
+
   const handleConnect = async () => {
     setConnecting(true);
     try {
-      const res = await fetch('/api/admin/proxy/integrations/pco/connect', { method: 'POST' });
+      const res = await fetch('/api/admin/proxy/integrations/pco/connect?source=web', { method: 'POST' });
       const data = res.ok ? await res.json() : {};
-      if (data.authUrl) {
-        window.location.href = data.authUrl;
+      if (data.authorizeUrl) {
+        window.location.href = data.authorizeUrl;
       } else {
         showToast('Failed to start OAuth flow');
       }
