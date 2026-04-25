@@ -53,7 +53,13 @@ function buildJWT(): string {
     throw new Error('APNS_KEY_ID, APNS_TEAM_ID, and APNS_KEY env vars are required for PTT pushes');
   }
 
-  const key = normalizePemKey(rawKey);
+  const pemKey = normalizePemKey(rawKey);
+
+  // createPrivateKey() produces a proper KeyObject that OpenSSL 3 / Node 20 can
+  // sign with reliably. Passing a raw PEM string directly to sign.sign() triggers
+  // ERR_OSSL_UNSUPPORTED ("DECODER routines::unsupported") in some Railway/Docker
+  // environments regardless of newline normalization.
+  const privateKey = crypto.createPrivateKey({ key: pemKey, format: 'pem' });
 
   const header  = base64url(JSON.stringify({ alg: 'ES256', kid: keyId }));
   const payload = base64url(JSON.stringify({ iss: teamId, iat: now }));
@@ -61,7 +67,7 @@ function buildJWT(): string {
 
   const sign = crypto.createSign('SHA256');
   sign.update(data);
-  const signature = sign.sign({ key, dsaEncoding: 'ieee-p1363' });
+  const signature = sign.sign({ key: privateKey, dsaEncoding: 'ieee-p1363' });
 
   cachedJWT = `${data}.${base64url(signature)}`;
   cachedJWTIssuedAt = now;

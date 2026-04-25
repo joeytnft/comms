@@ -107,6 +107,9 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // Set once per transmission, so we never emit ptt:start twice when both
   // startTransmitting (foreground) and onAudioActivated (background/island) fire.
   const pttStartEmittedRef = useRef(false);
+  // Safety net: auto-stop a transmission that was never explicitly stopped (e.g.
+  // bug, crash, or stuck state from a reconnect mid-transmission).
+  const safetyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Always-current socket ref so native PTT callbacks (registered once) can emit
   // even when the socket reconnects and the `socket` variable changes identity.
@@ -746,6 +749,24 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     transmitStartedAtRef.current = Date.now();
     usePTTStore.getState().setTransmitting(true);
 
+    // 45-second hard stop — prevents a frozen mic if stopTransmitting is never called
+    // (e.g. app backgrounded mid-tap, store reset during reconnect, native callback lost).
+    if (safetyTimeoutRef.current) clearTimeout(safetyTimeoutRef.current);
+    safetyTimeoutRef.current = setTimeout(() => {
+      safetyTimeoutRef.current = null;
+      console.warn('[PTT] Safety timeout: force-stopping stuck transmission after 45s');
+      // Call the underlying stop logic directly via the store snapshot rather than the
+      // closure-captured stopTransmitting (avoids stale-closure issues with the timeout).
+      const { currentGroupId: gid } = usePTTStore.getState();
+      if (!transmittingRef.current && usePTTStore.getState().pttState !== 'transmitting') return;
+      transmittingRef.current = false;
+      pttStartEmittedRef.current = false;
+      usePTTStore.getState().setTransmitting(false);
+      if (micTrackRef.current) micTrackRef.current.mute();
+      else roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null);
+      if (gid) pttPost(gid, 'stop').catch(() => null);
+    }, 45_000);
+
     const s = socketRef.current ?? socket;
     if (!s) {
       console.warn('[PTT] startTransmitting: socket unavailable — server will not start egress');
@@ -811,37 +832,57 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // ─── stopTransmitting ───────────────────────────────────────────────────────
   const stopTransmitting = useCallback(() => {
     const { currentGroupId, pttState } = usePTTStore.getState();
-    if (!currentGroupId || pttState !== 'transmitting') return;
+    // Guard on transmittingRef too: a reconnect can reset the store (pttState → idle)
+    // while the mic track remains unmuted — without this check the mic stays live.
+    const wasTransmitting = pttState === 'transmitting' || transmittingRef.current;
+    if (!currentGroupId || !wasTransmitting) return;
+
+    // Cancel the safety timeout — we are stopping cleanly.
+    if (safetyTimeoutRef.current) {
+      clearTimeout(safetyTimeoutRef.current);
+      safetyTimeoutRef.current = null;
+    }
 
     // Always reset the local state on release so the button can't get stuck red.
     const durationMs = Date.now() - transmitStartedAtRef.current;
+    const startWasEmitted = pttStartEmittedRef.current;
     transmittingRef.current = false;
     pttStartEmittedRef.current = false;
-    usePTTStore.getState().setTransmitting(false);
+    if (pttState === 'transmitting') usePTTStore.getState().setTransmitting(false);
+
+    // Always mute the mic first — this is safe to call even in the stuck-mic scenario
+    // where pttState was already reset to idle (e.g. after a reconnect).
+    if (micTrackRef.current) {
+      micTrackRef.current.mute();
+    } else {
+      roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null);
+    }
 
     const s = socketRef.current ?? socket;
 
     if (Platform.OS === 'web') {
-      if (s) s.emit('ptt:stop', { groupId: currentGroupId });
+      if (startWasEmitted && s) s.emit('ptt:stop', { groupId: currentGroupId });
       mediaRecorderRef.current?.stop();
       mediaRecorderRef.current = null;
     } else if (nativePTTActiveRef.current) {
       if (nativePTTChannelIdRef.current) {
-        pttPost(currentGroupId, 'stop').catch(() => null);
-        if (micTrackRef.current) { micTrackRef.current.mute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null); }
+        if (startWasEmitted) pttPost(currentGroupId, 'stop').catch(() => null);
         nativePTTService.stopTransmitting(nativePTTChannelIdRef.current).catch(() => null);
-        pttPost(currentGroupId, 'native-log', { durationMs }).catch(() => null);
+        if (startWasEmitted) pttPost(currentGroupId, 'native-log', { durationMs }).catch(() => null);
       }
     } else {
       // iOS (PTT framework unavailable or init failed) or Android
-      pttPost(currentGroupId, 'stop').catch(() => null);
-      if (micTrackRef.current) { micTrackRef.current.mute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null); }
+      if (startWasEmitted) pttPost(currentGroupId, 'stop').catch(() => null);
       if (Platform.OS === 'android' && callUUIDRef.current) callKitService.setMuted(callUUIDRef.current, true);
-      pttRecorderService.stopAndUpload(currentGroupId).then((audioUrl) => {
-        pttPost(currentGroupId, 'native-log', { durationMs, ...(audioUrl ? { audioUrl } : {}) }).catch(() => null);
-      }).catch(() => {
-        pttPost(currentGroupId, 'native-log', { durationMs }).catch(() => null);
-      });
+      if (startWasEmitted) {
+        pttRecorderService.stopAndUpload(currentGroupId).then((audioUrl) => {
+          pttPost(currentGroupId, 'native-log', { durationMs, ...(audioUrl ? { audioUrl } : {}) }).catch(() => null);
+        }).catch(() => {
+          pttPost(currentGroupId, 'native-log', { durationMs }).catch(() => null);
+        });
+      } else {
+        pttRecorderService.cancel();
+      }
     }
     // Update Live Activity — done transmitting
     const { currentGroupName, connectedMemberIds } = usePTTStore.getState();
