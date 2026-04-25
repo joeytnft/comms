@@ -90,6 +90,7 @@ export function AlertsScreen() {
   const isAdmin = !!(user?.isOrgAdmin || groups.some((g) => g.myRole === 'ADMIN'));
 
   const [showHistory, setShowHistory] = useState(false);
+  const [showAlertsModal, setShowAlertsModal] = useState(false);
   const [triggering, setTriggering] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmState>({ visible: false, alertType: null, customType: null });
   const [message, setMessage] = useState('');
@@ -321,6 +322,15 @@ export function AlertsScreen() {
   const displayAlerts = showHistory ? alerts : activeAlerts;
   const userId = user?.id;
 
+  // Highest-severity color for the active alerts banner
+  const bannerColor = activeAlerts.length === 0
+    ? COLORS.gray600
+    : activeAlerts.some((a) => a.level === 'EMERGENCY')
+      ? ALERT_COLORS.EMERGENCY
+      : activeAlerts.some((a) => a.level === 'WARNING')
+        ? ALERT_COLORS.WARNING
+        : ALERT_COLORS.ATTENTION;
+
   const renderAlert = ({ item }: { item: Alert }) => {
     const isAcked = item.acknowledgments.some((a) => a.userId === userId);
     const isResolved = !!item.resolvedAt;
@@ -401,12 +411,7 @@ export function AlertsScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>Alerts</Text>
-        <View style={styles.headerRight}>
-          <CampusSwitcher />
-          <TouchableOpacity onPress={() => { if (!showHistory) fetchAlerts({ campusId: activeCampusId }); setShowHistory(!showHistory); }}>
-            <Text style={styles.historyToggle}>{showHistory ? 'Active Only' : 'History'}</Text>
-          </TouchableOpacity>
-        </View>
+        <CampusSwitcher />
       </View>
 
       {/* Critical alerts disabled warning (iOS only) */}
@@ -480,28 +485,93 @@ export function AlertsScreen() {
         </View>
       ) : null}
 
-      <Text style={styles.sectionTitle}>
-        {showHistory ? 'Alert History' : `Active Alerts (${activeAlerts.length})`}
-      </Text>
-      <FlatList
-        data={displayAlerts}
-        renderItem={renderAlert}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        refreshControl={
-          <RefreshControl
-            refreshing={isLoading}
-            onRefresh={() => fetchAlerts({ active: !showHistory })}
-            tintColor={COLORS.accent}
-          />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>{showHistory ? 'No alert history' : 'No active alerts'}</Text>
-            <Text style={styles.emptySubtext}>All clear</Text>
+      {/* Active alerts banner — taps to open the slide-up alerts modal */}
+      <TouchableOpacity
+        style={[styles.alertsBanner, { borderLeftColor: bannerColor }]}
+        onPress={() => setShowAlertsModal(true)}
+        activeOpacity={0.75}
+      >
+        <View style={styles.alertsBannerLeft}>
+          <View style={[styles.alertsCountBadge, { backgroundColor: bannerColor }]}>
+            <Text style={styles.alertsCountText}>{activeAlerts.length}</Text>
           </View>
-        }
-      />
+          <View>
+            <Text style={styles.alertsBannerTitle}>Active Alerts</Text>
+            <Text style={styles.alertsBannerSub}>
+              {activeAlerts.length === 0
+                ? 'All clear — tap to view history'
+                : `${activeAlerts.length} alert${activeAlerts.length !== 1 ? 's' : ''} in progress · tap to view`}
+            </Text>
+          </View>
+        </View>
+        <Text style={[styles.alertsBannerChevron, { color: bannerColor }]}>›</Text>
+      </TouchableOpacity>
+
+      {/* ── Active alerts slide-up modal ───────────────────────────────────── */}
+      <Modal
+        visible={showAlertsModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAlertsModal(false)}
+      >
+        <View style={styles.alertsModalOverlay}>
+          {/* Dim backdrop — tap to close */}
+          <TouchableOpacity
+            style={styles.alertsModalBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowAlertsModal(false)}
+          />
+          <View style={styles.alertsModalSheet}>
+            {/* Drag handle */}
+            <View style={styles.alertsModalHandle} />
+
+            {/* Modal header */}
+            <View style={styles.alertsModalHeader}>
+              <Text style={styles.alertsModalTitle}>
+                {showHistory ? 'Alert History' : `Active Alerts (${activeAlerts.length})`}
+              </Text>
+              <View style={styles.alertsModalHeaderRight}>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (!showHistory) fetchAlerts({ campusId: activeCampusId });
+                    setShowHistory(!showHistory);
+                  }}
+                  style={styles.alertsHistoryToggle}
+                >
+                  <Text style={styles.historyToggle}>{showHistory ? 'Active Only' : 'History'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setShowAlertsModal(false)} style={styles.alertsModalCloseIcon}>
+                  <Text style={styles.alertsModalCloseIconText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <FlatList
+              data={displayAlerts}
+              renderItem={renderAlert}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.alertsModalList}
+              refreshControl={
+                <RefreshControl
+                  refreshing={isLoading}
+                  onRefresh={() => fetchAlerts({ active: !showHistory, campusId: activeCampusId })}
+                  tintColor={COLORS.accent}
+                />
+              }
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>{showHistory ? 'No alert history' : 'No active alerts'}</Text>
+                  <Text style={styles.emptySubtext}>{showHistory ? '' : 'All clear'}</Text>
+                </View>
+              }
+            />
+
+            <TouchableOpacity style={styles.alertsModalCloseBtn} onPress={() => setShowAlertsModal(false)}>
+              <Text style={styles.alertsModalCloseBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* ── Send confirm modal ─────────────────────────────────────────────── */}
       {activeDef && (
@@ -1055,4 +1125,85 @@ const styles = StyleSheet.create({
   levelOptionSelected: { borderColor: COLORS.accent, backgroundColor: COLORS.accent + '22' },
   levelOptionText: { ...TYPOGRAPHY.caption, color: COLORS.textSecondary, fontWeight: '700' },
   levelOptionTextSelected: { color: COLORS.accent },
+
+  // ── Active alerts banner ────────────────────────────────────────────────
+  alertsBanner: {
+    marginHorizontal: SPACING.lg,
+    marginBottom: SPACING.lg,
+    backgroundColor: COLORS.surface,
+    borderRadius: BORDER_RADIUS.md,
+    borderLeftWidth: 4,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...SHADOWS.sm,
+  },
+  alertsBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, flex: 1 },
+  alertsCountBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  alertsCountText: { ...TYPOGRAPHY.heading3, color: COLORS.white, fontWeight: '800' },
+  alertsBannerTitle: { ...TYPOGRAPHY.body, color: COLORS.textPrimary, fontWeight: '700' },
+  alertsBannerSub: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, marginTop: 2 },
+  alertsBannerChevron: { fontSize: 28, fontWeight: '300', marginLeft: SPACING.sm },
+
+  // ── Alerts slide-up modal ───────────────────────────────────────────────
+  alertsModalOverlay: { flex: 1, justifyContent: 'flex-end' },
+  alertsModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  alertsModalSheet: {
+    backgroundColor: COLORS.background,
+    borderTopLeftRadius: BORDER_RADIUS.lg * 2,
+    borderTopRightRadius: BORDER_RADIUS.lg * 2,
+    maxHeight: '85%',
+    paddingBottom: SPACING.lg,
+  },
+  alertsModalHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.gray600,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.xs,
+  },
+  alertsModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray700,
+  },
+  alertsModalTitle: { ...TYPOGRAPHY.heading2, color: COLORS.textPrimary },
+  alertsModalHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
+  alertsHistoryToggle: { paddingVertical: SPACING.xs, paddingHorizontal: SPACING.sm },
+  alertsModalCloseIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: COLORS.gray700,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  alertsModalCloseIconText: { color: COLORS.textMuted, fontSize: 13, fontWeight: '700' },
+  alertsModalList: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.md, paddingBottom: SPACING.md },
+  alertsModalCloseBtn: {
+    marginHorizontal: SPACING.lg,
+    marginTop: SPACING.sm,
+    paddingVertical: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+  },
+  alertsModalCloseBtnText: { ...TYPOGRAPHY.body, color: COLORS.textMuted, fontWeight: '600' },
 });
