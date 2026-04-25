@@ -46,6 +46,8 @@ model Organization {
   trainingEvents     TrainingEvent[]
   qualificationTypes QualificationType[]
 
+  customAlertTypes CustomAlertType[]
+
   @@map("organizations")
 }
 
@@ -166,6 +168,7 @@ model User {
   memberQualifications MemberQualification[]
   trainingSignups      TrainingSignup[]
   createdTrainings     TrainingEvent[]    @relation("trainingCreator")
+  createdCustomAlertTypes CustomAlertType[] @relation("customAlertCreator")
 
   @@index([organizationId])
   @@map("users")
@@ -358,6 +361,24 @@ model AlertAcknowledgment {
 
   @@unique([alertId, userId])
   @@map("alert_acknowledgments")
+}
+
+model CustomAlertType {
+  id             String     @id @default(cuid())
+  organizationId String
+  label          String     @db.VarChar(50)
+  description    String     @default("") @db.VarChar(100)
+  color          String     @db.VarChar(7)
+  emoji          String     @db.VarChar(10)
+  defaultLevel   AlertLevel
+  createdById    String?
+  createdAt      DateTime   @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  createdBy    User?        @relation("customAlertCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@map("custom_alert_types")
 }
 
 // ============================================================================

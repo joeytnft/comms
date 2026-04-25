@@ -75,6 +75,13 @@ export const ENDPOINTS = {
     DELETE: (id: string) => `/alerts/${id}`,
   },
 
+  // Custom alert types
+  CUSTOM_ALERT_TYPES: {
+    LIST: '/custom-alert-types',
+    CREATE: '/custom-alert-types',
+    DELETE: (id: string) => `/custom-alert-types/${id}`,
+  },
+
   // Incidents
   INCIDENTS: {
     LIST: '/incidents',

@@ -31,6 +31,7 @@ import { qualificationRoutes } from './routes/qualifications';
 import { setupSocketHandlers } from './sockets/socketHandler';
 import { webhookRoutes } from './routes/webhooks';
 import { organizationRoutes } from './routes/organizations';
+import { customAlertTypeRoutes } from './routes/customAlertTypes';
 import { setIO } from './config/socketIO';
 
 export async function buildApp() {
@@ -130,6 +131,7 @@ export async function buildApp() {
   app.register(trainingRoutes, { prefix: '/training' });
   app.register(qualificationRoutes, { prefix: '/qualifications' });
   app.register(organizationRoutes, { prefix: '/organizations' });
+  app.register(customAlertTypeRoutes, { prefix: '/custom-alert-types' });
   app.register(webhookRoutes, { prefix: '/webhooks' });
 
   // Socket.IO setup
