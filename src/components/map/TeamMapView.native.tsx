@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, Image, StyleSheet } from 'react-native';
 import MapView, { Marker, Callout, Circle } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { TeamMemberLocation, Geofence, Alert } from '@/types';
@@ -17,6 +17,30 @@ const DELTA = 0.0009; // ~300 ft zoom
 
 const isOnline = (updatedAt: string) =>
   Date.now() - new Date(updatedAt).getTime() < 300_000;
+
+function MemberAvatarPin({ member }: { member: TeamMemberLocation }) {
+  const online = isOnline(member.updatedAt);
+  const borderColor = online ? COLORS.success : COLORS.gray500;
+  const initials = member.displayName
+    .split(' ')
+    .map((n) => n[0] ?? '')
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+
+  return (
+    <View style={styles.avatarPin}>
+      <View style={[styles.avatarPinCircle, { borderColor }]}>
+        {member.avatarUrl ? (
+          <Image source={{ uri: member.avatarUrl }} style={styles.avatarPinImage} />
+        ) : (
+          <Text style={styles.avatarPinInitials}>{initials}</Text>
+        )}
+      </View>
+      <View style={[styles.avatarPinTail, { borderTopColor: borderColor }]} />
+    </View>
+  );
+}
 
 export function TeamMapView({ locations, geofence, activeAlerts = [], style }: Props) {
   const mapRef = useRef<MapView>(null);
@@ -153,13 +177,16 @@ export function TeamMapView({ locations, geofence, activeAlerts = [], style }: P
           <Marker
             key={member.userId}
             coordinate={{ latitude: member.latitude, longitude: member.longitude }}
-            pinColor={isOnline(member.updatedAt) ? COLORS.success : COLORS.gray500}
+            anchor={{ x: 0.5, y: 1 }}
+            tracksViewChanges={false}
           >
+            <MemberAvatarPin member={member} />
             <Callout>
               <View style={styles.callout}>
                 <Text style={styles.calloutName}>{member.displayName}</Text>
                 <Text style={styles.calloutCoords}>
-                  {member.latitude.toFixed(4)}, {member.longitude.toFixed(4)}
+                  {isOnline(member.updatedAt) ? '🟢 Online' : '⚫ Last seen'}
+                  {'  ·  '}{member.latitude.toFixed(4)}, {member.longitude.toFixed(4)}
                 </Text>
               </View>
             </Callout>
@@ -176,6 +203,44 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: COLORS.surface,
     ...SHADOWS.sm,
+  },
+  avatarPin: {
+    alignItems: 'center',
+  },
+  avatarPinCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: COLORS.surface,
+    borderWidth: 2.5,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 3,
+    elevation: 4,
+  },
+  avatarPinImage: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+  },
+  avatarPinInitials: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  avatarPinTail: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderTopWidth: 8,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    marginTop: -1,
   },
   alertPin: {
     width: 40,

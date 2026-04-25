@@ -16,16 +16,18 @@ import {
   Switch,
   ActivityIndicator,
   Image,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
-import * as SecureStore from 'expo-secure-store';
+import * as Notifications from 'expo-notifications';
 import * as ImagePicker from 'expo-image-picker';
 import { apiClient } from '@/api/client';
 import { ENDPOINTS } from '@/api/endpoints';
 import { ENV } from '@/config/env';
 import { useAlertStore } from '@/store/useAlertStore';
+import { useCustomAlertTypeStore } from '@/store/useCustomAlertTypeStore';
 import { useGroupStore } from '@/store/useGroupStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampusViewStore } from '@/store/useCampusViewStore';
@@ -42,7 +44,6 @@ import {
   ALERT_TYPE_KEYS,
   ALERT_COLORS,
   ALERT_LABELS,
-  CUSTOM_ALERT_TYPES_KEY,
 } from '@/types';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 
@@ -79,10 +80,14 @@ export function AlertsScreen() {
     resolveAlert,
     deleteAlert,
   } = useAlertStore();
+  const { types: customTypes, fetchTypes, createType, deleteType } = useCustomAlertTypeStore();
   const { groups, fetchGroups } = useGroupStore();
   const { activeCampusId } = useCampusViewStore();
   const { fetchCampuses } = useCampusStore();
   const { subscription } = useSubscriptionStore();
+
+  // Current user is an admin if they are an org admin or a group admin in any group
+  const isAdmin = !!(user?.isOrgAdmin || groups.some((g) => g.myRole === 'ADMIN'));
 
   const [showHistory, setShowHistory] = useState(false);
   const [triggering, setTriggering] = useState(false);
@@ -95,9 +100,10 @@ export function AlertsScreen() {
   const [photo, setPhoto] = useState<{ uri: string; base64: string; mimeType: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
+  // null = not yet checked, true/false = checked result
+  const [criticalAlertsEnabled, setCriticalAlertsEnabled] = useState<boolean | null>(null);
 
-  // Custom alert types
-  const [customTypes, setCustomTypes] = useState<CustomAlertType[]>([]);
+  // Custom alert type creation UI state
   const [showCreateCustom, setShowCreateCustom] = useState(false);
   const [newLabel, setNewLabel] = useState('');
   const [newDescription, setNewDescription] = useState('');
@@ -112,22 +118,17 @@ export function AlertsScreen() {
       if (subscription?.tier === 'PRO') fetchCampuses();
       fetchAlerts({ active: true, campusId: activeCampusId });
       if (groups.length === 0) fetchGroups(activeCampusId);
+      fetchTypes();
     }, [activeCampusId]),
   );
 
-  // Load custom types from SecureStore on mount
+  // Check if iOS critical alerts permission is granted
   useEffect(() => {
-    SecureStore.getItemAsync(CUSTOM_ALERT_TYPES_KEY).then((json) => {
-      if (json) {
-        try { setCustomTypes(JSON.parse(json)); } catch { /* ignore invalid JSON */ }
-      }
+    if (Platform.OS !== 'ios') return;
+    Notifications.getPermissionsAsync().then(({ ios }) => {
+      setCriticalAlertsEnabled(ios?.allowsCriticalAlerts ?? false);
     });
   }, []);
-
-  const saveCustomTypes = async (types: CustomAlertType[]) => {
-    setCustomTypes(types);
-    await SecureStore.setItemAsync(CUSTOM_ALERT_TYPES_KEY, JSON.stringify(types));
-  };
 
   const handlePickPhoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -176,30 +177,34 @@ export function AlertsScreen() {
 
   const handleCreateCustomType = async () => {
     if (!newLabel.trim()) return;
-    const newType: CustomAlertType = {
-      id: Date.now().toString(),
-      label: newLabel.trim(),
-      description: newDescription.trim() || newLabel.trim(),
-      color: newColor,
-      emoji: newEmoji,
-      defaultLevel: newLevel,
-    };
-    await saveCustomTypes([...customTypes, newType]);
-    setShowCreateCustom(false);
-    setNewLabel('');
-    setNewDescription('');
-    setNewEmoji(EMOJI_OPTIONS[0]);
-    setNewColor(COLOR_OPTIONS[0]);
-    setNewLevel('WARNING');
+    try {
+      await createType({
+        label: newLabel.trim(),
+        description: newDescription.trim() || newLabel.trim(),
+        color: newColor,
+        emoji: newEmoji,
+        defaultLevel: newLevel,
+      });
+      setShowCreateCustom(false);
+      setNewLabel('');
+      setNewDescription('');
+      setNewEmoji(EMOJI_OPTIONS[0]);
+      setNewColor(COLOR_OPTIONS[0]);
+      setNewLevel('WARNING');
+    } catch {
+      RNAlert.alert('Error', 'Failed to create custom alert type. Only admins can add custom alerts.');
+    }
   };
 
   const handleDeleteCustomType = (id: string) => {
-    RNAlert.alert('Remove Custom Alert', 'Remove this custom alert type?', [
+    RNAlert.alert('Remove Custom Alert', 'Remove this custom alert type for all team members?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
         style: 'destructive',
-        onPress: () => saveCustomTypes(customTypes.filter((t) => t.id !== id)),
+        onPress: () => deleteType(id).catch(() =>
+          RNAlert.alert('Error', 'Failed to remove custom alert type'),
+        ),
       },
     ]);
   };
@@ -404,6 +409,19 @@ export function AlertsScreen() {
         </View>
       </View>
 
+      {/* Critical alerts disabled warning (iOS only) */}
+      {Platform.OS === 'ios' && criticalAlertsEnabled === false && (
+        <TouchableOpacity
+          style={styles.criticalAlertWarning}
+          onPress={() => Linking.openSettings()}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.criticalAlertWarningText}>
+            ⚠️ Critical alerts are disabled — Active Shooter alerts will not bypass Silent mode or Do Not Disturb. Tap to enable in Settings → Notifications.
+          </Text>
+        </TouchableOpacity>
+      )}
+
       {/* Alert type grid */}
       <View style={styles.gridSection}>
         <Text style={styles.gridLabel}>TAP TO SEND ALERT</Text>
@@ -442,15 +460,17 @@ export function AlertsScreen() {
             </TouchableOpacity>
           ))}
 
-          {/* Add custom type button */}
-          <TouchableOpacity
-            style={styles.addCustomButton}
-            onPress={() => setShowCreateCustom(true)}
-            activeOpacity={0.75}
-          >
-            <Text style={styles.addCustomPlus}>+</Text>
-            <Text style={styles.addCustomLabel}>Custom</Text>
-          </TouchableOpacity>
+          {/* Add custom type button — admins only */}
+          {isAdmin && (
+            <TouchableOpacity
+              style={styles.addCustomButton}
+              onPress={() => setShowCreateCustom(true)}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.addCustomPlus}>+</Text>
+              <Text style={styles.addCustomLabel}>Custom</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -765,6 +785,18 @@ const styles = StyleSheet.create({
   title: { ...TYPOGRAPHY.heading1, color: COLORS.textPrimary },
   historyToggle: { ...TYPOGRAPHY.bodySmall, color: COLORS.info, fontWeight: '600' },
 
+  criticalAlertWarning: {
+    marginHorizontal: SPACING.lg,
+    marginBottom: SPACING.sm,
+    backgroundColor: '#7F1D1D',
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.md,
+  },
+  criticalAlertWarningText: {
+    ...TYPOGRAPHY.caption,
+    color: '#FCA5A5',
+    lineHeight: 16,
+  },
   gridSection: { paddingHorizontal: SPACING.lg, marginBottom: SPACING.md },
   gridLabel: {
     ...TYPOGRAPHY.caption,
