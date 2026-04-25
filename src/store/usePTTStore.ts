@@ -100,10 +100,16 @@ export const usePTTStore = create<PTTStoreState>((set, get) => ({
   },
 
   setActiveSpeaker: (speaker) => {
-    set({
+    set((state) => ({
       activeSpeaker: speaker,
-      pttState: speaker ? 'receiving' : get().pttState === 'receiving' ? 'idle' : get().pttState,
-    });
+      // Never override 'transmitting' — if we're mid-transmission and somehow
+      // receive our own ptt:speaking echo, the button must stay red.
+      pttState: state.pttState === 'transmitting'
+        ? 'transmitting'
+        : speaker
+          ? 'receiving'
+          : state.pttState === 'receiving' ? 'idle' : state.pttState,
+    }));
   },
 
   setConnectedMembers: (memberIds) => {

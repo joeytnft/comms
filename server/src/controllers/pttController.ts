@@ -217,21 +217,32 @@ export async function transmitStart(
   logger.info(`[PTT] HTTP ptt:start from ${userId} in ${room}`);
 
   const io = getIO();
-  io?.to(room).emit('ptt:speaking', { groupId, userId, displayName, startedAt });
+
+  // Fetch sockets once — reused for both the broadcast exclusion and APNs logic.
+  const socketsInRoom = await (io?.in(room).fetchSockets() ?? Promise.resolve([]));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const transmitterSocketIds = socketsInRoom.filter((s) => (s as any).user?.userId === userId).map((s) => s.id);
+
+  // Broadcast to everyone in the room EXCEPT the transmitter.
+  // Using io.to(room) (all sockets) would echo ptt:speaking back to the sender,
+  // which sets their pttState to 'receiving' and shows themselves as the active speaker.
+  if (io) {
+    const target = transmitterSocketIds.length > 0 ? io.to(room).except(transmitterSocketIds) : io.to(room);
+    target.emit('ptt:speaking', { groupId, userId, displayName, startedAt });
+  }
 
   const group = await prisma.group.findUnique({
     where: { id: groupId },
     select: { parentGroupId: true },
   });
-  if (group?.parentGroupId) {
-    io?.to(`ptt:${group.parentGroupId}`).emit('ptt:speaking', {
-      groupId, userId, displayName, startedAt, fromSubGroup: true,
-    });
+  if (group?.parentGroupId && io) {
+    const parentRoom = `ptt:${group.parentGroupId}`;
+    const target = transmitterSocketIds.length > 0 ? io.to(parentRoom).except(transmitterSocketIds) : io.to(parentRoom);
+    target.emit('ptt:speaking', { groupId, userId, displayName, startedAt, fromSubGroup: true });
   }
 
   // APNs wake-up for offline members
   try {
-    const socketsInRoom = await (io?.in(room).fetchSockets() ?? Promise.resolve([]));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const onlineIds = new Set(socketsInRoom.map((s) => (s as any).user?.userId as string | undefined).filter((id): id is string => typeof id === 'string'));
     const pushTokens = await prisma.pttPushToken.findMany({
@@ -285,16 +296,23 @@ export async function transmitStop(
   logger.info(`[PTT] HTTP ptt:stop from ${userId} in ${room}`);
 
   const io = getIO();
-  io?.to(room).emit('ptt:stopped', { groupId, userId, endedAt });
+  const socketsInRoomStop = await (io?.in(room).fetchSockets() ?? Promise.resolve([]));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const stopperSocketIds = socketsInRoomStop.filter((s) => (s as any).user?.userId === userId).map((s) => s.id);
+
+  if (io) {
+    const target = stopperSocketIds.length > 0 ? io.to(room).except(stopperSocketIds) : io.to(room);
+    target.emit('ptt:stopped', { groupId, userId, endedAt });
+  }
 
   const group = await prisma.group.findUnique({
     where: { id: groupId },
     select: { parentGroupId: true },
   });
-  if (group?.parentGroupId) {
-    io?.to(`ptt:${group.parentGroupId}`).emit('ptt:stopped', {
-      groupId, userId, endedAt, fromSubGroup: true,
-    });
+  if (group?.parentGroupId && io) {
+    const parentRoom = `ptt:${group.parentGroupId}`;
+    const target = stopperSocketIds.length > 0 ? io.to(parentRoom).except(stopperSocketIds) : io.to(parentRoom);
+    target.emit('ptt:stopped', { groupId, userId, endedAt, fromSubGroup: true });
   }
 
   // APNs stop notifications

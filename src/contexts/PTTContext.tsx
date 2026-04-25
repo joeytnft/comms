@@ -333,6 +333,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       displayName: string;
       startedAt: string;
     }) => {
+      // Ignore echoes of our own transmission — the server's HTTP broadcast path
+      // uses io.to(room) which can reach our own socket before the exclusion filter
+      // kicks in on slow connections.
+      const localUserId = useAuthStore.getState().user?.id;
+      if (data.userId === localUserId) return;
+
       usePTTStore.getState().setActiveSpeaker({
         userId: data.userId,
         displayName: data.displayName,
