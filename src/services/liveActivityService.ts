@@ -21,6 +21,7 @@ const isAvailable =
 export interface LiveActivityState {
   channelName: string;
   speakerName: string | null;
+  lastSpeakerName: string | null;
   isTransmitting: boolean;
   memberCount: number;
   alertLevel: string | null;
@@ -54,6 +55,7 @@ export const liveActivityService = {
         activityId,
         state.channelName,
         state.speakerName ?? null,
+        state.lastSpeakerName ?? null,
         state.isTransmitting,
         state.memberCount,
         state.alertLevel ?? null,

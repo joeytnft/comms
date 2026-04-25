@@ -13,9 +13,13 @@ let loaded = false;
 async function loadSounds(): Promise<void> {
   if (loaded || Platform.OS === 'web') return;
   try {
+    // allowsRecordingIOS: true keeps expo-av in PlayAndRecord category,
+    // which is compatible with LiveKit's audio session. Without it expo-av
+    // tries to switch to Playback category, conflicts with LiveKit, and
+    // playAsync() silently fails while the session is active.
     await Audio.setAudioModeAsync({
       playsInSilentModeIOS: true,
-      // Do NOT set allowsRecordingIOS — PTTContext owns the audio session mode
+      allowsRecordingIOS: true,
     });
     const [s, e] = await Promise.all([
       Audio.Sound.createAsync(START_SOUND, { volume: 0.8 }),

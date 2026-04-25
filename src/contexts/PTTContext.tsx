@@ -111,6 +111,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   const nativePTTButtonRef = useRef(false);
   // Live Activity ID for the current PTT session (iOS 16.2+)
   const liveActivityIdRef = useRef<string | null>(null);
+  // Persists the last speaker name so the lock-screen card can show "Last: X"
+  const lastSpeakerNameRef = useRef<string | null>(null);
   // Set once per transmission, so we never emit ptt:start twice when both
   // startTransmitting (foreground) and onAudioActivated (background/island) fire.
   const pttStartEmittedRef = useRef(false);
@@ -235,6 +237,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       liveActivityService.update(liveActivityIdRef.current, {
         channelName: st.currentGroupName ?? '',
         speakerName: null,
+        lastSpeakerName: lastSpeakerNameRef.current,
         isTransmitting: false,
         memberCount: st.connectedMemberIds.length,
         alertLevel: null,
@@ -368,10 +371,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         Vibration.vibrate(100);
       }
       // Update Live Activity to show who is speaking
+      lastSpeakerNameRef.current = data.displayName;
       const { currentGroupName, connectedMemberIds } = usePTTStore.getState();
       liveActivityService.update(liveActivityIdRef.current, {
         channelName: currentGroupName ?? '',
         speakerName: data.displayName,
+        lastSpeakerName: data.displayName,
         isTransmitting: false,
         memberCount: connectedMemberIds.length,
         alertLevel: null,
@@ -384,11 +389,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       if (USE_NATIVE_PTT && nativePTTChannelIdRef.current) {
         nativePTTService.clearActiveRemoteParticipant(nativePTTChannelIdRef.current).catch(() => null);
       }
-      // Clear Live Activity speaker
+      // Clear Live Activity speaker (keep lastSpeakerName so card shows "Last: X")
       const { currentGroupName, connectedMemberIds } = usePTTStore.getState();
       liveActivityService.update(liveActivityIdRef.current, {
         channelName: currentGroupName ?? '',
         speakerName: null,
+        lastSpeakerName: lastSpeakerNameRef.current,
         isTransmitting: false,
         memberCount: connectedMemberIds.length,
         alertLevel: null,
@@ -891,6 +897,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     liveActivityService.update(liveActivityIdRef.current, {
       channelName: currentGroupName ?? '',
       speakerName: null,
+      lastSpeakerName: lastSpeakerNameRef.current,
       isTransmitting: true,
       memberCount: connectedMemberIds.length,
       alertLevel: null,
@@ -964,6 +971,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     liveActivityService.update(liveActivityIdRef.current, {
       channelName: currentGroupName ?? '',
       speakerName: null,
+      lastSpeakerName: lastSpeakerNameRef.current,
       isTransmitting: false,
       memberCount: connectedMemberIds.length,
       alertLevel: null,

@@ -18,9 +18,11 @@ public struct GatherSafeActivityAttributes: ActivityAttributes {
         /// Name of the PTT channel/group the user is in.
         public var channelName: String
 
-        /// Display name of whoever is currently speaking.
-        /// nil → nobody is transmitting.
+        /// Display name of whoever is currently speaking (nil when nobody is).
         public var speakerName: String?
+
+        /// Display name of the last person who spoke (persists after transmission ends).
+        public var lastSpeakerName: String?
 
         /// true when the LOCAL user is the one transmitting.
         public var isTransmitting: Bool
