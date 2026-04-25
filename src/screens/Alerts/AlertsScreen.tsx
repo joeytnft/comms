@@ -123,13 +123,16 @@ export function AlertsScreen() {
     }, [activeCampusId]),
   );
 
-  // Check if iOS critical alerts permission is granted
-  useEffect(() => {
-    if (Platform.OS !== 'ios') return;
-    Notifications.getPermissionsAsync().then(({ ios }) => {
-      setCriticalAlertsEnabled(ios?.allowsCriticalAlerts ?? false);
-    });
-  }, []);
+  // Check if iOS critical alerts permission is granted; re-check on focus so
+  // returning from iOS Settings auto-dismisses the banner without a restart.
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'ios') return;
+      Notifications.getPermissionsAsync().then(({ ios }) => {
+        setCriticalAlertsEnabled(ios?.allowsCriticalAlerts ?? false);
+      });
+    }, []),
+  );
 
   const handlePickPhoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -422,7 +425,10 @@ export function AlertsScreen() {
           activeOpacity={0.8}
         >
           <Text style={styles.criticalAlertWarningText}>
-            ⚠️ Critical alerts are disabled — Active Shooter alerts will not bypass Silent mode or Do Not Disturb. Tap to enable in Settings → Notifications.
+            ⚠️ Critical Alerts are disabled — Active Shooter alerts will not sound during Silent mode or Do Not Disturb.
+          </Text>
+          <Text style={styles.criticalAlertWarningHint}>
+            Tap to open Settings → GatherSafe → Notifications → enable Critical Alerts
           </Text>
         </TouchableOpacity>
       )}
@@ -866,6 +872,13 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.caption,
     color: '#FCA5A5',
     lineHeight: 16,
+  },
+  criticalAlertWarningHint: {
+    ...TYPOGRAPHY.caption,
+    color: '#F87171',
+    lineHeight: 16,
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   gridSection: { paddingHorizontal: SPACING.lg, marginBottom: SPACING.md },
   gridLabel: {

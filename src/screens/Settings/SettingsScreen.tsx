@@ -177,6 +177,13 @@ export function SettingsScreen() {
           </Pressable>
           <Pressable
             style={styles.settingRow}
+            onPress={() => navigation.navigate('NotificationSettings')}
+          >
+            <Text style={styles.settingLabel}>Notifications</Text>
+            <Text style={styles.chevron}>{'›'}</Text>
+          </Pressable>
+          <Pressable
+            style={styles.settingRow}
             onPress={handleSchedulePress}
           >
             <Text style={styles.settingLabel}>Schedule & Check-In</Text>
