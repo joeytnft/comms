@@ -84,6 +84,9 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
   // LiveKit room instance (native)
   const roomRef = useRef<InstanceType<typeof import('livekit-client').Room> | null>(null);
+  // Listen-only sub-group rooms for lead group members
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const subRoomsRef = useRef<any[]>([]);
   // Pre-published mic track kept muted between transmissions for instant PTT response
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const micTrackRef = useRef<any>(null);
@@ -664,6 +667,44 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           console.warn('[PTT] Pre-publish mic track failed, will use on-demand enable:', trackErr);
           await room.localParticipant.setMicrophoneEnabled(false).catch(() => null);
         }
+
+        // Lead group: connect to each sub-group room as a listen-only subscriber so
+        // lead members can hear sub-group transmissions in real time.
+        if (response.subGroupRooms && response.subGroupRooms.length > 0) {
+          const subRooms = await Promise.allSettled(
+            response.subGroupRooms.map(async (sg) => {
+              const subRoom = new Room!({ dynacast: false });
+
+              subRoom.on(RoomEvent!.ActiveSpeakersChanged, (speakers: Array<{ identity: string; name?: string }>) => {
+                const remote = speakers.find((s) => s.identity !== subRoom.localParticipant?.identity);
+                if (remote) {
+                  usePTTStore.getState().setActiveSpeaker({
+                    userId: remote.identity,
+                    displayName: remote.name ?? remote.identity,
+                    startedAt: new Date().toISOString(),
+                  });
+                }
+                // Don't clear activeSpeaker on silence — the main room or another sub-room
+                // may have a live speaker; only the main room's handler clears it.
+              });
+
+              subRoom.on(RoomEvent!.Disconnected, () => {
+                // Sub-room disconnects are silent — they don't affect the main PTT state.
+              });
+
+              await subRoom.connect(livekitUrl, sg.token, { autoSubscribe: true });
+              console.info(`[PTT] Connected to sub-group room ${sg.groupName} (listen-only)`);
+              return subRoom;
+            }),
+          );
+
+          subRoomsRef.current = subRooms
+            .filter((r) => r.status === 'fulfilled')
+            .map((r) => (r as PromiseFulfilledResult<typeof room>).value);
+
+          const failed = subRooms.filter((r) => r.status === 'rejected').length;
+          if (failed > 0) console.warn(`[PTT] ${failed} sub-group room(s) failed to connect`);
+        }
       }
 
       socket.emit('ptt:join', { groupId });
@@ -709,6 +750,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       }
       roomRef.current?.disconnect();
       roomRef.current = null;
+
+      // Disconnect all sub-group listen-only rooms
+      for (const subRoom of subRoomsRef.current) {
+        subRoom.disconnect();
+      }
+      subRoomsRef.current = [];
 
       if (nativePTTActiveRef.current) {
         if (nativePTTChannelIdRef.current) {
