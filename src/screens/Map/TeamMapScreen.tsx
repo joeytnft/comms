@@ -93,7 +93,7 @@ export function TeamMapScreen() {
     if (refreshInterval.current) clearInterval(refreshInterval.current);
     refreshInterval.current = setInterval(() => {
       fetchTeamLocations(activeCampusId);
-    }, 30_000);
+    }, 5_000);
 
     // Always stop the previous geofence region before registering a new one.
     // Not doing this is what causes the crash when switching campuses quickly.
