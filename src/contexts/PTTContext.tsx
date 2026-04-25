@@ -798,13 +798,17 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       }).catch(() => null);
     } else if (nativePTTActiveRef.current) {
       if (nativePTTChannelIdRef.current) {
-        // Unmute immediately for instant audio.
+        // Re-activate the audio session BEFORE unmuting. The native PTT framework
+        // deactivates the AVAudioSession after every transmission ends, which means
+        // a plain micTrack.unmute() silently no-ops until Apple re-activates it
+        // (~1 s later via onAudioActivated). Pre-warming the session here lets the
+        // unmute below take effect immediately so audio flows from the first frame.
+        AudioSession?.startAudioSession();
+        // Unmute immediately — session is now live.
         if (micTrackRef.current) { micTrackRef.current.unmute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null); }
-        // Emit ptt:start here so LiveKit egress starts for foreground presses.
-        // onAudioActivated is unreliable in the foreground (audio session is
-        // already active so the framework skips the callback) — this was why
-        // main-channel presses produced no egress even though the island did.
-        // onAudioActivated still emits as a fallback, guarded by pttStartEmittedRef.
+        // Emit ptt:start immediately so LiveKit egress begins as soon as audio flows.
+        // onAudioActivated still fires as a fallback for background/lock-screen
+        // initiated transmissions, guarded by pttStartEmittedRef to prevent double-emit.
         if (!pttStartEmittedRef.current) {
           pttStartEmittedRef.current = true;
           console.info('[PTT] HTTP ptt:start (native foreground path)', { currentGroupId });
