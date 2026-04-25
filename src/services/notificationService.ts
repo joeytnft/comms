@@ -32,11 +32,26 @@ export const notificationService = {
     // Simulators don't support push notifications
     if (!Device.isDevice) return;
 
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    const { status: existingStatus, ios: existingIos } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
 
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
+    // Request on first launch OR when critical alerts haven't been granted yet.
+    // Including allowCriticalAlerts in the initial dialog means iOS presents it
+    // as a single prompt rather than two separate dialogs. Re-requesting when
+    // critical alerts are already denied triggers a second focused dialog for
+    // just that permission — the user can grant it without losing regular notifications.
+    if (
+      existingStatus !== 'granted' ||
+      (Platform.OS === 'ios' && !existingIos?.allowsCriticalAlerts)
+    ) {
+      const { status } = await Notifications.requestPermissionsAsync({
+        ios: {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+          allowCriticalAlerts: true,
+        },
+      });
       finalStatus = status;
     }
 
@@ -76,18 +91,6 @@ export const notificationService = {
         name: 'Messages',
         importance: Notifications.AndroidImportance.DEFAULT,
         sound: 'default',
-      });
-    }
-
-    // Request iOS Critical Alert permission (requires Apple entitlement approval)
-    if (Platform.OS === 'ios') {
-      await Notifications.requestPermissionsAsync({
-        ios: {
-          allowAlert: true,
-          allowBadge: true,
-          allowSound: true,
-          allowCriticalAlerts: true,
-        },
       });
     }
 

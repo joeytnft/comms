@@ -114,66 +114,90 @@ struct ExpandedView: View {
     let state: GatherSafeActivityAttributes.ContentState
 
     private var speakerText: String {
-        if state.isTransmitting   { return "You are speaking" }
-        if let name = state.speakerName { return "\(name) is speaking" }
+        if state.isTransmitting             { return "You are speaking" }
+        if let name = state.speakerName     { return "\(name) is speaking" }
         return "Channel active"
     }
 
+    // Left-edge stripe colour reflects the current channel state at a glance.
+    private var stripeColor: Color {
+        if let level = state.alertLevel, !level.isEmpty { return alertColor(level) }
+        if state.isTransmitting    { return .gsSuccess }
+        if state.speakerName != nil { return .gsAccent  }
+        return Color(.systemGray4)
+    }
+
     var body: some View {
-        HStack(spacing: 12) {
-            // Mic circle
-            ZStack {
-                Circle()
-                    .fill(micColor(state: state).opacity(0.18))
-                    .frame(width: 44, height: 44)
-                Image(systemName: state.isTransmitting ? "mic.fill" : "mic")
-                    .foregroundStyle(micColor(state: state))
-                    .font(.system(size: 20, weight: .semibold))
-            }
+        HStack(spacing: 0) {
+            // State-colour stripe
+            Rectangle()
+                .fill(stripeColor)
+                .frame(width: 4)
 
-            // Text column
-            VStack(alignment: .leading, spacing: 2) {
-                Text(attributes.orgName)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+            HStack(spacing: 12) {
+                // Mic circle
+                ZStack {
+                    Circle()
+                        .fill(micColor(state: state).opacity(0.18))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: state.isTransmitting ? "mic.fill" : "mic")
+                        .foregroundStyle(micColor(state: state))
+                        .font(.system(size: 20, weight: .semibold))
+                }
 
-                Text(state.channelName)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-
-                Text(speakerText)
-                    .font(.caption)
-                    .foregroundStyle(micColor(state: state))
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            // Right column: member count + alert badge
-            VStack(alignment: .trailing, spacing: 4) {
-                HStack(spacing: 3) {
-                    Image(systemName: "person.2.fill")
+                // Text column
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(attributes.orgName)
                         .font(.caption2)
-                    Text("\(state.memberCount)")
-                        .font(.caption2.monospacedDigit())
-                }
-                .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
 
-                if let level = state.alertLevel, !level.isEmpty {
-                    Text(alertLabel(level))
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(alertColor(level))
-                        .clipShape(Capsule())
+                    Text(state.channelName)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    Text(speakerText)
+                        .font(.caption)
+                        .foregroundStyle(micColor(state: state))
+                        .lineLimit(1)
+
+                    // Show last speaker when channel is idle
+                    if !state.isTransmitting, state.speakerName == nil,
+                       let last = state.lastSpeakerName {
+                        Text("Last: \(last)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer()
+
+                // Right column: member count + alert badge
+                VStack(alignment: .trailing, spacing: 4) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "person.2.fill")
+                            .font(.caption2)
+                        Text("\(state.memberCount)")
+                            .font(.caption2.monospacedDigit())
+                    }
+                    .foregroundStyle(.secondary)
+
+                    if let level = state.alertLevel, !level.isEmpty {
+                        Text(alertLabel(level))
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(alertColor(level))
+                            .clipShape(Capsule())
+                    }
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
     }
 }
 

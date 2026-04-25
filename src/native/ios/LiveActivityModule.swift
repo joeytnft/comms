@@ -26,6 +26,7 @@ class LiveActivityModule: NSObject {
         let state = GatherSafeActivityAttributes.ContentState(
             channelName: channelName,
             speakerName: nil,
+            lastSpeakerName: nil,
             isTransmitting: false,
             memberCount: 0,
             alertLevel: nil
@@ -50,6 +51,7 @@ class LiveActivityModule: NSObject {
         _ activityId: String,
         channelName: String,
         speakerName: String?,
+        lastSpeakerName: String?,
         isTransmitting: Bool,
         memberCount: NSNumber,
         alertLevel: String?,
@@ -61,6 +63,7 @@ class LiveActivityModule: NSObject {
         let newState = GatherSafeActivityAttributes.ContentState(
             channelName: channelName,
             speakerName: speakerName?.isEmpty == false ? speakerName : nil,
+            lastSpeakerName: lastSpeakerName?.isEmpty == false ? lastSpeakerName : nil,
             isTransmitting: isTransmitting,
             memberCount: memberCount.intValue,
             alertLevel: alertLevel?.isEmpty == false ? alertLevel : nil

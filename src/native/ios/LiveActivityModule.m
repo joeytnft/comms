@@ -21,6 +21,7 @@ RCT_EXTERN_METHOD(startActivity:(NSString *)channelName
 RCT_EXTERN_METHOD(updateActivity:(NSString *)activityId
                   channelName:(NSString *)channelName
                   speakerName:(NSString *)speakerName
+                  lastSpeakerName:(NSString *)lastSpeakerName
                   isTransmitting:(BOOL)isTransmitting
                   memberCount:(nonnull NSNumber *)memberCount
                   alertLevel:(NSString *)alertLevel

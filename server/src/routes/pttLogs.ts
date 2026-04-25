@@ -9,7 +9,7 @@ export async function pttLogRoutes(app: FastifyInstance) {
     { preHandler: [authenticate] },
     async (request, reply) => {
       const { groupId } = request.params;
-      const limit = Math.min(parseInt(request.query.limit || '30', 10), 50);
+      const limit = Math.min(parseInt(request.query.limit || '100', 10), 100);
       const { cursor } = request.query;
       const { userId } = request;
 
