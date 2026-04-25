@@ -102,6 +102,10 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   const transmittingRef = useRef(false);
   // True only when native PTT framework successfully joined a channel this session
   const nativePTTActiveRef = useRef(false);
+  // True when the current transmission was initiated by the native PTT framework
+  // (Dynamic Island button, lock screen, Bluetooth accessory) rather than the
+  // in-app PTT button. Controls whether stopTransmitting() calls the framework.
+  const nativePTTButtonRef = useRef(false);
   // Live Activity ID for the current PTT session (iOS 16.2+)
   const liveActivityIdRef = useRef<string | null>(null);
   // Set once per transmission, so we never emit ptt:start twice when both
@@ -200,10 +204,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!USE_NATIVE_PTT) return;
 
-    // Transmission started from ANY source (screen, lock screen, Bluetooth accessory)
+    // Transmission started from the native PTT framework (Dynamic Island, lock screen,
+    // Bluetooth accessory) — NOT from the in-app PTT button (which calls startTransmitting()).
     const unsubStart = nativePTTService.onTransmissionStarted(({ source }) => {
       const { pttState } = usePTTStore.getState();
       if (pttState === 'transmitting') return;
+      nativePTTButtonRef.current = true; // framework owns this transmission
       transmittingRef.current = true;
       transmitStartedAtRef.current = Date.now();
       usePTTStore.getState().setTransmitting(true);
@@ -802,25 +808,26 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       }).catch(() => null);
     } else if (nativePTTActiveRef.current) {
       if (nativePTTChannelIdRef.current) {
-        // Re-activate the audio session BEFORE unmuting. The native PTT framework
-        // deactivates the AVAudioSession after every transmission ends, which means
-        // a plain micTrack.unmute() silently no-ops until Apple re-activates it
-        // (~1 s later via onAudioActivated). Pre-warming the session here lets the
-        // unmute below take effect immediately so audio flows from the first frame.
+        // In-app button — own the audio session directly (LiveKit path).
+        //
+        // beginTransmitting() is intentionally NOT called here. Calling it asks
+        // Apple's PTT framework to take over the AVAudioSession, which triggers
+        // an async activation cycle (~1 s) and plays Apple's system "begin transmit"
+        // sound — that's the "second chirp" the user hears. The Dynamic Island button
+        // avoids this because Apple handles that press synchronously at the system level.
+        //
+        // Instead: we keep the session alive ourselves (startAudioSession at join +
+        // re-warm in onAudioDeactivated) so unmute is instant with no framework delay.
+        // The onTransmissionStarted/onAudioActivated callbacks still handle the Dynamic
+        // Island / lock screen / hardware button path unchanged.
+        nativePTTButtonRef.current = false; // in-app button owns this transmission
         AudioSession?.startAudioSession();
-        // Unmute immediately — session is now live.
         if (micTrackRef.current) { micTrackRef.current.unmute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null); }
-        // Emit ptt:start immediately so LiveKit egress begins as soon as audio flows.
-        // onAudioActivated still fires as a fallback for background/lock-screen
-        // initiated transmissions, guarded by pttStartEmittedRef to prevent double-emit.
         if (!pttStartEmittedRef.current) {
           pttStartEmittedRef.current = true;
-          console.info('[PTT] HTTP ptt:start (native foreground path)', { currentGroupId });
+          console.info('[PTT] HTTP ptt:start (native in-app path, no beginTransmitting)', { currentGroupId });
           pttPost(currentGroupId, 'start').catch(() => null);
         }
-        nativePTTService.beginTransmitting(nativePTTChannelIdRef.current).catch((err) => {
-          console.warn('[PTT] native beginTransmitting failed:', err);
-        });
       } else {
         console.warn('[PTT] native PTT active but no channel id — cannot begin transmission');
       }
@@ -881,7 +888,14 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     } else if (nativePTTActiveRef.current) {
       if (nativePTTChannelIdRef.current) {
         if (startWasEmitted) pttPost(currentGroupId, 'stop').catch(() => null);
-        nativePTTService.stopTransmitting(nativePTTChannelIdRef.current).catch(() => null);
+        if (nativePTTButtonRef.current) {
+          // Framework-initiated (Dynamic Island / hardware button): tell the framework
+          // to end so it can update system UI and deactivate the audio session.
+          nativePTTService.stopTransmitting(nativePTTChannelIdRef.current).catch(() => null);
+        }
+        // In-app-initiated: no stopTransmitting() call — we never called beginTransmitting(),
+        // so the framework isn't in "transmitting" state and the session stays warm.
+        nativePTTButtonRef.current = false;
         if (startWasEmitted) pttPost(currentGroupId, 'native-log', { durationMs }).catch(() => null);
       }
     } else {

@@ -32,13 +32,28 @@ let cachedJWTIssuedAt = 0;
 const JWT_TTL_SECONDS = 55 * 60; // Refresh 5 min before the 60-min APNs limit
 
 // Normalize a PEM-encoded private key read from an env var.
-// Hosting platforms (Railway, Fly.io, Docker, Heroku) usually surface multi-line
-// env vars with literal "\n" sequences rather than real newlines. OpenSSL 3
-// rejects those with ERR_OSSL_UNSUPPORTED / "DECODER routines::unsupported"
-// because the PEM body is no longer base64-decodable. Also strip any CR chars
-// that sneak in from Windows-style line endings.
+//
+// Hosting platforms (Railway, Fly.io, Heroku) may encode multi-line env vars
+// in several incompatible ways: literal "\n" escape sequences, CR+LF line
+// endings, or the entire key as one long base64 string with no newlines at all.
+// OpenSSL 3 is stricter than OpenSSL 1.x and rejects malformed PEM bodies with
+// ERR_OSSL_UNSUPPORTED / "DECODER routines::unsupported".
+//
+// This function:
+//  1. Converts any literal \n or \r\n sequences to real newlines
+//  2. Extracts the base64 body, strips ALL whitespace, then re-wraps at 64 chars
+//     (the canonical PEM line length — handles single-line and weirdly-wrapped keys)
 function normalizePemKey(raw: string): string {
-  return raw.replace(/\\n/g, '\n').replace(/\r/g, '').trim();
+  const withNewlines = raw.replace(/\\n/g, '\n').replace(/\\r/g, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+  const match = withNewlines.match(/-----BEGIN ([A-Z ]+)-----\s*([\s\S]+?)\s*-----END ([A-Z ]+)-----/);
+  if (match) {
+    const header  = `-----BEGIN ${match[1]}-----`;
+    const footer  = `-----END ${match[3]}-----`;
+    const body    = match[2].replace(/\s+/g, ''); // strip all whitespace from base64 body
+    const wrapped = (body.match(/.{1,64}/g) ?? [body]).join('\n');
+    return `${header}\n${wrapped}\n${footer}`;
+  }
+  return withNewlines;
 }
 
 function buildJWT(): string {
@@ -55,11 +70,18 @@ function buildJWT(): string {
 
   const pemKey = normalizePemKey(rawKey);
 
-  // createPrivateKey() produces a proper KeyObject that OpenSSL 3 / Node 20 can
-  // sign with reliably. Passing a raw PEM string directly to sign.sign() triggers
-  // ERR_OSSL_UNSUPPORTED ("DECODER routines::unsupported") in some Railway/Docker
-  // environments regardless of newline normalization.
-  const privateKey = crypto.createPrivateKey({ key: pemKey, format: 'pem' });
+  let privateKey: crypto.KeyObject;
+  try {
+    // createPrivateKey() produces a proper KeyObject that OpenSSL 3 / Node 20 can
+    // sign with reliably regardless of how the PEM was encoded in the env var.
+    privateKey = crypto.createPrivateKey({ key: pemKey, format: 'pem' });
+  } catch (parseErr) {
+    // Key parsing failed — clear cache so the next call retries normalization
+    // rather than serving a potentially stale (broken) cached JWT.
+    cachedJWT = null;
+    cachedJWTIssuedAt = 0;
+    throw parseErr;
+  }
 
   const header  = base64url(JSON.stringify({ alg: 'ES256', kid: keyId }));
   const payload = base64url(JSON.stringify({ iss: teamId, iat: now }));
