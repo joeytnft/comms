@@ -266,9 +266,13 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       // For incoming audio, LiveKit auto-plays subscribed tracks — nothing to do here
     });
 
-    // iOS deactivates audio session — mute mic, stop any recording
+    // iOS deactivates audio session — mute mic, then immediately re-warm the session.
+    // The framework has finished its cleanup by the time this callback fires, so
+    // calling startAudioSession() here does not conflict with the deactivation and
+    // ensures the next button press finds a live session (no ~1 s wait on re-press).
     const unsubDeactivated = nativePTTService.onAudioDeactivated(() => {
       if (micTrackRef.current) { micTrackRef.current.mute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null); }
+      AudioSession?.startAudioSession();
     });
 
     // System closed the channel (user left from Dynamic Island / lock screen)
@@ -575,11 +579,11 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           throw new Error('LiveKit server URL is not configured. Set LIVEKIT_URL on the server.');
         }
 
-        // For direct LiveKit mode (no native PTT framework), we own the audio session.
-        // Native PTT path skips this — iOS activates/deactivates via onAudioActivated.
-        if (!nativePTTActiveRef.current) {
-          AudioSession?.startAudioSession();
-        }
+        // Start the audio session for all modes. In native PTT mode the framework
+        // manages per-transmission activation, but we still need a baseline active
+        // session so the pre-published muted mic track is properly configured and the
+        // first button press doesn't wait ~1 s for Apple's async activation cycle.
+        AudioSession?.startAudioSession();
 
         const room = new Room!({
           audioCaptureDefaults: {
