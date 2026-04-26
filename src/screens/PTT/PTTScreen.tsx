@@ -28,12 +28,13 @@ export function PTTScreen() {
 
   const { groups, fetchGroups } = useGroupStore();
   const { error, clearError } = usePTTStore();
-  const { logs, isLoading: logsLoading, error: logsError, fetchLogs } = usePTTLogStore();
+  const { logs, totalCounts, isLoading: logsLoading, error: logsError, fetchLogs } = usePTTLogStore();
   const [showGroupPicker, setShowGroupPicker] = useState(!isConnected);
   const [showLog, setShowLog] = useState(false);
   const [playingUrl, setPlayingUrl] = useState<string | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
   const groupLogs = currentGroupId ? (logs[currentGroupId] ?? []) : [];
+  const groupLogTotal = currentGroupId ? (totalCounts[currentGroupId] ?? groupLogs.length) : 0;
 
   useEffect(() => {
     fetchGroups();
@@ -222,7 +223,7 @@ export function PTTScreen() {
         }}
       >
         <Text style={styles.logToggleText}>
-          {showLog ? 'Hide Voice Log' : `Voice Log (${groupLogs.length})`}
+          {showLog ? 'Hide Voice Log' : `Voice Log (${groupLogTotal})`}
         </Text>
       </TouchableOpacity>
 

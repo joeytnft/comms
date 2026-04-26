@@ -21,18 +21,21 @@ export async function pttLogRoutes(app: FastifyInstance) {
         return reply.status(403).send({ error: 'FORBIDDEN', message: 'Not a member of this group' });
       }
 
-      const logs = await prisma.pttLog.findMany({
-        where: { groupId, ...(cursor ? { createdAt: { lt: new Date(cursor) } } : {}) },
-        orderBy: { createdAt: 'desc' },
-        take: limit + 1,
-        include: { sender: { select: { id: true, displayName: true, avatarUrl: true } } },
-      });
+      const [logs, totalCount] = await Promise.all([
+        prisma.pttLog.findMany({
+          where: { groupId, ...(cursor ? { createdAt: { lt: new Date(cursor) } } : {}) },
+          orderBy: { createdAt: 'desc' },
+          take: limit + 1,
+          include: { sender: { select: { id: true, displayName: true, avatarUrl: true } } },
+        }),
+        prisma.pttLog.count({ where: { groupId } }),
+      ]);
 
       const hasMore = logs.length > limit;
       const items = hasMore ? logs.slice(0, limit) : logs;
       const nextCursor = hasMore ? items[items.length - 1].createdAt.toISOString() : null;
 
-      return reply.send({ logs: items, nextCursor });
+      return reply.send({ logs: items, nextCursor, totalCount });
     },
   );
 }
