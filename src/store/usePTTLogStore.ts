@@ -6,6 +6,7 @@ import { ACCESS_TOKEN_KEY } from '@/config/constants';
 
 interface PTTLogState {
   logs: Record<string, PttLog[]>; // keyed by groupId
+  totalCounts: Record<string, number>; // total log count per groupId from server
   isLoading: boolean;
   error: string | null;
 
@@ -17,6 +18,7 @@ interface PTTLogState {
 
 export const usePTTLogStore = create<PTTLogState>((set) => ({
   logs: {},
+  totalCounts: {},
   isLoading: false,
   error: null,
 
@@ -28,9 +30,10 @@ export const usePTTLogStore = create<PTTLogState>((set) => ({
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('Failed to load voice log');
-      const { logs } = await res.json();
+      const { logs, totalCount } = await res.json();
       set((state) => ({
         logs: { ...state.logs, [groupId]: logs },
+        totalCounts: { ...state.totalCounts, [groupId]: totalCount ?? logs.length },
         isLoading: false,
       }));
     } catch (err: unknown) {
@@ -44,6 +47,10 @@ export const usePTTLogStore = create<PTTLogState>((set) => ({
       logs: {
         ...state.logs,
         [log.groupId]: [log, ...(state.logs[log.groupId] ?? [])],
+      },
+      totalCounts: {
+        ...state.totalCounts,
+        [log.groupId]: (state.totalCounts[log.groupId] ?? 0) + 1,
       },
     }));
   },
