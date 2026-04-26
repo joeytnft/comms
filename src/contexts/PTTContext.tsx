@@ -448,9 +448,11 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
     const handleSocketReconnect = () => {
       const { currentGroupId, isConnected } = usePTTStore.getState();
+      // Any ptt:speaking / ptt:stopped events we missed during the disconnection
+      // are gone — reset so the UI doesn't stay stuck in RECEIVING.
+      usePTTStore.getState().setActiveSpeaker(null);
       if (isConnected && currentGroupId) {
         socket.emit('ptt:join', { groupId: currentGroupId });
-        // Re-report service status after reconnect
         if (USE_NATIVE_PTT && nativePTTChannelIdRef.current) {
           nativePTTService.setServiceStatus(nativePTTChannelIdRef.current, 'ready').catch(() => null);
         }
@@ -619,6 +621,11 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         });
 
         room.on(RoomEvent!.ActiveSpeakersChanged, (speakers: Array<{ identity: string; name?: string }>) => {
+          // Only SET the speaker here — never CLEAR it. LiveKit fires this with
+          // an empty array whenever audio drops below its VAD threshold, which
+          // happens even while someone is still holding the PTT button (silence
+          // between words). Clearing here causes RECEIVING to flicker off mid-hold.
+          // The ptt:stopped socket event is the authoritative signal to clear.
           const remote = speakers.find((s) => s.identity !== room.localParticipant?.identity);
           if (remote) {
             usePTTStore.getState().setActiveSpeaker({
@@ -626,8 +633,6 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
               displayName: remote.name ?? remote.identity,
               startedAt: new Date().toISOString(),
             });
-          } else {
-            usePTTStore.getState().setActiveSpeaker(null);
           }
         });
 

@@ -364,9 +364,25 @@ export function setupPTTSocket(io: Server, socket: Socket) {
         // If the user dropped mid-transmission, tell peers immediately so their
         // UI clears the active-speaker indicator rather than spinning forever.
         const sessionKey = `ptt:session:${userId}:${groupId}`;
-        redis.get(sessionKey).then((sessionData) => {
+        redis.get(sessionKey).then(async (sessionData) => {
           if (sessionData) {
-            io.to(room).emit('ptt:stopped', { groupId, userId, endedAt: new Date().toISOString() });
+            const endedAt = new Date().toISOString();
+            io.to(room).emit('ptt:stopped', { groupId, userId, endedAt });
+
+            // Also notify the parent (lead) group room so lead-group members
+            // don't get stuck in RECEIVING when a sub-group user drops abruptly.
+            try {
+              const group = await prisma.group.findUnique({
+                where: { id: groupId },
+                select: { parentGroupId: true },
+              });
+              if (group?.parentGroupId) {
+                io.to(`ptt:${group.parentGroupId}`).emit('ptt:stopped', {
+                  groupId, userId, endedAt, fromSubGroup: true,
+                });
+              }
+            } catch { /* non-fatal */ }
+
             redis.del(sessionKey).catch(() => null);
           }
         }).catch(() => null);
