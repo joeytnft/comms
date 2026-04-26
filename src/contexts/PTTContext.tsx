@@ -286,13 +286,14 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       // For incoming audio, LiveKit auto-plays subscribed tracks — nothing to do here
     });
 
-    // iOS deactivates audio session — mute mic, then immediately re-warm the session.
-    // The framework has finished its cleanup by the time this callback fires, so
-    // calling startAudioSession() here does not conflict with the deactivation and
-    // ensures the next button press finds a live session (no ~1 s wait on re-press).
+    // iOS deactivates audio session after a framework-initiated transmission ends
+    // (Dynamic Island, lock-screen, or hardware accessory press). Mute the mic and
+    // leave session ownership with the PTT framework — calling startAudioSession()
+    // here re-activates AVAudioSession under the framework's feet, iOS detects the
+    // conflict and ends the PTT channel, which is why subsequent Dynamic Island
+    // presses fail until the user re-joins the channel from the app.
     const unsubDeactivated = nativePTTService.onAudioDeactivated(() => {
       if (micTrackRef.current) { micTrackRef.current.mute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null); }
-      AudioSession?.startAudioSession();
     });
 
     // System closed the channel (user left from Dynamic Island / lock screen)

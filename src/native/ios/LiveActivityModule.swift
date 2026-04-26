@@ -103,10 +103,12 @@ class LiveActivityModule: NSObject {
             // the state stale forces iOS to dismiss rather than preserve.
             let now = Date()
             for activity in Activity<GatherSafeActivityAttributes>.activities {
+                if !activityId.isEmpty && activity.id != activityId { continue }
                 let current = activity.content.state
                 let finalState = GatherSafeActivityAttributes.ContentState(
                     channelName: current.channelName,
                     speakerName: nil,
+                    lastSpeakerName: current.lastSpeakerName,
                     isTransmitting: false,
                     memberCount: current.memberCount,
                     alertLevel: nil
