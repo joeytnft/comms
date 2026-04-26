@@ -160,9 +160,29 @@ class LiveActivityModule: NSObject {
     ) {
         guard #available(iOS 16.2, *) else { resolve(nil); return }
         Task {
-            for activity in Activity<GatherSafeActivityAttributes>.activities
-                where activity.id == activityId {
-                    await activity.end(nil, dismissalPolicy: .immediate)
+            // Push a terminal content with a PAST stale date first, then call end()
+            // with .immediate. Without the stale date iOS keeps the current card
+            // rendered (lock-screen banner lingers until the user swipes it).
+            // Iterate ALL activities when activityId is empty — covers cold-launch
+            // cleanup where the in-memory id has been lost.
+            let now = Date()
+            for activity in Activity<GatherSafeActivityAttributes>.activities {
+                if !activityId.isEmpty && activity.id != activityId { continue }
+                let current = activity.content.state
+                let finalState = GatherSafeActivityAttributes.ContentState(
+                    channelName: current.channelName,
+                    speakerName: nil,
+                    lastSpeakerName: current.lastSpeakerName,
+                    isTransmitting: false,
+                    memberCount: current.memberCount,
+                    alertLevel: nil
+                )
+                let finalContent = ActivityContent(
+                    state: finalState,
+                    staleDate: now.addingTimeInterval(-1)
+                )
+                await activity.update(finalContent)
+                await activity.end(finalContent, dismissalPolicy: .immediate)
             }
             resolve(nil)
         }
@@ -176,12 +196,12 @@ import SwiftUI
 import WidgetKit
 
 private extension Color {
-    static let gsBackground = Color(red: 0.10, green: 0.10, blue: 0.14)
-    static let gsAccent     = Color(red: 0.22, green: 0.53, blue: 0.98)
-    static let gsSuccess    = Color(red: 0.18, green: 0.78, blue: 0.45)
-    static let gsDanger     = Color(red: 0.95, green: 0.27, blue: 0.27)
-    static let gsWarning    = Color(red: 1.00, green: 0.70, blue: 0.00)
-    static let gsAttention  = Color(red: 1.00, green: 0.60, blue: 0.00)
+    static let gsBackground  = Color(red: 0.10, green: 0.10, blue: 0.14)
+    static let gsAccent      = Color(red: 0.22, green: 0.53, blue: 0.98)
+    static let gsSuccess     = Color(red: 0.18, green: 0.78, blue: 0.45)
+    static let gsDanger      = Color(red: 0.95, green: 0.27, blue: 0.27)
+    static let gsWarning     = Color(red: 1.00, green: 0.70, blue: 0.00)
+    static let gsAttention   = Color(red: 1.00, green: 0.60, blue: 0.00)
 }
 
 private func alertColor(_ level: String?) -> Color {
@@ -202,11 +222,62 @@ private func alertLabel(_ level: String?) -> String {
     }
 }
 
+// iOS 17 changed widgets/Live Activities to require containerBackground.
+// Without it the lock-screen banner container is invisible (Dynamic Island still
+// works because it uses a completely separate rendering path).
+@available(iOS 16.2, *)
+private extension View {
+    @ViewBuilder
+    func lockScreenBackground() -> some View {
+        if #available(iOS 17.0, *) {
+            self.containerBackground(Color.gsBackground, for: .widget)
+        } else {
+            self.background(Color.gsBackground)
+        }
+    }
+}
+
 @available(iOS 16.2, *)
 private func micColor(state: GatherSafeActivityAttributes.ContentState) -> Color {
-    if state.isTransmitting     { return .gsSuccess }
-    if state.speakerName != nil { return .gsAccent  }
+    if state.isTransmitting       { return .gsSuccess }
+    if state.speakerName != nil   { return .gsAccent  }
     return Color(.systemGray3)
+}
+
+@available(iOS 16.2, *)
+struct CompactLeadingView: View {
+    let state: GatherSafeActivityAttributes.ContentState
+    var body: some View {
+        Image(systemName: state.isTransmitting ? "mic.fill" : "mic")
+            .foregroundStyle(micColor(state: state))
+            .font(.system(size: 14, weight: .semibold))
+    }
+}
+
+struct CompactTrailingView: View {
+    let channelName: String
+    let alertLevel: String?
+    var body: some View {
+        HStack(spacing: 4) {
+            if let level = alertLevel, !level.isEmpty {
+                Circle().fill(alertColor(level)).frame(width: 7, height: 7)
+            }
+            Text(channelName)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+        }
+    }
+}
+
+@available(iOS 16.2, *)
+struct MinimalView: View {
+    let state: GatherSafeActivityAttributes.ContentState
+    var body: some View {
+        Image(systemName: "mic.fill")
+            .foregroundStyle(micColor(state: state))
+            .font(.system(size: 12, weight: .semibold))
+    }
 }
 
 @available(iOS 16.2, *)
@@ -215,14 +286,14 @@ struct ExpandedView: View {
     let state: GatherSafeActivityAttributes.ContentState
 
     private var speakerText: String {
-        if state.isTransmitting          { return "You are speaking" }
-        if let n = state.speakerName     { return "\\(n) is speaking" }
+        if state.isTransmitting             { return "You are speaking" }
+        if let name = state.speakerName     { return "\\(name) is speaking" }
         return "Channel active"
     }
 
     private var stripeColor: Color {
         if let level = state.alertLevel, !level.isEmpty { return alertColor(level) }
-        if state.isTransmitting     { return .gsSuccess }
+        if state.isTransmitting    { return .gsSuccess }
         if state.speakerName != nil { return .gsAccent  }
         return Color(.systemGray4)
     }
@@ -268,32 +339,39 @@ struct ExpandedView: View {
 struct GatherSafeLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: GatherSafeActivityAttributes.self) { context in
+            // Lock screen / StandBy — deep-link into the PTT screen on tap.
             ExpandedView(attributes: context.attributes, state: context.state)
-                .background(Color.gsBackground)
+                .lockScreenBackground()
+                .widgetURL(URL(string: "gathersafe://ptt"))
         } dynamicIsland: { context in
+            // NO .widgetURL on the Dynamic Island block.
+            // When iOS native PTT (PTChannelManager) is active it owns the Dynamic
+            // Island and provides a built-in talk button. Adding a widgetURL here
+            // intercepts that tap and reopens the app instead — breaking the
+            // press-and-talk gesture and forcing the framework to leave the channel.
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Image(systemName: context.state.isTransmitting ? "mic.fill" : "mic")
-                        .foregroundStyle(micColor(state: context.state))
-                        .padding(.leading, 8)
+                    CompactLeadingView(state: context.state).padding(.leading, 8)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Text(context.state.channelName).font(.caption2.weight(.semibold)).padding(.trailing, 8)
+                    CompactTrailingView(
+                        channelName: context.attributes.orgName,
+                        alertLevel: context.state.alertLevel
+                    ).padding(.trailing, 8)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     ExpandedView(attributes: context.attributes, state: context.state)
                 }
             } compactLeading: {
-                Image(systemName: context.state.isTransmitting ? "mic.fill" : "mic")
-                    .foregroundStyle(micColor(state: context.state))
-                    .font(.system(size: 14, weight: .semibold))
+                CompactLeadingView(state: context.state)
             } compactTrailing: {
-                Text(context.state.channelName).font(.caption2.weight(.semibold)).lineLimit(1)
+                CompactTrailingView(
+                    channelName: context.state.channelName,
+                    alertLevel: context.state.alertLevel
+                )
             } minimal: {
-                Image(systemName: "mic.fill").foregroundStyle(micColor(state: context.state))
-                    .font(.system(size: 12, weight: .semibold))
+                MinimalView(state: context.state)
             }
-            .widgetURL(URL(string: "gathersafe://ptt"))
             .keylineTint(micColor(state: context.state))
         }
     }
