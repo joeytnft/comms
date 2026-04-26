@@ -140,24 +140,21 @@ File: src/screens/Groups/GroupDetailScreen.tsx
 
 ---
 
-## Phase 3: Encrypted Text Messaging
+## Phase 3: Encrypted-At-Rest Text Messaging (server-managed keys)
+
+This is NOT zero-knowledge / Signal Protocol. See `docs/SECURITY_MODEL.md`.
 
 ### 3.1 Encryption Setup
 ```
-File: src/crypto/signalProtocol.ts
-  - Initialize Signal Protocol store
-  - Generate identity key pair on first launch
-  - Store keys in expo-secure-store
-
 File: src/crypto/groupKeys.ts
-  - Generate AES-256-GCM group key when creating a group
-  - Encrypt group key with each member's public key
-  - Distribute encrypted group keys via server
-  - Implement key rotation when members leave
+  - Fetch the per-group AES-256-GCM key from the server (GET /groups/:id/key)
+  - Cache the key locally in expo-secure-store keyed by groupId
+  - On rotation events, refetch and replace the cached key
+  - Group key is generated server-side; clients never derive it
 
 File: src/crypto/keyStorage.ts
-  - Secure storage wrapper for all cryptographic keys
-  - Key backup/restore mechanism
+  - Secure storage wrapper for cached group keys
+  - Wipe on logout / membership-revoked events
 ```
 
 ### 3.2 Messaging API & Sockets

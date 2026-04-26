@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**GatherSafe** is an encrypted, real-time communication app built for church security teams. It runs on iOS and Android, providing encrypted text messaging, push-to-talk (PTT) voice, hierarchical group management, panic alerts, location sharing, and incident logging.
+**GatherSafe** is a secure, real-time communication app built for church security teams. It runs on iOS and Android, providing encrypted-in-transit text messaging, push-to-talk (PTT) voice, hierarchical group management, panic alerts, location sharing, and incident logging. Sensitive content is encrypted at rest using server-managed AES-256 keys, biometric/PIN-locked on-device, and protected with TLS in transit. The server is not zero-knowledge — see `docs/SECURITY_MODEL.md` for the full threat model.
 
 ## Tech Stack
 
@@ -11,7 +11,7 @@
 - **Language:** TypeScript (strict mode)
 - **State Management:** Zustand
 - **Navigation:** React Navigation v6
-- **Encryption:** libsignal-protocol (text), WebRTC SRTP (voice)
+- **Encryption:** AES-256-GCM (text, server-managed group keys), WebRTC SRTP (voice)
 - **Voice/PTT:** react-native-webrtc + LiveKit client SDK
 - **Push Notifications:** expo-notifications + Firebase Cloud Messaging
 - **Local Storage:** expo-secure-store (keys), MMKV (general data)
@@ -26,7 +26,7 @@
 - **Auth:** JWT + refresh tokens, bcrypt for passwords
 - **File Storage:** S3-compatible (MinIO for self-hosted, AWS S3 for cloud)
 - **Message Queue:** Redis (BullMQ) for async jobs
-- **Encryption:** Server never holds plaintext — E2E encryption is client-side
+- **Encryption:** AES-256-GCM at rest with envelope encryption; TLS in transit. Group keys are server-managed and rotate when membership changes.
 
 ### Infrastructure
 - **Containerization:** Docker + Docker Compose for local dev
@@ -37,7 +37,7 @@
 
 ## Architecture Principles
 
-1. **Zero-knowledge server:** The server routes encrypted blobs. It never sees plaintext messages or audio.
+1. **Defense in depth:** TLS in transit, AES-256-GCM at rest with envelope encryption, biometric/PIN device lock, and strict per-org / per-group authorization on every endpoint and socket event. The server is not zero-knowledge; see `docs/SECURITY_MODEL.md`.
 2. **Hierarchy-first groups:** Lead groups subscribe to all sub-group channels. Sub-groups are isolated from each other.
 3. **Offline-first:** Messages queue locally and sync when connection resumes.
 4. **Battery-conscious:** Background services use minimal polling; prefer push-based wakeups.
@@ -90,11 +90,10 @@ gathersafe/
 │   │   ├── SocketContext.tsx     # WebSocket connection provider
 │   │   └── PTTContext.tsx        # PTT state and audio provider
 │   │
-│   ├── crypto/                  # Client-side encryption
-│   │   ├── signalProtocol.ts    # Signal Protocol wrapper
-│   │   ├── groupKeys.ts         # Group key distribution & rotation
-│   │   ├── keyStorage.ts        # Secure key storage
-│   │   └── utils.ts             # Crypto helper functions
+│   ├── crypto/                  # Client-side AES-GCM helpers (server-managed keys)
+│   │   ├── groupKeys.ts         # Fetches/caches per-group key from server, handles rotation
+│   │   ├── keyStorage.ts        # Keychain/Keystore wrapper for cached group keys
+│   │   └── utils.ts             # AES-GCM encrypt/decrypt helpers
 │   │
 │   ├── hooks/                   # Custom React hooks
 │   │   ├── useAuth.ts
@@ -283,11 +282,13 @@ gathersafe/
 - [ ] Admin permissions (who can create/manage groups)
 - [ ] Group list and detail screens
 
-### Phase 3: Encrypted Text Messaging
-- [ ] Implement Signal Protocol key exchange (client-side)
-- [ ] Group key generation and distribution
-- [ ] Encrypted message send/receive via Socket.IO
-- [ ] Message persistence (encrypted blobs in Postgres)
+### Phase 3: Encrypted-At-Rest Text Messaging (server-managed keys)
+- [ ] Server generates and stores per-group AES-256-GCM key
+- [ ] Authenticated `GET /groups/:id/key` distributes the key to members over TLS
+- [ ] Client caches key in Keychain/Keystore; refetches on rotation
+- [ ] Encrypted message send/receive via Socket.IO (ciphertext + IV only)
+- [ ] Message persistence (ciphertext blobs in Postgres)
+- [ ] Group key rotation on member removal
 - [ ] Offline message queuing and sync
 - [ ] Read receipts and delivery status
 - [ ] Chat UI: message list, input, bubbles
@@ -368,11 +369,12 @@ gathersafe/
 
 ## Key Implementation Notes
 
-### Encryption
-- **Text messages:** Signal Protocol (Double Ratchet). Each group member has a Signal session with the group. Use `@nicolo-ribaudo/libsignal-protocol` or equivalent maintained fork.
-- **Group keys:** When a new group is created, the creator generates a group key, encrypts it individually for each member using their public key, and sends it via the server. The server never sees the plaintext group key.
-- **Key rotation:** Rotate group keys when any member is removed. New key is distributed to remaining members.
-- **Voice:** LiveKit uses SRTP by default. Additional application-layer encryption can be added via LiveKit's E2EE feature using insertable streams.
+### Encryption (server-managed model — NOT zero-knowledge)
+- **Text messages:** AES-256-GCM. The server generates a per-group symmetric key on first request, stores it server-side, and serves it over TLS to authenticated members. Clients encrypt/decrypt the message body locally; the server stores only ciphertext + IV.
+- **Group keys:** Created by the server, distributed via authenticated `GET /groups/:id/key`. Rotate when any member is removed (new key issued; older messages remain readable to former members who cached the old key — operationally documented).
+- **Voice:** LiveKit uses SRTP. No application-layer E2EE is applied; recordings are encrypted at rest in Supabase via signed URLs.
+- **At-rest:** `groups.groupKey`, `users.passwordHash`, refresh tokens (hashed), and PCO credentials are stored in Postgres protected by the hosting provider's at-rest encryption. There is no application-layer envelope encryption today; planned in `docs/SECURITY_MODEL.md`.
+- **Threat model summary:** See `docs/SECURITY_MODEL.md`. Compromise of the database OR an org admin account compromises message confidentiality. Device theft is mitigated by biometric/PIN lock. Network interception is mitigated by TLS.
 
 ### Push-to-Talk Background Operation
 - **Android:** Use a foreground service with a persistent notification ("GatherSafe active"). Register a MediaSession to capture hardware button events.
