@@ -119,6 +119,10 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // Safety net: auto-stop a transmission that was never explicitly stopped (e.g.
   // bug, crash, or stuck state from a reconnect mid-transmission).
   const safetyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Set to true when the mount-cleanup leaveChannel() call is in flight so the
+  // resulting onPTTChannelLeft event (which iOS queues and fires asynchronously,
+  // sometimes hundreds of ms later) is not mistaken for a real user-initiated leave.
+  const cleanupLeaveRef = useRef(false);
 
   // Always-current socket ref so native PTT callbacks (registered once) can emit
   // even when the socket reconnects and the `socket` variable changes identity.
@@ -156,6 +160,10 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       mmkvStorage.delete(LIVE_ACTIVITY_ID_KEY);
     }
     if (storedChannelId && USE_NATIVE_PTT) {
+      // Flag that a stale onPTTChannelLeft is now in flight — the iOS PTT framework
+      // queues this callback on the main thread and may deliver it hundreds of ms
+      // after leaveChannel returns (e.g. right when the user releases the PTT button).
+      cleanupLeaveRef.current = true;
       nativePTTService.leaveChannel(storedChannelId).catch(() => null);
       mmkvStorage.delete(PTT_CHANNEL_ID_KEY);
     }
@@ -289,10 +297,18 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
     // System closed the channel (user left from Dynamic Island / lock screen)
     const unsubLeft = nativePTTService.onChannelLeft((channelId) => {
-      // Ignore stale leave events from previous sessions — the mount cleanup calls
-      // leaveChannel(oldChannelId) which eventually fires onPTTChannelLeft even after
-      // the user has already joined a new channel. Guard on the active channel ref so
-      // we only handle leaves for the channel we are currently in.
+      // Consume the stale leave from mount-time cleanup BEFORE the channelId guard.
+      // iOS queues onPTTChannelLeft on the main thread and fires it asynchronously —
+      // sometimes 300–400 ms after leaveChannel() returns, exactly when the PTT button
+      // is released (freeing the main thread). When the stored channelId equals the
+      // newly joined channelId the guard below passes through the stale event and
+      // triggers a false ptt:leave → disconnect cycle.
+      if (cleanupLeaveRef.current) {
+        cleanupLeaveRef.current = false;
+        return;
+      }
+      // Ignore events for channels we are not currently in (e.g. race between
+      // leaveChannel and a rapid rejoin to a different group).
       if (!nativePTTChannelIdRef.current || channelId !== nativePTTChannelIdRef.current) return;
 
       intentionalLeaveRef.current = true;
