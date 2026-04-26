@@ -13,13 +13,15 @@ let loaded = false;
 async function loadSounds(): Promise<void> {
   if (loaded || Platform.OS === 'web') return;
   try {
-    // allowsRecordingIOS: true keeps expo-av in PlayAndRecord category,
-    // which is compatible with LiveKit's audio session. Without it expo-av
-    // tries to switch to Playback category, conflicts with LiveKit, and
-    // playAsync() silently fails while the session is active.
+    // MixWithOthers (interruptionModeIOS: 0) lets expo-av coexist with LiveKit's
+    // PlayAndRecord session instead of fighting to replace it. playsInSilentModeIOS
+    // and allowsRecordingIOS are both false so expo-av uses the Ambient category,
+    // which DOES respect the iOS ringer/silent switch — chirps are muted on silent.
     await Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      allowsRecordingIOS: true,
+      playsInSilentModeIOS: false,
+      allowsRecordingIOS: false,
+      interruptionModeIOS: 0, // InterruptionModeIOS.MixWithOthers
+      shouldDuckAndroid: false,
     });
     const [s, e] = await Promise.all([
       Audio.Sound.createAsync(START_SOUND, { volume: 0.8 }),

@@ -288,7 +288,13 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     });
 
     // System closed the channel (user left from Dynamic Island / lock screen)
-    const unsubLeft = nativePTTService.onChannelLeft(() => {
+    const unsubLeft = nativePTTService.onChannelLeft((channelId) => {
+      // Ignore stale leave events from previous sessions — the mount cleanup calls
+      // leaveChannel(oldChannelId) which eventually fires onPTTChannelLeft even after
+      // the user has already joined a new channel. Guard on the active channel ref so
+      // we only handle leaves for the channel we are currently in.
+      if (!nativePTTChannelIdRef.current || channelId !== nativePTTChannelIdRef.current) return;
+
       intentionalLeaveRef.current = true;
       const { currentGroupId } = usePTTStore.getState();
       const s = socketRef.current;
@@ -517,6 +523,10 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
         // ── iOS: Apple native PTT framework ──────────────────────────────────
         nativePTTActiveRef.current = false;
+        // Null out the channel ref BEFORE joining so any stale onPTTChannelLeft event
+        // that fires during this join window (e.g. from mount-time leaveChannel cleanup
+        // of a previous session with the same channel ID) is safely ignored.
+        nativePTTChannelIdRef.current = null;
         if (USE_NATIVE_PTT) {
           try {
             // Register push token listener BEFORE joinChannel — iOS can fire the

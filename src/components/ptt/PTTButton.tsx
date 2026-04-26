@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SHADOWS } from '@/config/theme';
 import { PTTState } from '@/types';
 import { pttBeeps } from '@/utils/pttBeeps';
+import { usePTTStore } from '@/store/usePTTStore';
 
 interface PTTButtonProps {
   state: PTTState;
@@ -35,6 +36,7 @@ export function PTTButton({
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const pulseRef = useRef<Animated.CompositeAnimation | null>(null);
+  const { config } = usePTTStore();
 
   const handlePressIn = () => {
     if (disabled) return;
@@ -52,7 +54,7 @@ export function PTTButton({
     );
     pulseRef.current.start();
 
-    pttBeeps.onTransmitStart();
+    if (config.beepOnTransmit) pttBeeps.onTransmitStart();
     onPressIn();
   };
 
@@ -67,7 +69,7 @@ export function PTTButton({
     pulseRef.current?.stop();
     pulseAnim.setValue(1);
 
-    pttBeeps.onTransmitStop();
+    if (config.beepOnTransmit) pttBeeps.onTransmitStop();
     onPressOut();
   };
 
