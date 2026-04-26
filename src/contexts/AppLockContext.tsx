@@ -8,6 +8,8 @@ interface AppLockContextType {
   isPinEnabled: boolean;
   isBiometricEnabled: boolean;
   biometricType: BiometricType;
+  /** Type based on hardware alone — non-null even when permission was denied. */
+  hardwareBiometricType: BiometricType;
   unlock: () => void;
   tryBiometric: () => Promise<boolean>;
   refreshPinStatus: () => Promise<void>;
@@ -19,6 +21,7 @@ const AppLockContext = createContext<AppLockContextType>({
   isPinEnabled: false,
   isBiometricEnabled: false,
   biometricType: null,
+  hardwareBiometricType: null,
   unlock: () => {},
   tryBiometric: async () => false,
   refreshPinStatus: async () => {},
@@ -33,16 +36,19 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
   const [isPinEnabled, setIsPinEnabled] = useState(false);
   const [isBiometricEnabled, setIsBiometricEnabled] = useState(false);
   const [biometricType, setBiometricType] = useState<BiometricType>(null);
+  const [hardwareBiometricType, setHardwareBiometricType] = useState<BiometricType>(null);
   const [backgroundedAt, setBackgroundedAt] = useState<number | null>(null);
 
   const refreshBiometricStatus = useCallback(async () => {
-    const [available, enabled, type] = await Promise.all([
+    const [available, enabled, type, hwType] = await Promise.all([
       biometricAuth.isAvailable(),
       biometricAuth.isEnabled(),
       biometricAuth.getType(),
+      biometricAuth.hasHardwareType(),
     ]);
     setIsBiometricEnabled(available && enabled);
     setBiometricType(available ? type : null);
+    setHardwareBiometricType(hwType);
   }, []);
 
   const refreshPinStatus = useCallback(async () => {
@@ -67,11 +73,13 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
       biometricAuth.isAvailable(),
       biometricAuth.isEnabled(),
       biometricAuth.getType(),
-    ]).then(([pinSet, bioAvailable, bioEnabled, bioType]) => {
+      biometricAuth.hasHardwareType(),
+    ]).then(([pinSet, bioAvailable, bioEnabled, bioType, hwType]) => {
       setIsPinEnabled(pinSet);
       setIsBiometricEnabled(bioAvailable && bioEnabled);
       setBiometricType(bioAvailable ? bioType : null);
-      setIsLocked(pinSet); // start locked if PIN is set
+      setHardwareBiometricType(hwType);
+      setIsLocked(pinSet);
     });
   }, []);
 
@@ -122,6 +130,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
         isPinEnabled,
         isBiometricEnabled,
         biometricType,
+        hardwareBiometricType,
         unlock,
         tryBiometric,
         refreshPinStatus,

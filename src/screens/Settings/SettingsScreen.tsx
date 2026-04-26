@@ -16,8 +16,9 @@ export function SettingsScreen() {
   const { user, organization, logout } = useAuth();
   const { tierLabel, subscription, canUseFeature } = useSubscriptionStore();
   const [isRegenerating, setIsRegenerating] = useState(false);
-  const { isPinEnabled, isBiometricEnabled, biometricType, refreshPinStatus, refreshBiometricStatus } = useAppLock();
-  const biometricLabel = biometricType === 'faceId' ? 'Face ID' : 'Touch ID';
+  const { isPinEnabled, isBiometricEnabled, biometricType, hardwareBiometricType, refreshPinStatus, refreshBiometricStatus } = useAppLock();
+  const effectiveBiometricType = biometricType ?? hardwareBiometricType;
+  const biometricLabel = effectiveBiometricType === 'faceId' ? 'Face ID' : 'Touch ID';
   const isEnterprise = subscription?.tier === 'PRO';
   const isOrgAdmin = user?.role === 'owner' || user?.role === 'admin';
   const hasPcoAddon = isOrgAdmin; // Visible to all org owners/admins; connection optional
@@ -241,27 +242,31 @@ export function SettingsScreen() {
               <Text style={styles.settingLabel}>Organization</Text>
               <Text style={styles.settingValue}>{organization.name}</Text>
             </View>
-            <View style={styles.inviteRow}>
-              <View style={styles.inviteCodeBox}>
-                <Text style={styles.inviteCodeLabel}>Invite Code</Text>
-                <Text style={styles.inviteCode}>{organization.inviteCode}</Text>
-              </View>
-              <TouchableOpacity style={styles.shareButton} onPress={handleShareInvite}>
-                <Text style={styles.shareButtonText}>Share</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.shareButton, styles.regenerateButton]}
-                onPress={handleRegenerateInvite}
-                disabled={isRegenerating}
-              >
-                <Text style={styles.shareButtonText}>
-                  {isRegenerating ? '...' : 'Regenerate'}
+            {isOrgAdmin && (
+              <>
+                <View style={styles.inviteRow}>
+                  <View style={styles.inviteCodeBox}>
+                    <Text style={styles.inviteCodeLabel}>Invite Code</Text>
+                    <Text style={styles.inviteCode}>{organization.inviteCode}</Text>
+                  </View>
+                  <TouchableOpacity style={styles.shareButton} onPress={handleShareInvite}>
+                    <Text style={styles.shareButtonText}>Share</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.shareButton, styles.regenerateButton]}
+                    onPress={handleRegenerateInvite}
+                    disabled={isRegenerating}
+                  >
+                    <Text style={styles.shareButtonText}>
+                      {isRegenerating ? '...' : 'Regenerate'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.inviteHint}>
+                  This code can be used unlimited times. Regenerate it to invalidate old links.
                 </Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.inviteHint}>
-              This code can be used unlimited times. Regenerate it to invalidate old links.
-            </Text>
+              </>
+            )}
           </View>
         )}
 
@@ -282,18 +287,26 @@ export function SettingsScreen() {
               <Text style={styles.chevron}>{'›'}</Text>
             </View>
           </Pressable>
-          {isPinEnabled && biometricType !== null && (
+          {isPinEnabled && effectiveBiometricType !== null && (
             <Pressable
               style={styles.settingRow}
               onPress={async () => {
                 if (isBiometricEnabled) {
                   await biometricAuth.setEnabled(false);
                 } else {
-                  // Verify biometric before enabling
                   const ok = await biometricAuth.authenticate(
                     `Confirm ${biometricLabel} to enable it as your unlock method`,
                   );
-                  if (ok) await biometricAuth.setEnabled(true);
+                  if (ok) {
+                    await biometricAuth.setEnabled(true);
+                  } else if (!biometricType) {
+                    // Permission was denied at OS level — direct user to Settings
+                    Alert.alert(
+                      `${biometricLabel} Permission Required`,
+                      `Please go to Settings > GatherSafe > ${biometricLabel} and enable access, then try again.`,
+                      [{ text: 'OK' }],
+                    );
+                  }
                 }
                 await refreshBiometricStatus();
               }}

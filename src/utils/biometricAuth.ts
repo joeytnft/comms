@@ -17,6 +17,15 @@ export const biometricAuth = {
     return enrolled;
   },
 
+  // Returns the biometric type the device hardware supports, regardless of
+  // whether the user has enrolled or granted the app permission.  Used to
+  // keep the Face ID / Touch ID settings row visible even after a denial.
+  async hasHardwareType(): Promise<BiometricType> {
+    const compatible = await LocalAuthentication.hasHardwareAsync();
+    if (!compatible) return null;
+    return biometricAuth.getType();
+  },
+
   async getType(): Promise<BiometricType> {
     const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
     if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) {
