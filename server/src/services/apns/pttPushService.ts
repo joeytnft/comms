@@ -29,7 +29,13 @@ function base64url(buf: Buffer | string): string {
 
 let cachedJWT: string | null = null;
 let cachedJWTIssuedAt = 0;
-const JWT_TTL_SECONDS = 55 * 60; // Refresh 5 min before the 60-min APNs limit
+const JWT_TTL_SECONDS = 55 * 60;
+
+// Subtle crypto is available in Node 18+ and bypasses OpenSSL's PKCS8 decoder,
+// which rejects valid .p8 keys on some Railway / OpenSSL 3 configurations with
+// ERR_OSSL_UNSUPPORTED.  Web Crypto ECDSA sign() returns the signature in
+// raw R||S (ieee-p1363) format — exactly what APNs expects.
+const subtle = crypto.webcrypto.subtle;
 
 // Normalize a PEM-encoded private key read from an env var.
 //
@@ -56,7 +62,7 @@ function normalizePemKey(raw: string): string {
   return withNewlines;
 }
 
-function buildJWT(): string {
+async function buildJWT(): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   if (cachedJWT && now - cachedJWTIssuedAt < JWT_TTL_SECONDS) return cachedJWT;
 
@@ -70,28 +76,36 @@ function buildJWT(): string {
 
   const pemKey = normalizePemKey(rawKey);
 
-  let privateKey: crypto.KeyObject;
-  try {
-    // createPrivateKey() produces a proper KeyObject that OpenSSL 3 / Node 20 can
-    // sign with reliably regardless of how the PEM was encoded in the env var.
-    privateKey = crypto.createPrivateKey({ key: pemKey, format: 'pem' });
-  } catch (parseErr) {
-    // Key parsing failed — clear cache so the next call retries normalization
-    // rather than serving a potentially stale (broken) cached JWT.
-    cachedJWT = null;
-    cachedJWTIssuedAt = 0;
-    throw parseErr;
-  }
+  // Extract the raw DER bytes from the PEM body (strip header/footer + whitespace)
+  const derBase64 = pemKey
+    .replace(/-----BEGIN [A-Z ]+-----/, '')
+    .replace(/-----END [A-Z ]+-----/, '')
+    .replace(/\s/g, '');
+  const derBuffer = Buffer.from(derBase64, 'base64');
+
+  // importKey via Web Crypto avoids the OpenSSL 3 PKCS8 decoder that raises
+  // ERR_OSSL_UNSUPPORTED on some Railway configurations.  Apple .p8 keys are
+  // PKCS#8-wrapped P-256 — this is the correct format parameter.
+  const cryptoKey = await subtle.importKey(
+    'pkcs8',
+    derBuffer,
+    { name: 'ECDSA', namedCurve: 'P-256' },
+    false,
+    ['sign'],
+  );
 
   const header  = base64url(JSON.stringify({ alg: 'ES256', kid: keyId }));
   const payload = base64url(JSON.stringify({ iss: teamId, iat: now }));
   const data    = `${header}.${payload}`;
 
-  const sign = crypto.createSign('SHA256');
-  sign.update(data);
-  const signature = sign.sign({ key: privateKey, dsaEncoding: 'ieee-p1363' });
+  // Web Crypto ECDSA returns R||S (ieee-p1363) format natively — no conversion needed.
+  const sigBuffer = await subtle.sign(
+    { name: 'ECDSA', hash: 'SHA-256' },
+    cryptoKey,
+    Buffer.from(data),
+  );
 
-  cachedJWT = `${data}.${base64url(signature)}`;
+  cachedJWT = `${data}.${base64url(Buffer.from(sigBuffer))}`;
   cachedJWTIssuedAt = now;
   return cachedJWT;
 }
@@ -143,7 +157,7 @@ async function sendPTTPush(deviceToken: string, payload: PTTPushPayload): Promis
   if (!bundleId) throw new Error('APNS_BUNDLE_ID is required');
 
   const host    = getHost();
-  const jwt     = buildJWT();
+  const jwt     = await buildJWT();
   const path    = `/3/device/${deviceToken}`;
   const body    = JSON.stringify(payload);
 
