@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, TextInput, Share, Switch } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, TextInput, Share, Switch, Modal, FlatList, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -7,6 +7,7 @@ import { RouteProp } from '@react-navigation/native';
 import { useGroupStore } from '@/store/useGroupStore';
 import { useCampusStore } from '@/store/useCampusStore';
 import { useSubscriptionStore } from '@/store/useSubscriptionStore';
+import { useMembersStore } from '@/store/useMembersStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { MemberList } from '@/components/groups/MemberList';
 import { LoadingOverlay, Button } from '@/components/common';
@@ -24,9 +25,10 @@ export function GroupDetailScreen({ navigation, route }: Props) {
   const { currentGroup, isLoading, fetchGroup, addMember, removeMember, deleteGroup, updateGroup, generateInvite, revokeInvite, clearCurrentGroup, assignGroupCampus } = useGroupStore();
   const { campuses, fetchCampuses } = useCampusStore();
   const { subscription } = useSubscriptionStore();
+  const { members: orgMembers, isLoading: membersLoading, fetchMembers } = useMembersStore();
   const isEnterprise = subscription?.tier === 'PRO';
   const [showAddMember, setShowAddMember] = useState(false);
-  const [memberEmail, setMemberEmail] = useState('');
+  const [memberSearch, setMemberSearch] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
   const [showCampusPicker, setShowCampusPicker] = useState(false);
@@ -46,12 +48,11 @@ export function GroupDetailScreen({ navigation, route }: Props) {
     (m) => m.userId === user?.id && m.role === 'admin',
   );
 
-  const handleAddMember = async () => {
-    if (!memberEmail.trim()) return;
+  const handleAddMember = async (userId: string) => {
     setIsAdding(true);
     try {
-      await addMember({ groupId, email: memberEmail.trim(), role: 'member' });
-      setMemberEmail('');
+      await addMember({ groupId, userId, role: 'member' });
+      setMemberSearch('');
       setShowAddMember(false);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to add member';
@@ -322,34 +323,15 @@ export function GroupDetailScreen({ navigation, route }: Props) {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Members</Text>
             {isAdmin && (
-              <TouchableOpacity onPress={() => setShowAddMember(!showAddMember)}>
-                <Text style={styles.addMemberText}>
-                  {showAddMember ? 'Cancel' : '+ Add'}
-                </Text>
+              <TouchableOpacity onPress={() => {
+                fetchMembers();
+                setMemberSearch('');
+                setShowAddMember(true);
+              }}>
+                <Text style={styles.addMemberText}>+ Add</Text>
               </TouchableOpacity>
             )}
           </View>
-
-          {showAddMember && (
-            <View style={styles.addMemberForm}>
-              <TextInput
-                style={styles.emailInput}
-                placeholder="Enter member's email"
-                placeholderTextColor={COLORS.gray500}
-                value={memberEmail}
-                onChangeText={setMemberEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-              <Button
-                title="Add"
-                onPress={handleAddMember}
-                loading={isAdding}
-                disabled={!memberEmail.trim()}
-                style={styles.addButton}
-              />
-            </View>
-          )}
 
           <MemberList
             members={currentGroup.members}
@@ -358,6 +340,82 @@ export function GroupDetailScreen({ navigation, route }: Props) {
             onRemoveMember={handleRemoveMember}
           />
         </View>
+
+        {/* Add member modal */}
+        <Modal
+          visible={showAddMember}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setShowAddMember(false)}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add Member</Text>
+              <TouchableOpacity onPress={() => setShowAddMember(false)}>
+                <Text style={styles.modalCancel}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.searchRow}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search members…"
+                placeholderTextColor={COLORS.gray500}
+                value={memberSearch}
+                onChangeText={setMemberSearch}
+                autoCapitalize="none"
+                clearButtonMode="while-editing"
+              />
+            </View>
+            {membersLoading ? (
+              <ActivityIndicator color={COLORS.accent} style={styles.modalLoader} />
+            ) : (
+              (() => {
+                const currentMemberIds = new Set(currentGroup.members.map((m) => m.userId));
+                const available = orgMembers.filter(
+                  (m) =>
+                    !currentMemberIds.has(m.id) &&
+                    (memberSearch.trim() === '' ||
+                      m.displayName.toLowerCase().includes(memberSearch.toLowerCase()) ||
+                      (m.email ?? '').toLowerCase().includes(memberSearch.toLowerCase())),
+                );
+                return available.length === 0 ? (
+                  <Text style={styles.emptyPickerText}>
+                    {memberSearch.trim() ? 'No members match your search' : 'All organization members are already in this channel'}
+                  </Text>
+                ) : (
+                  <FlatList
+                    data={available}
+                    keyExtractor={(item) => item.id}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.memberPickerRow}
+                        onPress={() => handleAddMember(item.id)}
+                        disabled={isAdding}
+                      >
+                        <View style={styles.memberPickerAvatar}>
+                          <Text style={styles.memberPickerAvatarText}>
+                            {item.displayName.charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={styles.memberPickerInfo}>
+                          <Text style={styles.memberPickerName}>{item.displayName}</Text>
+                          {item.email ? (
+                            <Text style={styles.memberPickerEmail}>{item.email}</Text>
+                          ) : null}
+                        </View>
+                        {isAdding ? null : (
+                          <Text style={styles.memberPickerAdd}>Add</Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                    ItemSeparatorComponent={() => <View style={styles.separator} />}
+                    contentContainerStyle={styles.pickerList}
+                  />
+                );
+              })()
+            )}
+          </View>
+        </Modal>
 
         {/* Admin actions */}
         {isAdmin && (
@@ -609,5 +667,98 @@ const styles = StyleSheet.create({
   },
   campusOptionTextSelected: {
     color: COLORS.accent,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray700,
+  },
+  modalTitle: {
+    ...TYPOGRAPHY.heading3,
+    color: COLORS.textPrimary,
+  },
+  modalCancel: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.info,
+  },
+  searchRow: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray700,
+  },
+  searchInput: {
+    backgroundColor: COLORS.surface,
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    ...TYPOGRAPHY.body,
+    color: COLORS.textPrimary,
+    borderWidth: 1,
+    borderColor: COLORS.gray700,
+  },
+  modalLoader: {
+    marginTop: SPACING.xxl,
+  },
+  pickerList: {
+    paddingBottom: SPACING.xxl,
+  },
+  memberPickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    gap: SPACING.md,
+  },
+  memberPickerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  memberPickerAvatarText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.white,
+    fontWeight: '700',
+  },
+  memberPickerInfo: {
+    flex: 1,
+  },
+  memberPickerName: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textPrimary,
+    fontWeight: '600',
+  },
+  memberPickerEmail: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  memberPickerAdd: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.info,
+    fontWeight: '600',
+  },
+  separator: {
+    height: 1,
+    backgroundColor: COLORS.gray700,
+    marginLeft: SPACING.lg + 40 + SPACING.md,
+  },
+  emptyPickerText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginTop: SPACING.xxl,
+    paddingHorizontal: SPACING.xl,
   },
 });
