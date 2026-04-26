@@ -568,6 +568,13 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
               }
             });
 
+            // iOS internally closes any existing PTT session when initialize() is called,
+            // queuing an onPTTChannelLeft that fires asynchronously — typically when the
+            // main thread is first freed, which is right after the first PTT button release.
+            // Set the flag here so onChannelLeft can consume that stale event before the
+            // channelId guard sees it (both old and new channelId are the same groupId).
+            cleanupLeaveRef.current = true;
+
             const resolvedId = await nativePTTService.joinChannel(groupId, response.groupName);
             nativePTTChannelIdRef.current = resolvedId;
             nativePTTActiveRef.current = true;
@@ -997,6 +1004,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         pttRecorderService.cancel();
       }
     }
+    // Expire the join-grace period 1.5 s after this transmission ends. The stale
+    // onPTTChannelLeft that iOS queues during initialize() fires within ~500 ms of
+    // the first PTT release — well within this window. After 1.5 s, cleanupLeaveRef
+    // becomes false so legitimate Dynamic Island / lock-screen leaves are processed.
+    setTimeout(() => { cleanupLeaveRef.current = false; }, 1500);
+
     // Update Live Activity — done transmitting
     const { currentGroupName, connectedMemberIds } = usePTTStore.getState();
     liveActivityService.update(liveActivityIdRef.current, {
