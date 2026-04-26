@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Linking,
   Platform,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -64,6 +65,29 @@ export function NotificationSettingsScreen({ navigation }: Props) {
   );
 
   const openSettings = () => Linking.openSettings();
+
+  const requestCriticalAlerts = useCallback(async () => {
+    const { ios } = await Notifications.requestPermissionsAsync({
+      ios: {
+        allowAlert: true,
+        allowBadge: true,
+        allowSound: true,
+        allowCriticalAlerts: true,
+      },
+    });
+    if (ios?.allowsCriticalAlerts) {
+      await checkPermissions();
+    } else {
+      Alert.alert(
+        'Critical Alerts',
+        'iOS did not show the permission dialog — this can happen when the permission was already determined on a previous install.\n\nTo enable Critical Alerts:\n1. Delete the app\n2. Reinstall from TestFlight\n3. Tap "Allow" on both permission dialogs that appear\n\nOr go to Settings → GatherSafe → Notifications → Critical Alerts if the toggle is already there.',
+        [
+          { text: 'Open Settings', onPress: openSettings },
+          { text: 'OK', style: 'cancel' },
+        ],
+      );
+    }
+  }, [checkPermissions, openSettings]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -123,17 +147,16 @@ export function NotificationSettingsScreen({ navigation }: Props) {
               <View style={styles.warningCard}>
                 <Text style={styles.warningTitle}>Critical Alerts are off</Text>
                 <Text style={styles.warningBody}>
-                  Active Shooter and other emergency alerts will not override Silent mode or
-                  Do Not Disturb. Tap the button below to enable them.
+                  Emergency alerts will not override Silent mode or Do Not Disturb. Tap
+                  "Request Permission" below — iOS will show a dialog to enable them.
                 </Text>
-                <TouchableOpacity style={styles.settingsButton} onPress={openSettings}>
-                  <Text style={styles.settingsButtonText}>Open Notification Settings</Text>
+                <TouchableOpacity style={styles.settingsButton} onPress={requestCriticalAlerts}>
+                  <Text style={styles.settingsButtonText}>Request Permission</Text>
                 </TouchableOpacity>
                 <Text style={styles.settingsHint}>
-                  In iOS Settings, tap{' '}
-                  <Text style={styles.settingsHintBold}>GatherSafe</Text> → Notifications →
-                  turn on{' '}
-                  <Text style={styles.settingsHintBold}>Critical Alerts</Text>.
+                  If no dialog appears, go to{' '}
+                  <Text style={styles.settingsHintBold}>Settings → GatherSafe → Notifications → Critical Alerts</Text>
+                  {' '}to enable it manually. If that toggle is missing, reinstall the app from TestFlight and allow both permission dialogs on first launch.
                 </Text>
               </View>
             )}
