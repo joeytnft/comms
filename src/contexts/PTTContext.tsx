@@ -322,7 +322,9 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       roomRef.current = null;
       nativePTTChannelIdRef.current = null;
       usePTTStore.getState().disconnect();
-      AudioSession?.stopAudioSession();
+      // Native PTT path never called startAudioSession itself, so there is
+      // nothing to stop here — the framework deactivated its own session
+      // already as part of the channel-leave sequence.
       endLiveActivity();
       mmkvStorage.delete(PTT_GROUP_ID_KEY);
       mmkvStorage.delete(PTT_CHANNEL_ID_KEY);
@@ -640,11 +642,20 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           throw new Error('LiveKit server URL is not configured. Set LIVEKIT_URL on the server.');
         }
 
-        // Start the audio session for all modes. In native PTT mode the framework
-        // manages per-transmission activation, but we still need a baseline active
-        // session so the pre-published muted mic track is properly configured and the
-        // first button press doesn't wait ~1 s for Apple's async activation cycle.
-        AudioSession?.startAudioSession();
+        // Audio-session ownership:
+        //   - When native PTT is active, Apple's framework owns the AVAudioSession
+        //     while a channel is joined. Calling AudioSession.startAudioSession()
+        //     here flips RTCAudioSession.useManualAudio back to NO and activates
+        //     the session outside the framework's lifecycle, which iOS treats as
+        //     a contract violation and ends the channel on first transmit.
+        //     The .m file already configured manual-audio mode and will enable
+        //     WebRTC audio in didActivateAudioSession when the framework activates
+        //     the session per-transmission.
+        //   - For non-native paths (Android, iOS without the PTT framework, web)
+        //     we still need to bring the LiveKit session up ourselves.
+        if (!USE_NATIVE_PTT) {
+          AudioSession?.startAudioSession();
+        }
 
         const room = new Room!({
           audioCaptureDefaults: {
@@ -699,7 +710,11 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           if (intentionalLeaveRef.current) {
             intentionalLeaveRef.current = false;
             usePTTStore.getState().disconnect();
-            AudioSession?.stopAudioSession();
+            // Only call stopAudioSession on the non-native path — native PTT
+            // never started a LiveKit-managed session in the first place.
+            if (!USE_NATIVE_PTT) {
+              AudioSession?.stopAudioSession();
+            }
           } else {
             usePTTStore.getState().setActiveSpeaker(null);
           }
@@ -721,7 +736,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
             callKitService.endCall(callUUIDRef.current);
             callUUIDRef.current = null;
           }
-          AudioSession?.stopAudioSession();
+          // stopAudioSession is only meaningful when we previously started
+          // one (non-native path). Native PTT lets the framework own the
+          // session lifecycle entirely.
+          if (!USE_NATIVE_PTT) {
+            AudioSession?.stopAudioSession();
+          }
           usePTTStore.getState().disconnect();
           mmkvStorage.delete(PTT_GROUP_ID_KEY);
           mmkvStorage.delete(PTT_CHANNEL_ID_KEY);
@@ -847,7 +867,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         }
       }
       pttRecorderService.cancel();
-      AudioSession?.stopAudioSession();
+      // Only stop the LiveKit-managed audio session if we started one. Native
+      // PTT delegates session ownership to Apple's framework, which has
+      // already deactivated its session as part of the channel-leave path.
+      if (!USE_NATIVE_PTT) {
+        AudioSession?.stopAudioSession();
+      }
     }
 
     const s = socketRef.current ?? socket;
@@ -932,26 +957,25 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       }).catch(() => null);
     } else if (nativePTTActiveRef.current) {
       if (nativePTTChannelIdRef.current) {
-        // In-app button — own the audio session directly (LiveKit path).
+        // Delegate to Apple's PTT framework even for in-app button presses.
         //
-        // beginTransmitting() is intentionally NOT called here. Calling it asks
-        // Apple's PTT framework to take over the AVAudioSession, which triggers
-        // an async activation cycle (~1 s) and plays Apple's system "begin transmit"
-        // sound — that's the "second chirp" the user hears. The Dynamic Island button
-        // avoids this because Apple handles that press synchronously at the system level.
+        // Earlier code called AudioSession.startAudioSession() and unmuted the
+        // LiveKit mic directly to avoid Apple's ~100-300 ms activation cycle and
+        // the system "begin transmit" tone, but that activates AVAudioSession
+        // outside the framework's lifecycle while a channel is joined — iOS
+        // treats it as a contract violation and revokes the channel on the
+        // first transmit (Dynamic Island talk icon disappears, subsequent
+        // taps deeplink into the app instead of transmitting).
         //
-        // Instead: we keep the session alive ourselves (startAudioSession at join +
-        // re-warm in onAudioDeactivated) so unmute is instant with no framework delay.
-        // The onTransmissionStarted/onAudioActivated callbacks still handle the Dynamic
-        // Island / lock screen / hardware button path unchanged.
-        nativePTTButtonRef.current = false; // in-app button owns this transmission
-        AudioSession?.startAudioSession();
-        if (micTrackRef.current) { micTrackRef.current.unmute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null); }
-        if (!pttStartEmittedRef.current) {
-          pttStartEmittedRef.current = true;
-          console.info('[PTT] HTTP ptt:start (native in-app path, no beginTransmitting)', { currentGroupId });
-          pttPost(currentGroupId, 'start').catch(() => null);
-        }
+        // The framework now owns the session: requestBeginTransmitting fires
+        // didActivateAudioSession, our native module enables WebRTC audio,
+        // and onAudioActivated below unmutes the LiveKit track + posts
+        // ptt:start to the server. Slight first-press latency is the price
+        // for keeping the channel alive.
+        nativePTTButtonRef.current = true;
+        nativePTTService.beginTransmitting(nativePTTChannelIdRef.current).catch((err) => {
+          console.warn('[PTT] beginTransmitting failed', err);
+        });
       } else {
         console.warn('[PTT] native PTT active but no channel id — cannot begin transmission');
       }
@@ -1013,13 +1037,13 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     } else if (nativePTTActiveRef.current) {
       if (nativePTTChannelIdRef.current) {
         if (startWasEmitted) pttPost(currentGroupId, 'stop').catch(() => null);
-        if (nativePTTButtonRef.current) {
-          // Framework-initiated (Dynamic Island / hardware button): tell the framework
-          // to end so it can update system UI and deactivate the audio session.
-          nativePTTService.stopTransmitting(nativePTTChannelIdRef.current).catch(() => null);
-        }
-        // In-app-initiated: no stopTransmitting() call — we never called beginTransmitting(),
-        // so the framework isn't in "transmitting" state and the session stays warm.
+        // Every native-PTT transmission now goes through the framework
+        // (beginTransmitting in startTransmitting), so the framework is
+        // always in "transmitting" state on release — call stopTransmitting
+        // unconditionally so the framework deactivates its session and the
+        // system UI updates. The didDeactivateAudioSession callback then
+        // mutes the LiveKit mic via our handler.
+        nativePTTService.stopTransmitting(nativePTTChannelIdRef.current).catch(() => null);
         nativePTTButtonRef.current = false;
         if (startWasEmitted) pttPost(currentGroupId, 'native-log', { durationMs }).catch(() => null);
       }
