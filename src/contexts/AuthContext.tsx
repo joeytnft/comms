@@ -4,6 +4,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useSubscriptionStore } from '@/store/useSubscriptionStore';
 import { notificationService } from '@/services/notificationService';
 import { revenueCatService } from '@/services/revenueCatService';
+import { reportCrash } from '@/utils/logger';
 
 interface Organization {
   id: string;
@@ -38,12 +39,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (isAuthenticated && user) {
       // Use the organization ID so all org members share the same RevenueCat
       // customer record — the org owner's purchase covers the whole team.
-      revenueCatService.identify(user.organizationId).catch(() => {
-        // Non-fatal — SDK will continue in anonymous mode
+      revenueCatService.identify(user.organizationId).catch((err) => {
+        // Non-fatal — SDK will continue in anonymous mode — but we want to
+        // know about it so subscription bugs are diagnosable.
+        reportCrash({ err, context: 'AuthContext.revenueCatIdentify' });
       });
       fetchSubscription();
       fetchCustomerInfo();
-      notificationService.registerPushToken();
+      // Push-token registration was previously fire-and-forget with no error
+      // path. Silent failure means push notifications stop working forever
+      // until next login — log it so we can see when it happens.
+      notificationService.registerPushToken().catch((err) => {
+        reportCrash({ err, context: 'AuthContext.registerPushToken' });
+      });
     }
   }, [isAuthenticated, user]);
 
@@ -52,7 +60,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await notificationService.unregisterPushToken();
     await authLogout();
     // Reset RevenueCat to anonymous customer after logout
-    revenueCatService.logOut().catch(() => {});
+    revenueCatService.logOut().catch((err) => {
+      reportCrash({ err, context: 'AuthContext.revenueCatLogout' });
+    });
   };
 
   return (
