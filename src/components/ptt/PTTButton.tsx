@@ -5,6 +5,15 @@ import { COLORS, TYPOGRAPHY, SHADOWS } from '@/config/theme';
 import { PTTState } from '@/types';
 import { pttBeeps } from '@/utils/pttBeeps';
 import { usePTTStore } from '@/store/usePTTStore';
+import { nativePTTService } from '@/services/nativePTTService';
+
+// Apple's PTT framework plays its own begin/end transmission tones whenever
+// the system audio session activates. Apple's docs explicitly say:
+//   "The framework doesn't support custom sound effects."
+//   "Don't provide sound effects for these events."
+// So we only play our own beeps on platforms where the framework is NOT in
+// the loop (Android via CallKit, iOS without the entitlement, web).
+const SUPPRESS_APP_BEEPS = nativePTTService.isAvailable;
 
 interface PTTButtonProps {
   state: PTTState;
@@ -54,7 +63,7 @@ export function PTTButton({
     );
     pulseRef.current.start();
 
-    if (config.beepOnTransmit) pttBeeps.onTransmitStart();
+    if (config.beepOnTransmit && !SUPPRESS_APP_BEEPS) pttBeeps.onTransmitStart();
     onPressIn();
   };
 
@@ -69,7 +78,7 @@ export function PTTButton({
     pulseRef.current?.stop();
     pulseAnim.setValue(1);
 
-    if (config.beepOnTransmit) pttBeeps.onTransmitStop();
+    if (config.beepOnTransmit && !SUPPRESS_APP_BEEPS) pttBeeps.onTransmitStop();
     onPressOut();
   };
 

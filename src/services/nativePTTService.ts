@@ -44,6 +44,24 @@ function on(event: string, handler: (data: Record<string, unknown>) => void): Un
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 /**
+ * Create the iOS PTChannelManager singleton at app launch — BEFORE any user
+ * action joins a channel. Required for iOS to restore a previously-joined
+ * PTT channel after the app is killed/relaunched. Per Apple's docs:
+ *
+ *   "Initialize the channel manager as soon as possible during startup to
+ *    ensure the framework can restore existing channels and deliver push
+ *    notifications to the app."
+ *
+ * No-op on Android, web, or older iOS. Safe to call multiple times — the
+ * native implementation is idempotent.
+ */
+async function preinit(): Promise<void> {
+  if (!isAvailable) return;
+  if (typeof PushToTalkModule.preinit !== 'function') return;
+  return PushToTalkModule.preinit();
+}
+
+/**
  * Join a PTT channel. Returns the resolved channel UUID (may differ from the
  * requested one when iOS normalises it).
  */
@@ -166,6 +184,9 @@ function onAudioDeactivated(cb: () => void): Unsubscribe {
 
 export const nativePTTService = {
   isAvailable,
+
+  // Lifecycle
+  preinit,
 
   // Channel lifecycle
   joinChannel,

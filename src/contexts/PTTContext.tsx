@@ -148,6 +148,15 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // queue a ptt:leave for when the socket reconnects — otherwise the server keeps
   // the user in the room indefinitely.
   useEffect(() => {
+    // Apple: "Initialize the channel manager as soon as possible during
+    // startup to ensure the framework can restore existing channels and
+    // deliver push notifications to the app." Without this preinit, an
+    // active PTT channel that iOS persisted across app relaunches (e.g.
+    // after a crash) cannot be restored — the framework needs a live
+    // channelManager + restorationDelegate before it will fire the
+    // restoration path. The call is idempotent.
+    nativePTTService.preinit().catch(() => null);
+
     if (usePTTStore.getState().isConnected) return;
 
     const storedActivityId = mmkvStorage.getString(LIVE_ACTIVITY_ID_KEY);
