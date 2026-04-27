@@ -405,9 +405,14 @@ export function setupPTTSocket(io: Server, socket: Socket) {
 
         // If the user dropped mid-transmission, tell peers immediately so their
         // UI clears the active-speaker indicator rather than spinning forever.
+        // The session key is a Redis hash (written with HSET in ptt:start), so
+        // we must use EXISTS rather than GET — calling GET on a hash returns a
+        // WRONGTYPE error that silently swallows the ptt:stopped notification,
+        // leaving every peer stuck in the RECEIVING state indefinitely.
         const sessionKey = `ptt:session:${userId}:${groupId}`;
-        redis.get(sessionKey).then(async (sessionData) => {
-          if (sessionData) {
+        const chunksKey  = `ptt:chunks:${userId}:${groupId}`;
+        redis.exists(sessionKey).then(async (exists) => {
+          if (exists > 0) {
             const endedAt = new Date().toISOString();
             io.to(room).emit('ptt:stopped', { groupId, userId, endedAt });
 
@@ -425,7 +430,7 @@ export function setupPTTSocket(io: Server, socket: Socket) {
               }
             } catch { /* non-fatal */ }
 
-            redis.del(sessionKey).catch(() => null);
+            redis.del(sessionKey, chunksKey).catch(() => null);
           }
         }).catch(() => null);
 
