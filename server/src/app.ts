@@ -4,9 +4,6 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import jwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
-import staticPlugin from '@fastify/static';
-import { existsSync } from 'fs';
-import path from 'path';
 import { Server } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { redis } from './config/redis';
@@ -109,19 +106,6 @@ export async function buildApp() {
   await app.register(multipart, {
     limits: { fileSize: 8 * 1024 * 1024 }, // 8MB per file
   });
-
-  // Admin panel (polygon geofence editor). In production the Dockerfile copies
-  // the built Vite output to /app/admin-dist. In dev, build the admin panel
-  // separately with `cd admin && npm run dev` (port 5174).
-  const adminDistPath = process.env.ADMIN_DIST_PATH ?? path.join(__dirname, '../../admin/dist');
-  if (existsSync(adminDistPath)) {
-    await app.register(staticPlugin, {
-      root: adminDistPath,
-      prefix: '/admin/',
-      index: ['index.html'],
-    });
-    app.get('/admin', (_req, reply) => reply.sendFile('index.html'));
-  }
 
 // Liveness probe — cheap, no dependencies. K8s/Railway use this to decide
   // whether the process is up at all. Returns 200 unconditionally.
