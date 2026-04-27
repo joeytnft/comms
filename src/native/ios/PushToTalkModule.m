@@ -281,6 +281,49 @@ RCT_EXPORT_METHOD(stopTransmitting:(NSString *)channelId
     reject(@"UNSUPPORTED", @"Push To Talk requires iOS 16 or later", nil);
 }
 
+/**
+ * Re-join the current PTT channel without going through a full initialize().
+ *
+ * Called from JS when the cleanupLeaveRef window consumes a stale
+ * didLeaveChannelWithUUID event — iOS considers the channel left (it closed the
+ * previous session), but we preserved _channelUUID.  Calling
+ * requestJoinChannelWithUUID here restores the framework's joined state so
+ * subsequent requestBeginTransmittingWithChannelUUID calls succeed instead of
+ * firing failedToBeginTransmittingInChannelWithUUID.
+ */
+RCT_EXPORT_METHOD(rejoinChannel:(NSString *)channelId
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+{
+#ifdef PTTM_HAS_FRAMEWORK
+    if (@available(iOS 16.0, *)) {
+        if (!_channelManager || !_channelUUID || !_channelDescriptor) {
+            reject(@"PTT_NOT_INITIALIZED", @"PTT channel not initialized", nil);
+            return;
+        }
+        @try {
+            [_channelManager requestJoinChannelWithUUID:_channelUUID
+                                             descriptor:_channelDescriptor];
+            resolve(nil);
+        } @catch (NSException *ex) {
+            NSString *reason = ex.reason ?: @"";
+            if ([reason containsString:@"already"] || [reason containsString:@"exist"]) {
+                // Framework already considers the channel joined — that's fine.
+                _isChannelJoined = YES;
+                resolve(nil);
+            } else {
+                reject(@"PTT_REJOIN_ERROR",
+                       reason.length ? reason : @"Failed to rejoin PTT channel",
+                       nil);
+            }
+        }
+        return;
+    }
+#endif
+    // Not iOS 16+ — resolve as no-op; the non-native path doesn't need rejoin.
+    resolve(nil);
+}
+
 RCT_EXPORT_METHOD(leaveChannel:(NSString *)channelId
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
