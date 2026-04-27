@@ -75,6 +75,17 @@ async function leaveChannel(channelId: string): Promise<void> {
   return PushToTalkModule.leaveChannel(channelId);
 }
 
+/**
+ * Re-join the channel after iOS delivers the deferred leave for the previous
+ * session. The native layer preserved _channelUUID; this call restores the
+ * PTT framework's "joined" state so requestBeginTransmitting succeeds again.
+ * No-op on non-iOS or when the framework is unavailable.
+ */
+async function rejoinChannel(channelId: string): Promise<void> {
+  if (!isAvailable) return;
+  return PushToTalkModule.rejoinChannel(channelId);
+}
+
 /** Call when the user presses the PTT button. */
 async function beginTransmitting(channelId: string): Promise<void> {
   if (!isAvailable) return;
@@ -191,6 +202,7 @@ export const nativePTTService = {
   // Channel lifecycle
   joinChannel,
   leaveChannel,
+  rejoinChannel,
 
   // Transmission control
   beginTransmitting,

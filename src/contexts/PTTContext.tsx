@@ -314,6 +314,14 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       // triggers a false ptt:leave → disconnect cycle.
       if (cleanupLeaveRef.current) {
         cleanupLeaveRef.current = false;
+        // iOS delivered the deferred leave for the previous session (same
+        // deterministic UUID). The native layer preserved _channelUUID but iOS
+        // no longer considers the channel joined — requestBeginTransmitting would
+        // fail until we re-join. Calling rejoinChannel restores the framework's
+        // joined state so subsequent transmissions work without a full re-init.
+        if (USE_NATIVE_PTT && nativePTTChannelIdRef.current) {
+          nativePTTService.rejoinChannel(nativePTTChannelIdRef.current).catch(() => null);
+        }
         return;
       }
       // Ignore events for channels we are not currently in (e.g. race between

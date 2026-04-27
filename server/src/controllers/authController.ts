@@ -310,13 +310,20 @@ export async function refresh(
   }
 
   if (storedToken.expiresAt < new Date()) {
-    // Clean up expired token
-    await prisma.refreshToken.delete({ where: { id: storedToken.id } });
+    // Clean up expired token — deleteMany avoids P2025 on concurrent refresh attempts
+    await prisma.refreshToken.deleteMany({ where: { id: storedToken.id } });
     throw new AuthenticationError('Refresh token expired');
   }
 
-  // Rotate refresh token: delete old, create new
-  await prisma.refreshToken.delete({ where: { id: storedToken.id } });
+  // Rotate refresh token: delete old, create new.
+  // deleteMany (not delete) so a concurrent refresh of the same token — e.g.
+  // two in-flight requests during a flaky reconnect — doesn't throw P2025 and
+  // return a 500.  The second request will find count:0 here and then fail at
+  // the findUnique above on the next attempt (token already rotated → 401).
+  const { count } = await prisma.refreshToken.deleteMany({ where: { id: storedToken.id } });
+  if (count === 0) {
+    throw new AuthenticationError('Refresh token already used');
+  }
 
   const newAccessToken = request.server.jwt.sign({
     userId: storedToken.user.id,
