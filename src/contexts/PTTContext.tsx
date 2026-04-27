@@ -643,6 +643,15 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
               displayName: remote.name ?? remote.identity,
               startedAt: new Date().toISOString(),
             });
+            // Notify the native PTT framework so it activates the audio session
+            // for playback — this is the fallback path when the ptt:speaking socket
+            // event was missed (e.g. socket ping-timeout during the transmission).
+            if (USE_NATIVE_PTT && nativePTTChannelIdRef.current) {
+              nativePTTService.setActiveRemoteParticipant(
+                nativePTTChannelIdRef.current,
+                remote.name ?? remote.identity,
+              ).catch(() => null);
+            }
           }
         });
 
@@ -734,6 +743,14 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
                     displayName: remote.name ?? remote.identity,
                     startedAt: new Date().toISOString(),
                   });
+                  // Same fallback as the main room handler — activate the iOS audio
+                  // session via the PTT framework when the socket event was missed.
+                  if (USE_NATIVE_PTT && nativePTTChannelIdRef.current) {
+                    nativePTTService.setActiveRemoteParticipant(
+                      nativePTTChannelIdRef.current,
+                      remote.name ?? remote.identity,
+                    ).catch(() => null);
+                  }
                 }
                 // Don't clear activeSpeaker on silence — the main room or another sub-room
                 // may have a live speaker; only the main room's handler clears it.
