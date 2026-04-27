@@ -14,9 +14,7 @@
 
 import { Audio } from 'expo-av';
 import { Platform } from 'react-native';
-import { secureStorage } from '@/utils/secureStorage';
-import { ACCESS_TOKEN_KEY } from '@/config/constants';
-import { ENV } from '@/config/env';
+import { apiClient } from '@/api/client';
 
 const RECORDING_OPTIONS: Audio.RecordingOptions = {
   android: {
@@ -71,25 +69,20 @@ export const pttRecorderService = {
       const uri = recording.getURI();
       if (!uri) return null;
 
-      const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
-
       const formData = new FormData();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       formData.append('audio', { uri, type: 'audio/mp4', name: `ptt_${Date.now()}.m4a` } as any);
 
-      const res = await fetch(`${ENV.apiUrl}/ptt/${groupId}/audio`, {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: formData,
-      });
+      // Use apiClient (not bare fetch) so the 401→refresh→retry interceptor fires
+      // when the access token expires during a long PTT session. Raw fetch with a
+      // manually-read token would silently fail after 15 minutes of inactivity.
+      const res = await apiClient.post<{ audioUrl?: string }>(
+        `/ptt/${groupId}/audio`,
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } },
+      );
 
-      if (!res.ok) {
-        console.warn('[PTTRecorder] Upload returned', res.status);
-        return null;
-      }
-
-      const { audioUrl } = (await res.json()) as { audioUrl?: string };
-      return audioUrl ?? null;
+      return res.data.audioUrl ?? null;
     } catch (err) {
       console.warn('[PTTRecorder] Upload failed:', err);
       return null;
