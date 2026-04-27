@@ -271,6 +271,19 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       usePTTStore.getState().setTransmitting(false);
       transmittingRef.current = false;
       pttRecorderService.cancel();
+      // Clear the Live Activity — startTransmitting already set isTransmitting:true,
+      // but stopTransmitting returns early (wasTransmitting=false) once this handler
+      // resets state, so we must clear it here or the lock-screen card stays stuck
+      // on "speaking" indefinitely.
+      const st = usePTTStore.getState();
+      liveActivityService.update(liveActivityIdRef.current, {
+        channelName: st.currentGroupName ?? '',
+        speakerName: null,
+        lastSpeakerName: lastSpeakerNameRef.current,
+        isTransmitting: false,
+        memberCount: st.connectedMemberIds.length,
+        alertLevel: null,
+      });
       console.warn('[PTT] transmission failed:', error);
     });
 
@@ -314,14 +327,16 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       // triggers a false ptt:leave → disconnect cycle.
       if (cleanupLeaveRef.current) {
         cleanupLeaveRef.current = false;
-        // iOS delivered the deferred leave for the previous session (same
-        // deterministic UUID). The native layer preserved _channelUUID but iOS
-        // no longer considers the channel joined — requestBeginTransmitting would
-        // fail until we re-join. Calling rejoinChannel restores the framework's
-        // joined state so subsequent transmissions work without a full re-init.
-        if (USE_NATIVE_PTT && nativePTTChannelIdRef.current) {
-          nativePTTService.rejoinChannel(nativePTTChannelIdRef.current).catch(() => null);
-        }
+        // iOS delivered the stale didLeaveChannelWithUUID for the previous
+        // session (same deterministic UUID v5). The framework already queued
+        // didJoinChannelWithUUID for the CURRENT session as part of the single
+        // requestJoinChannelWithUUID call inside initialize() — that callback
+        // will set _isChannelJoined=YES without us doing anything here.
+        //
+        // Do NOT call rejoinChannel / requestJoinChannelWithUUID here. A second
+        // join request creates another leave/join cycle; the resulting leave
+        // arrives after cleanupLeaveRef is already false and is mistaken for a
+        // real user-initiated leave, triggering a spurious full disconnect.
         return;
       }
       // Ignore events for channels we are not currently in (e.g. race between
@@ -1035,6 +1050,15 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     // Guard on transmittingRef too: a reconnect can reset the store (pttState → idle)
     // while the mic track remains unmuted — without this check the mic stays live.
     const wasTransmitting = pttState === 'transmitting' || transmittingRef.current;
+
+    // Expire the stale-leave grace window on every button release — including
+    // the case where onTransmissionFailed already reset state (wasTransmitting=false),
+    // which causes the early return below and would otherwise leave
+    // cleanupLeaveRef=true forever, silently swallowing the next real leave event.
+    if (cleanupLeaveRef.current) {
+      setTimeout(() => { cleanupLeaveRef.current = false; }, 1500);
+    }
+
     if (!currentGroupId || !wasTransmitting) return;
 
     // Cancel the safety timeout — we are stopping cleanly.
@@ -1091,12 +1115,6 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         pttRecorderService.cancel();
       }
     }
-    // Expire the join-grace period 1.5 s after this transmission ends. The stale
-    // onPTTChannelLeft that iOS queues during initialize() fires within ~500 ms of
-    // the first PTT release — well within this window. After 1.5 s, cleanupLeaveRef
-    // becomes false so legitimate Dynamic Island / lock-screen leaves are processed.
-    setTimeout(() => { cleanupLeaveRef.current = false; }, 1500);
-
     // Update Live Activity — done transmitting
     const { currentGroupName, connectedMemberIds } = usePTTStore.getState();
     liveActivityService.update(liveActivityIdRef.current, {
