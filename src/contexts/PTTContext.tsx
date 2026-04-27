@@ -549,60 +549,22 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           throw new Error('Microphone permission is required for PTT');
         }
 
-        // ── iOS: Apple native PTT framework ──────────────────────────────────
+        // Reset native PTT bookkeeping. The framework channel is joined LAST,
+        // after LiveKit pre-publish, because Apple's framework switches WebRTC
+        // to manual-audio mode the moment the channel is registered. Trying
+        // to publish a mic track after that switch produces a track that
+        // never binds to the hardware capture pipeline — the server records
+        // a small file but real-time WebRTC frames to peers are silent.
         nativePTTActiveRef.current = false;
         // Null out the channel ref BEFORE joining so any stale onPTTChannelLeft event
         // that fires during this join window (e.g. from mount-time leaveChannel cleanup
         // of a previous session with the same channel ID) is safely ignored.
         nativePTTChannelIdRef.current = null;
-        if (USE_NATIVE_PTT) {
-          try {
-            // Register push token listener BEFORE joinChannel — iOS can fire the
-            // token callback within milliseconds of the channel joining, so the
-            // listener must already be in place or the token is silently missed and
-            // notifyTransmissionStopped has nothing to send to.
-            let unsubToken: (() => void) | null = null;
-            unsubToken = nativePTTService.onPushTokenReceived(async (token) => {
-              unsubToken?.();
-              unsubToken = null;
-              try {
-                // Use apiClient so the call inherits the 401-refresh interceptor.
-                // The previous bespoke fetch sent the cached access token directly
-                // and silently failed once it expired.
-                await apiClient.post(`/ptt/${groupId}/register-token`, { token });
-              } catch (err) {
-                console.warn('[PTT] Failed to register push token:', err);
-              }
-            });
-
-            // iOS internally closes any existing PTT session when initialize() is called,
-            // queuing an onPTTChannelLeft that fires asynchronously — typically when the
-            // main thread is first freed, which is right after the first PTT button release.
-            // Set the flag here so onChannelLeft can consume that stale event before the
-            // channelId guard sees it (both old and new channelId are the same groupId).
-            cleanupLeaveRef.current = true;
-
-            const resolvedId = await nativePTTService.joinChannel(groupId, response.groupName);
-            nativePTTChannelIdRef.current = resolvedId;
-            nativePTTActiveRef.current = true;
-            if (resolvedId) mmkvStorage.setString(PTT_CHANNEL_ID_KEY, resolvedId);
-
-            // Report service as "ready" in system UI
-            nativePTTService.setServiceStatus(resolvedId, 'ready').catch(() => null);
-          } catch (nativeErr) {
-            // Native PTT framework unavailable on this OS version — fall through to
-            // direct LiveKit mode so PTT still works without system UI integration.
-            console.warn('[PTT] Native PTT init failed, using direct LiveKit mode:', nativeErr);
-            nativePTTChannelIdRef.current = null;
-          }
-        }
 
         // Start the Live Activity for the lock screen status regardless of whether
         // native PTT is active. When native PTT IS active, the PTT framework takes
         // priority in the Dynamic Island (transmit button), but it provides no lock
-        // screen expanded view — our Live Activity fills that gap. The Dynamic Island
-        // compact/minimal views in our widget have no widgetURL so they don't
-        // intercept the PTT framework's tap-to-transmit gesture.
+        // screen expanded view — our Live Activity fills that gap.
         if (usePTTStore.getState().config.showLiveActivity) {
           const orgName = useAuthStore.getState().organization?.name ?? 'GatherSafe';
           liveActivityService.start(response.groupName, orgName)
@@ -613,7 +575,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
             .catch(() => null);
         }
 
-        if (!nativePTTActiveRef.current && Platform.OS === 'android') {
+        if (Platform.OS === 'android' && !USE_NATIVE_PTT) {
           // ── Android: ConnectionService keeps audio alive in background ────
           await new Promise<void>((resolve) => {
             const uuid = callKitService.startCall(response.groupName, () => resolve());
@@ -625,10 +587,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         // ── Connect to LiveKit room (both iOS and Android) ───────────────────
         const livekitUrl = response.livekitUrl || ENV.livekitUrl;
         if (!livekitUrl) {
-          if (USE_NATIVE_PTT && nativePTTChannelIdRef.current) {
-            await nativePTTService.leaveChannel(nativePTTChannelIdRef.current);
-            nativePTTChannelIdRef.current = null;
-          } else if (Platform.OS === 'android' && callUUIDRef.current) {
+          if (Platform.OS === 'android' && callUUIDRef.current) {
             callKitService.endCall(callUUIDRef.current);
             callUUIDRef.current = null;
           }
@@ -636,20 +595,13 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           throw new Error('LiveKit server URL is not configured. Set LIVEKIT_URL on the server.');
         }
 
-        // Audio-session ownership:
-        //   - When native PTT is active, Apple's framework owns the AVAudioSession
-        //     while a channel is joined. Calling AudioSession.startAudioSession()
-        //     here flips RTCAudioSession.useManualAudio back to NO and activates
-        //     the session outside the framework's lifecycle, which iOS treats as
-        //     a contract violation and ends the channel on first transmit.
-        //     The .m file already configured manual-audio mode and will enable
-        //     WebRTC audio in didActivateAudioSession when the framework activates
-        //     the session per-transmission.
-        //   - For non-native paths (Android, iOS without the PTT framework, web)
-        //     we still need to bring the LiveKit session up ourselves.
-        if (!USE_NATIVE_PTT) {
-          AudioSession?.startAudioSession();
-        }
+        // Audio session is unconditionally activated here so createLocalAudioTrack
+        // can bind to the real mic hardware. WebRTC is still in default
+        // (auto-managed) mode — useManualAudio doesn't flip to YES until the
+        // PTT channel is joined further below. The session is then released
+        // (for native PTT) or kept active (Android / web fallback) so the
+        // framework can take over per-transmission activation cleanly.
+        AudioSession?.startAudioSession();
 
         const room = new Room!({
           audioCaptureDefaults: {
@@ -705,7 +657,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
             intentionalLeaveRef.current = false;
             usePTTStore.getState().disconnect();
             // Only call stopAudioSession on the non-native path — native PTT
-            // never started a LiveKit-managed session in the first place.
+            // already handed session ownership to Apple's framework and the
+            // framework deactivates it as part of the channel-leave flow.
             if (!USE_NATIVE_PTT) {
               AudioSession?.stopAudioSession();
             }
@@ -722,29 +675,26 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           await room.connect(livekitUrl, response.token, { autoSubscribe: true });
         } catch (err) {
           roomRef.current = null;
-          if (USE_NATIVE_PTT && nativePTTChannelIdRef.current) {
-            await nativePTTService.leaveChannel(nativePTTChannelIdRef.current).catch(() => null);
-            nativePTTChannelIdRef.current = null;
-            nativePTTActiveRef.current = false;
-          } else if (Platform.OS === 'android' && callUUIDRef.current) {
+          if (Platform.OS === 'android' && callUUIDRef.current) {
             callKitService.endCall(callUUIDRef.current);
             callUUIDRef.current = null;
           }
-          // stopAudioSession is only meaningful when we previously started
-          // one (non-native path). Native PTT lets the framework own the
-          // session lifecycle entirely.
-          if (!USE_NATIVE_PTT) {
-            AudioSession?.stopAudioSession();
-          }
+          AudioSession?.stopAudioSession();
           usePTTStore.getState().disconnect();
           mmkvStorage.delete(PTT_GROUP_ID_KEY);
           mmkvStorage.delete(PTT_CHANNEL_ID_KEY);
           const msg = err instanceof Error ? err.message : 'Failed to connect to voice channel';
           throw new Error(msg);
         }
+
         // Pre-publish mic track muted with DTX for instant unmute on first press.
-        // Wrapped in try-catch: on first launch iOS may not have the audio session
-        // fully provisioned yet — fall back to on-demand enable in that case.
+        // CRITICAL: this MUST happen before nativePTTService.joinChannel below,
+        // because that call switches WebRTC into manual-audio mode. A track
+        // created in manual-audio mode without an explicitly-active session
+        // never binds to the mic — the published track exists but carries no
+        // audio frames to peers, even after the framework later activates the
+        // session for a transmission. Wrapped in try-catch: on first launch
+        // iOS may not have provisioned the session yet, fall back to on-demand.
         try {
           const micTrack = await createLocalAudioTrack!({
             echoCancellation: true,
@@ -760,7 +710,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         }
 
         // Lead group: connect to each sub-group room as a listen-only subscriber so
-        // lead members can hear sub-group transmissions in real time.
+        // lead members can hear sub-group transmissions in real time. These rooms
+        // do not publish audio so they do not need the local mic.
         if (response.subGroupRooms && response.subGroupRooms.length > 0) {
           const subRooms = await Promise.allSettled(
             response.subGroupRooms.map(async (sg) => {
@@ -795,6 +746,57 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
           const failed = subRooms.filter((r) => r.status === 'rejected').length;
           if (failed > 0) console.warn(`[PTT] ${failed} sub-group room(s) failed to connect`);
+        }
+
+        // ── Hand audio session ownership to Apple's PTT framework ───────────
+        if (USE_NATIVE_PTT) {
+          // Release our hold on the AVAudioSession before joining the PTT
+          // channel. The pre-published mic track is already bound to the
+          // hardware capture pipeline; it stays bound through the deactivation
+          // and resumes capture when the framework re-activates the session
+          // for a transmission. Without this release, both LiveKit and the
+          // PTT framework end up issuing setActive: calls and iOS revokes
+          // the channel.
+          AudioSession?.stopAudioSession();
+
+          try {
+            // Register push token listener BEFORE joinChannel — iOS can fire the
+            // token callback within milliseconds of the channel joining, so the
+            // listener must already be in place or the token is silently missed.
+            let unsubToken: (() => void) | null = null;
+            unsubToken = nativePTTService.onPushTokenReceived(async (token) => {
+              unsubToken?.();
+              unsubToken = null;
+              try {
+                // Use apiClient so the call inherits the 401-refresh interceptor.
+                await apiClient.post(`/ptt/${groupId}/register-token`, { token });
+              } catch (err) {
+                console.warn('[PTT] Failed to register push token:', err);
+              }
+            });
+
+            // iOS internally closes any existing PTT session when initialize() is called,
+            // queuing an onPTTChannelLeft that fires asynchronously — typically when the
+            // main thread is first freed, which is right after the first PTT button release.
+            // Set the flag here so onChannelLeft can consume that stale event before the
+            // channelId guard sees it (both old and new channelId are the same groupId).
+            cleanupLeaveRef.current = true;
+
+            const resolvedId = await nativePTTService.joinChannel(groupId, response.groupName);
+            nativePTTChannelIdRef.current = resolvedId;
+            nativePTTActiveRef.current = true;
+            if (resolvedId) mmkvStorage.setString(PTT_CHANNEL_ID_KEY, resolvedId);
+
+            // Report service as "ready" in system UI
+            nativePTTService.setServiceStatus(resolvedId, 'ready').catch(() => null);
+          } catch (nativeErr) {
+            // Native PTT framework unavailable on this OS version — fall back
+            // to direct LiveKit mode. Reactivate the session because the
+            // framework is not going to manage it for us.
+            console.warn('[PTT] Native PTT init failed, using direct LiveKit mode:', nativeErr);
+            nativePTTChannelIdRef.current = null;
+            AudioSession?.startAudioSession();
+          }
         }
       }
 
