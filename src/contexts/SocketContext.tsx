@@ -2,9 +2,44 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { io, Socket } from 'socket.io-client';
 import { secureStorage } from '@/utils/secureStorage';
 import { ENV } from '@/config/env';
-import { ACCESS_TOKEN_KEY, SOCKET_RECONNECT_ATTEMPTS, SOCKET_RECONNECT_DELAY } from '@/config/constants';
+import {
+  ACCESS_TOKEN_KEY,
+  SOCKET_RECONNECT_ATTEMPTS,
+  SOCKET_RECONNECT_DELAY,
+  SOCKET_RECONNECT_DELAY_MAX,
+  SOCKET_RECONNECT_JITTER,
+} from '@/config/constants';
 import { useAuth } from './AuthContext';
 import { useAuthStore } from '@/store/useAuthStore';
+import { reportCrash } from '@/utils/logger';
+
+// Decode a JWT's `exp` claim (in seconds since epoch) without verifying the
+// signature. Verification is the server's job — we just want to know whether
+// to bother sending the current token or refresh it first. Returns null when
+// the token is malformed.
+function readJwtExpiryMs(token: string): number | null {
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    // Base64URL → base64
+    const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    // atom on the global polyfilled by RN; falls back to Buffer/inline decode.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decoded =
+      typeof atob === 'function'
+        ? atob(payload)
+        : (globalThis as any).Buffer?.from(payload, 'base64').toString('binary') ?? '';
+    const json = JSON.parse(decoded);
+    return typeof json?.exp === 'number' ? json.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+// Refresh proactively when the token has < this many ms left. Tuned to be
+// larger than the worst-case round trip + reconnect window so we don't burn
+// a reconnect attempt on a guaranteed 401.
+const TOKEN_REFRESH_LEEWAY_MS = 60_000;
 
 interface SocketContextType {
   socket: Socket | null;
@@ -43,6 +78,10 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         reconnection: true,
         reconnectionAttempts: SOCKET_RECONNECT_ATTEMPTS,
         reconnectionDelay: SOCKET_RECONNECT_DELAY,
+        // Cap each individual backoff wait so very long outages don't stretch
+        // to multi-minute sleeps between attempts.
+        reconnectionDelayMax: SOCKET_RECONNECT_DELAY_MAX,
+        randomizationFactor: SOCKET_RECONNECT_JITTER,
       });
 
       socket.on('connect', () => {
@@ -53,24 +92,61 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         if (mounted) setIsConnected(false);
       });
 
+      // De-duplication guard: while a refresh is in flight we don't want
+      // every parallel reconnect_attempt or connect_error to fire its own
+      // refresh request and race the others.
+      let refreshInFlight: Promise<string | null> | null = null;
+      const ensureFreshToken = async (): Promise<string | null> => {
+        if (refreshInFlight) return refreshInFlight;
+        refreshInFlight = (async () => {
+          try {
+            await useAuthStore.getState().refreshSession();
+            return await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
+          } catch (err) {
+            reportCrash({ err, context: 'SocketContext.refreshSession' });
+            return null;
+          } finally {
+            refreshInFlight = null;
+          }
+        })();
+        return refreshInFlight;
+      };
+
       socket.on('connect_error', async (error) => {
         console.warn('[Socket] Connection error:', error.message);
         const lowerMsg = error.message.toLowerCase();
-        if (lowerMsg.includes('token') || lowerMsg.includes('auth') || lowerMsg.includes('unauthorized')) {
-          // The access token may have expired — refresh it, then reconnect with the new one.
-          await useAuthStore.getState().refreshSession();
-          const freshToken = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
-          if (freshToken && mounted) {
-            socket.auth = { token: freshToken };
-            socket.connect();
+        if (
+          lowerMsg.includes('token') ||
+          lowerMsg.includes('auth') ||
+          lowerMsg.includes('unauthorized')
+        ) {
+          // Auth-flavoured failure — refresh the token then fall through to
+          // the built-in reconnection loop. We do NOT call socket.connect()
+          // ourselves here because that races with socket.io-client's own
+          // reconnect timer and produces double-connections.
+          const fresh = await ensureFreshToken();
+          if (fresh && mounted) {
+            socket.auth = { token: fresh };
+          } else if (mounted) {
+            // Refresh failed — the user's session is dead. Stop hammering
+            // the server with guaranteed-401 reconnects until the user
+            // re-authenticates; AuthContext will fully re-init the socket.
+            socket.io.opts.reconnection = false;
           }
         }
       });
 
-      // Keep the auth token up to date on every reconnect attempt
-      // so a token refreshed by the API client is picked up automatically.
+      // Refresh the token PROACTIVELY on each reconnect_attempt rather than
+      // reactively after a failed handshake. Avoids burning a reconnect on a
+      // guaranteed 401 when the token has expired during a long disconnect.
       socket.io.on('reconnect_attempt', async () => {
-        const freshToken = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
+        const stored = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
+        if (!stored) return;
+
+        const expMs = readJwtExpiryMs(stored);
+        const expired = expMs !== null && expMs - Date.now() < TOKEN_REFRESH_LEEWAY_MS;
+
+        const freshToken = expired ? await ensureFreshToken() : stored;
         if (freshToken) {
           socket.auth = { token: freshToken };
         }
