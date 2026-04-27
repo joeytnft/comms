@@ -125,6 +125,19 @@ RCT_EXPORT_METHOD(initialize:(NSString *)channelId
             if (!strong) { resolve(nil); return; }
             strong->_channelManager = mgr;
 
+            // Take WebRTC out of automatic-audio mode for the entire PTT session.
+            // While a PT channel is joined, Apple's PushToTalk framework owns the
+            // AVAudioSession lifecycle; if WebRTC (or our own JS code) calls
+            // setActive:YES on the session outside requestBeginTransmittingWithChannelUUID,
+            // iOS treats it as a contract violation and fires didLeaveChannel.
+            // Manual mode means the framework activates the session on transmit and
+            // we explicitly enable WebRTC audio in didActivateAudioSession below.
+#ifdef PTTM_HAS_WEBRTC
+            RTCAudioSession *rtcSession = [RTCAudioSession sharedInstance];
+            rtcSession.useManualAudio = YES;
+            rtcSession.isAudioEnabled = NO;
+#endif
+
             // If iOS already restored this channel (crash recovery / reboot), the
             // framework rejoined on its own — calling requestJoinChannelWithUUID
             // again raises an uncatchable NSException from CXChannelAction and
@@ -414,14 +427,14 @@ RCT_EXPORT_METHOD(setServiceStatus:(NSString *)channelId
 - (void)channelManager:(PTChannelManager *)channelManager
     didActivateAudioSession:(AVAudioSession *)audioSession API_AVAILABLE(ios(16.0))
 {
-    // Notify the WebRTC stack that the audio session is now active.
-    // This is required for both directions:
-    //   Transmitting — LiveKit can capture mic audio
-    //   Receiving    — LiveKit can render incoming audio from remote participants
-    // Without this call the 2-way radio function is silent on iOS native PTT.
-    // (CallKit integrations do the same via RTCAudioSession.audioSessionDidActivate())
+    // The framework just activated AVAudioSession for this transmission
+    // (outgoing or incoming). Hand the session to WebRTC and explicitly turn
+    // on audio capture/playback — required because we configured manual audio
+    // mode at channel-manager init.
 #ifdef PTTM_HAS_WEBRTC
-    [[RTCAudioSession sharedInstance] audioSessionDidActivate:audioSession];
+    RTCAudioSession *rtcSession = [RTCAudioSession sharedInstance];
+    [rtcSession audioSessionDidActivate:audioSession];
+    rtcSession.isAudioEnabled = YES;
 #endif
     [self emit:@"onPTTAudioActivated" body:@{
         @"channelId": _channelUUID.UUIDString ?: @"",
@@ -431,9 +444,14 @@ RCT_EXPORT_METHOD(setServiceStatus:(NSString *)channelId
 - (void)channelManager:(PTChannelManager *)channelManager
     didDeactivateAudioSession:(AVAudioSession *)audioSession API_AVAILABLE(ios(16.0))
 {
-    // Notify WebRTC the session is going away so it releases audio resources cleanly.
+    // Disable WebRTC audio FIRST so it stops touching the session, then notify
+    // it the session is gone. Reversing this order lets WebRTC briefly try to
+    // run audio against a deactivated session and has been observed to log
+    // RTCAudioSession errors in production.
 #ifdef PTTM_HAS_WEBRTC
-    [[RTCAudioSession sharedInstance] audioSessionDidDeactivate:audioSession];
+    RTCAudioSession *rtcSession = [RTCAudioSession sharedInstance];
+    rtcSession.isAudioEnabled = NO;
+    [rtcSession audioSessionDidDeactivate:audioSession];
 #endif
     [self emit:@"onPTTAudioDeactivated" body:@{
         @"channelId": _channelUUID.UUIDString ?: @"",
