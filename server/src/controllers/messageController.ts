@@ -96,8 +96,6 @@ export async function sendMessage(
     message.sender?.displayName ?? 'Unknown',
     group.name,
   ).catch((err) => logger.error({ err }, '[Message] Push notification error'));
-
-  return message;
 }
 
 export async function getMessages(
@@ -187,6 +185,4 @@ export async function markRead(
   );
 
   reply.send({ readCount: receipts.length });
-
-  return { userId: request.userId, messageIds };
 }
