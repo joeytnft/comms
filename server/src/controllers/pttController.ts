@@ -12,10 +12,67 @@ import { notifyTransmissionStarted, notifyTransmissionStopped } from '../service
 
 const SESSION_TTL = 7200;
 
+// Signed URL TTL for PTT recordings. Mobile clients re-fetch the log (and
+// thus refresh URLs) on demand, so a relatively short window is fine.
+const PTT_AUDIO_SIGNED_URL_SECONDS = 60 * 60 * 6; // 6h
+
+// Allow-listed PTT upload mime types. Trusting the client's mimetype lets a
+// caller serve text/html through the bucket — which becomes stored XSS if
+// recipients open the URL in a browser context.
+const ALLOWED_PTT_MIME_TYPES = new Set([
+  'audio/mp4',
+  'audio/m4a',
+  'audio/x-m4a',
+  'audio/aac',
+  'audio/wav',
+  'audio/webm',
+  'audio/ogg',
+]);
+
 let _supabase: ReturnType<typeof createClient> | null = null;
 function getSupabase() {
   if (!_supabase) _supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
   return _supabase;
+}
+
+async function getSignedAudioUrl(filename: string): Promise<string | null> {
+  const { data, error } = await getSupabase()
+    .storage
+    .from(env.SUPABASE_PTT_BUCKET)
+    .createSignedUrl(filename, PTT_AUDIO_SIGNED_URL_SECONDS);
+  if (error || !data?.signedUrl) {
+    logger.warn({ err: error, filename }, '[PTT] Failed to create signed audio URL');
+    return null;
+  }
+  return data.signedUrl;
+}
+
+/**
+ * Authorize a request against a group. Confirms (a) the caller is a member,
+ * (b) the group exists in the caller's org. Without (b) a stale cross-org
+ * membership row would let the caller act on another tenant's group.
+ *
+ * Use this helper everywhere a PTT endpoint reads a `groupId` from the URL.
+ */
+async function assertGroupAccess(
+  groupId: string,
+  userId: string,
+  organizationId: string,
+) {
+  const membership = await prisma.groupMembership.findUnique({
+    where: { groupId_userId: { groupId, userId } },
+    include: {
+      user: { select: { displayName: true } },
+      group: { select: { name: true, organizationId: true, type: true, parentGroupId: true } },
+    },
+  });
+  if (!membership) {
+    throw new AuthorizationError('You are not a member of this group');
+  }
+  if (membership.group.organizationId !== organizationId) {
+    throw new AuthorizationError('Group does not belong to your organization');
+  }
+  return membership;
 }
 
 interface TokenParams {
@@ -32,26 +89,7 @@ export async function getToken(
 ) {
   const { groupId } = request.params;
   const { userId } = request;
-
-  // Verify user is a member of the group
-  const membership = await prisma.groupMembership.findUnique({
-    where: {
-      groupId_userId: { groupId, userId },
-    },
-    include: {
-      user: { select: { displayName: true } },
-      group: { select: { name: true, organizationId: true, type: true } },
-    },
-  });
-
-  if (!membership) {
-    throw new AuthorizationError('You are not a member of this group');
-  }
-
-  // Verify group belongs to user's org
-  if (membership.group.organizationId !== request.organizationId) {
-    throw new AuthorizationError('Group does not belong to your organization');
-  }
+  const membership = await assertGroupAccess(groupId, userId, request.organizationId);
 
   const token = await generateLiveKitToken(userId, membership.user.displayName, groupId);
 
@@ -94,17 +132,7 @@ export async function getParticipants(
 ) {
   const { groupId } = request.params;
   const { userId } = request;
-
-  // Verify membership
-  const membership = await prisma.groupMembership.findUnique({
-    where: {
-      groupId_userId: { groupId, userId },
-    },
-  });
-
-  if (!membership) {
-    throw new AuthorizationError('You are not a member of this group');
-  }
+  await assertGroupAccess(groupId, userId, request.organizationId);
 
   // Get all members of the group
   const members = await prisma.groupMembership.findMany({
@@ -145,13 +173,12 @@ export async function registerPushToken(
   if (!token || typeof token !== 'string') {
     throw new ValidationError('token is required');
   }
-
-  const membership = await prisma.groupMembership.findUnique({
-    where: { groupId_userId: { groupId, userId } },
-  });
-  if (!membership) {
-    throw new AuthorizationError('You are not a member of this group');
+  // Cap length so we never store a 1MB blob if the client misbehaves.
+  if (token.length > 256) {
+    throw new ValidationError('token is too long');
   }
+
+  await assertGroupAccess(groupId, userId, request.organizationId);
 
   await prisma.pttPushToken.upsert({
     where:  { userId_groupId: { userId, groupId } },
@@ -173,43 +200,57 @@ export async function uploadAudio(
 ) {
   const { groupId } = request.params;
   const { userId } = request;
-
-  const membership = await prisma.groupMembership.findUnique({
-    where: { groupId_userId: { groupId, userId } },
-  });
-  if (!membership) throw new AuthorizationError('You are not a member of this group');
+  await assertGroupAccess(groupId, userId, request.organizationId);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const part = await (request as any).file();
   if (!part) throw new ValidationError('No audio file provided');
+
+  // Server-side validation of mimetype. The previous code used the client's
+  // declared mimetype straight through to Supabase; a malicious uploader
+  // could set `text/html` and turn the public bucket into a stored-XSS sink.
+  const declaredMime = (part.mimetype ?? '').toString().toLowerCase().trim();
+  if (!ALLOWED_PTT_MIME_TYPES.has(declaredMime)) {
+    throw new ValidationError('Unsupported audio mimetype');
+  }
+
+  // Sanitise extension: strip path components and only allow a small allowlist.
+  const ALLOWED_EXTS = new Set(['m4a', 'mp4', 'aac', 'wav', 'webm', 'ogg']);
+  const rawExt = (part.filename as string | undefined)?.split('.').pop()?.toLowerCase() ?? 'm4a';
+  const ext = ALLOWED_EXTS.has(rawExt) ? rawExt : 'm4a';
 
   const chunks: Buffer[] = [];
   for await (const chunk of part.file) {
     chunks.push(chunk as Buffer);
   }
   const audioBuffer = Buffer.concat(chunks);
+  // Reject empty / oversized payloads at the controller boundary.
+  if (audioBuffer.length === 0) throw new ValidationError('Audio file is empty');
+  if (audioBuffer.length > 25 * 1024 * 1024) {
+    throw new ValidationError('Audio file is too large');
+  }
 
-  const rawExt = (part.filename as string | undefined)?.split('.').pop();
-  const ext = rawExt && rawExt.length <= 4 ? rawExt : 'm4a';
   const filename = `${groupId}/${userId}_${Date.now()}.${ext}`;
 
   const { error: uploadErr } = await getSupabase()
     .storage
     .from(env.SUPABASE_PTT_BUCKET)
-    .upload(filename, audioBuffer, { contentType: part.mimetype ?? 'audio/mp4', upsert: false });
+    .upload(filename, audioBuffer, { contentType: declaredMime, upsert: false });
 
   if (uploadErr) {
     logger.warn({ err: uploadErr }, '[PTT] Client audio upload failed');
     return reply.status(500).send({ error: 'Upload failed' });
   }
 
-  const { data: { publicUrl } } = getSupabase()
-    .storage
-    .from(env.SUPABASE_PTT_BUCKET)
-    .getPublicUrl(filename);
+  // Signed URL with TTL — bucket is configured private. Removed members and
+  // the public internet cannot guess and replay the URL forever.
+  const audioUrl = await getSignedAudioUrl(filename);
+  if (!audioUrl) {
+    return reply.status(500).send({ error: 'Could not generate signed URL' });
+  }
 
   logger.info(`[PTT] Client audio uploaded: ${filename}`);
-  reply.send({ audioUrl: publicUrl });
+  reply.send({ audioUrl });
 }
 
 /**
@@ -224,12 +265,7 @@ export async function transmitStart(
 ) {
   const { groupId } = request.params;
   const { userId } = request;
-
-  const membership = await prisma.groupMembership.findUnique({
-    where: { groupId_userId: { groupId, userId } },
-    include: { user: { select: { displayName: true } } },
-  });
-  if (!membership) throw new AuthorizationError('Not a member of this group');
+  const membership = await assertGroupAccess(groupId, userId, request.organizationId);
 
   const room = `ptt:${groupId}`;
   const displayName = membership.user.displayName;
@@ -305,11 +341,7 @@ export async function transmitStop(
 ) {
   const { groupId } = request.params;
   const { userId } = request;
-
-  const membership = await prisma.groupMembership.findUnique({
-    where: { groupId_userId: { groupId, userId } },
-  });
-  if (!membership) throw new AuthorizationError('Not a member of this group');
+  await assertGroupAccess(groupId, userId, request.organizationId);
 
   const room = `ptt:${groupId}`;
   const endedAt = new Date().toISOString();
@@ -371,29 +403,50 @@ export async function nativeLog(
   const { userId } = request;
   const { durationMs = 0, audioUrl } = request.body ?? {};
 
-  const [user, savedLog] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { displayName: true } }),
-    prisma.pttLog.create({
-      data: {
-        groupId,
-        senderId: userId,
-        durationMs,
-        ...(audioUrl ? { audioUrl } : {}),
-      },
-    }),
-  ]);
+  // Authorize first — previously this endpoint had no check at all, so any
+  // authenticated user could write a pttLog row in any group.
+  const membership = await assertGroupAccess(groupId, userId, request.organizationId);
+
+  // Sanity-check duration (prevent negative or absurd values polluting the audit log).
+  const safeDurationMs = Number.isFinite(durationMs) && durationMs >= 0 && durationMs < 60 * 60 * 1000
+    ? Math.floor(durationMs)
+    : 0;
+
+  // If the client supplied an audioUrl, only accept Supabase-hosted URLs we
+  // could plausibly have signed ourselves; never persist arbitrary attacker URLs.
+  let safeAudioUrl: string | undefined;
+  if (audioUrl) {
+    try {
+      const u = new URL(audioUrl);
+      const supabaseHost = new URL(env.SUPABASE_URL).hostname;
+      if (u.protocol === 'https:' && u.hostname === supabaseHost) {
+        safeAudioUrl = audioUrl;
+      }
+    } catch {
+      // Invalid URL — drop silently.
+    }
+  }
+
+  const savedLog = await prisma.pttLog.create({
+    data: {
+      groupId,
+      senderId: userId,
+      durationMs: safeDurationMs,
+      ...(safeAudioUrl ? { audioUrl: safeAudioUrl } : {}),
+    },
+  });
 
   const room = `ptt:${groupId}`;
   getIO()?.to(room).emit('ptt:log_saved', {
     id: savedLog.id,
     groupId,
     userId,
-    displayName: user?.displayName ?? 'Unknown',
-    audioUrl,
-    durationMs,
+    displayName: membership.user.displayName,
+    audioUrl: safeAudioUrl,
+    durationMs: safeDurationMs,
     createdAt: savedLog.createdAt.toISOString(),
   });
 
-  logger.info(`[PTT] HTTP native-log saved: ${savedLog.id} (${durationMs}ms) for ${userId}`);
+  logger.info(`[PTT] HTTP native-log saved: ${savedLog.id} (${safeDurationMs}ms) for ${userId}`);
   reply.status(204).send();
 }

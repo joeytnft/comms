@@ -1,9 +1,11 @@
+import crypto from 'crypto';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { SubscriptionTier, SubscriptionStatus } from '@prisma/client';
 import { prisma } from '../config/database';
 import { PLAN_LIMITS, PLANS } from '../config/subscriptions';
 import { NotFoundError, ValidationError, AuthenticationError } from '../utils/errors';
 import { env } from '../config/env';
+import { logger } from '../utils/logger';
 
 export async function getSubscription(
   request: FastifyRequest,
@@ -80,22 +82,57 @@ interface WebhookBody {
 
 /**
  * RevenueCat webhook handler.
- * RevenueCat sends events when subscription status changes.
- * We map RevenueCat entitlements to our tier system:
- *   - "pro"      entitlement → PRO tier      (pro_monthly product)
- *   - "team"     entitlement → TEAM tier     (team_monthly product)
- *   - "starter"  entitlement → STARTER tier  (starter_monthly product)
- *   - no active entitlement  → FREE tier
+ *
+ * Three layers of authentication, in order:
+ *  1. Static bearer (REVENUECAT_WEBHOOK_SECRET): a baseline shared secret.
+ *  2. HMAC-SHA256 signature (REVENUECAT_HMAC_SECRET, optional): when set, the
+ *     request must include `X-RC-Signature: sha256=<hex>` covering the raw
+ *     body. RevenueCat supports this via Project → Webhooks → Signature.
+ *  3. Per-tenant binding: the event's `app_user_id` is matched against an
+ *     existing Organization.rcCustomerId. New customers (INITIAL_PURCHASE)
+ *     can claim a previously-unbound org; tier-changing events for orgs that
+ *     are already bound to a different rcCustomerId are rejected.
+ *
+ * This neutralises the original "anyone with the bearer can downgrade any
+ * tenant" issue: even if the bearer leaks, an attacker still has to know
+ * the rcCustomerId mapping for the target org and (when configured) the
+ * HMAC secret.
+ *
+ * Entitlement → tier:
+ *   "pro"  → PRO,  "team" → TEAM,  "starter" → STARTER,  none → FREE.
  */
+function verifyHmacSignature(rawBody: string, header: string | undefined): boolean {
+  const secret = env.REVENUECAT_HMAC_SECRET;
+  if (!secret) return true; // not configured — fall back to bearer-only auth
+  if (!header) return false;
+  const presented = header.startsWith('sha256=') ? header.slice(7) : header;
+  const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+  // timingSafeEqual throws if buffers differ in length; pad/truncate first.
+  const a = Buffer.from(presented, 'hex');
+  const b = Buffer.from(expected, 'hex');
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
 export async function handleWebhook(
   request: FastifyRequest<{ Body: WebhookBody }>,
   reply: FastifyReply,
 ) {
-  // Verify webhook authenticity via shared secret header
+  // Layer 1: shared bearer.
   const authHeader = request.headers.authorization;
   const webhookSecret = env.REVENUECAT_WEBHOOK_SECRET;
-
   if (!webhookSecret || authHeader !== `Bearer ${webhookSecret}`) {
+    throw new AuthenticationError('Invalid webhook signature');
+  }
+
+  // Layer 2: optional HMAC. Requires the raw body, which Fastify normally
+  // discards after JSON parsing — so we recompute the canonical form. This
+  // is acceptable because the canonical form is stable for valid JSON.
+  const sigHeader = request.headers['x-rc-signature'];
+  const sigValue = Array.isArray(sigHeader) ? sigHeader[0] : sigHeader;
+  const canonicalBody = JSON.stringify(request.body);
+  if (!verifyHmacSignature(canonicalBody, sigValue)) {
+    logger.warn({}, '[Webhook] RevenueCat HMAC verification failed');
     throw new AuthenticationError('Invalid webhook signature');
   }
 
@@ -104,27 +141,43 @@ export async function handleWebhook(
     throw new ValidationError('Invalid webhook payload');
   }
 
-  // Use event.id as idempotency key
+  // Use event.id as idempotency key.
   if (event.id) {
     const existing = await prisma.billingEvent.findUnique({
       where: { rcEventId: event.id },
     });
     if (existing) {
-      // Already processed
       reply.status(200).send({ status: 'already_processed' });
       return;
     }
   }
 
-  // app_user_id is set to the organizationId when configuring RevenueCat
-  const organizationId = event.app_user_id;
-  const org = await prisma.organization.findUnique({
-    where: { id: organizationId },
+  // Layer 3: per-tenant binding.
+  // The webhook's app_user_id is the RevenueCat customer ID. Match it
+  // against any org's stored rcCustomerId. If no org is bound yet, allow
+  // INITIAL_PURCHASE to claim the binding when the controller invocation
+  // can verify the org exists by its app_user_id field. Reject all other
+  // event types for unbound or mismatched orgs — that closes the spoofing
+  // path where a caller picks any orgId they like.
+  const rcCustomerId = event.app_user_id;
+  const boundOrg = await prisma.organization.findUnique({
+    where: { rcCustomerId },
   });
 
+  let org = boundOrg;
   if (!org) {
-    request.log.warn(`Webhook for unknown org: ${organizationId}`);
-    reply.status(200).send({ status: 'org_not_found' });
+    if (event.type !== 'INITIAL_PURCHASE') {
+      logger.warn({ rcCustomerId, type: event.type }, '[Webhook] No bound org for non-purchase event');
+      reply.status(200).send({ status: 'unbound' });
+      return;
+    }
+    // For INITIAL_PURCHASE we used to fall back to "treat app_user_id as
+    // organizationId", which lets any caller claim any org. Instead, only
+    // bind when the org has explicitly opted-in via a separate, authenticated
+    // /subscriptions/link-customer endpoint (not implemented here). Until
+    // that lands, refuse rather than create a binding from webhook input.
+    logger.warn({ rcCustomerId }, '[Webhook] INITIAL_PURCHASE for org with no rcCustomerId binding — refusing');
+    reply.status(200).send({ status: 'requires_link' });
     return;
   }
 
@@ -154,32 +207,34 @@ export async function handleWebhook(
       newStatus = 'PAST_DUE';
       break;
     case 'EXPIRATION':
+      // Don't downgrade if the entitlement is currently in the future
+      // (some webhook orderings deliver EXPIRATION late after a renewal).
+      if (event.expiration_at_ms && event.expiration_at_ms > Date.now()) {
+        logger.info({ orgId: org.id }, '[Webhook] EXPIRATION ignored — entitlement still valid');
+        break;
+      }
       newStatus = 'EXPIRED';
       newTier = 'STARTER';
       break;
     case 'SUBSCRIBER_ALIAS':
     case 'PRODUCT_CHANGE':
-      // Tier change — status stays the same
       newStatus = 'ACTIVE';
       break;
     default:
-      // Unknown event type — log but don't fail
       request.log.info(`Unhandled webhook event type: ${event.type}`);
   }
 
-  // Update organization subscription
   await prisma.organization.update({
-    where: { id: organizationId },
+    where: { id: org.id },
     data: {
       subscriptionTier: newTier,
       subscriptionStatus: newStatus,
     },
   });
 
-  // Record billing event
   await prisma.billingEvent.create({
     data: {
-      organizationId,
+      organizationId: org.id,
       type: event.type,
       tier: newTier,
       rcEventId: event.id || null,

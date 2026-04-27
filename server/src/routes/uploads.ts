@@ -49,7 +49,10 @@ export async function uploadRoutes(app: FastifyInstance) {
         return reply.status(413).send({ error: 'File too large (max 8MB)' });
       }
 
-      const filename = `${randomUUID()}.${ext}`;
+      // Scope uploads under the caller's org so a leaked URL is at least
+      // contained to one tenant's prefix, and so we can reason about who
+      // owns each object when we later need to rotate or audit them.
+      const filename = `${request.organizationId}/${randomUUID()}.${ext}`;
 
       const { error } = await supabase.storage
         .from(BUCKET)
@@ -60,11 +63,17 @@ export async function uploadRoutes(app: FastifyInstance) {
         return reply.status(500).send({ error: 'Upload failed' });
       }
 
-      const { data: publicUrl } = supabase.storage
+      // Signed URL with TTL — buckets are private. Clients re-fetch via the
+      // authenticated GET endpoints, which can refresh URLs as needed.
+      const { data: signed, error: signErr } = await supabase.storage
         .from(BUCKET)
-        .getPublicUrl(filename);
+        .createSignedUrl(filename, 60 * 60 * 24); // 24h
+      if (signErr || !signed?.signedUrl) {
+        request.log.error({ err: signErr }, 'Supabase signed URL failed');
+        return reply.status(500).send({ error: 'Could not generate signed URL' });
+      }
 
-      return reply.status(201).send({ url: publicUrl.publicUrl });
+      return reply.status(201).send({ url: signed.signedUrl });
     },
   );
 }

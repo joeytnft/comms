@@ -280,9 +280,9 @@ This causes re-renders when any part of the store changes. Use granular selector
 const messages = useChatStore((s) => s.messagesByGroup[groupId]);
 ```
 
-### Group Key Architecture Gap
+### Group Key Architecture
 
-The current design has a fundamental gap: group encryption keys are generated and stored locally per-device, but there's no key exchange protocol to share them with other group members. This means in practice, no member can decrypt another member's messages. Implementing the Signal Protocol key exchange or at minimum a server-mediated key distribution (as described in CLAUDE.md) is essential before encrypted messaging is functional.
+GatherSafe uses **server-managed group keys**, not Signal-style E2E. The server generates a 32-byte AES key on first request, stores it in `groups.groupKey`, and serves it over TLS to authenticated members. Clients encrypt/decrypt locally; the server stores only ciphertext + IV. This is documented in `docs/SECURITY_MODEL.md` as the project's actual encryption posture; the older Signal Protocol design notes have been retired.
 
 ---
 

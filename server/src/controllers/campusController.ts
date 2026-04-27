@@ -149,11 +149,27 @@ export async function getCampusMembers(
   });
   assertOrgCampus(existing, request.organizationId);
 
+  // Email and phone are PII; only org admins (and members of this campus
+  // who are also org admins) get them. Standard members see name + avatar.
+  const requester = await prisma.user.findUnique({
+    where: { id: request.userId },
+    select: { isOrgAdmin: true },
+  });
+  const includeContact = requester?.isOrgAdmin === true;
+
   const memberships = await prisma.campusUser.findMany({
     where: { campusId: request.params.id },
     select: {
       joinedAt: true,
-      user: { select: { id: true, displayName: true, email: true, phone: true, avatarUrl: true, createdAt: true } },
+      user: {
+        select: {
+          id: true,
+          displayName: true,
+          avatarUrl: true,
+          createdAt: true,
+          ...(includeContact ? { email: true, phone: true } : {}),
+        },
+      },
     },
     orderBy: { user: { displayName: 'asc' } },
   });

@@ -519,7 +519,17 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     async (groupId: string) => {
       if (!socket) return;
 
-      const response = await usePTTStore.getState().fetchToken(groupId);
+      // fetchToken can fail (network down, server 4xx/5xx). Without the catch
+      // the promise rejects further down with no breadcrumb, and the UI is
+      // stuck on a loader forever. Reset to disconnected and re-throw with a
+      // useful message so callers can show it.
+      const response = await usePTTStore.getState()
+        .fetchToken(groupId)
+        .catch((err: unknown) => {
+          usePTTStore.getState().disconnect();
+          const msg = err instanceof Error ? err.message : 'Failed to fetch PTT access token';
+          throw new Error(msg);
+        });
       usePTTStore.getState().setCurrentGroup(groupId, response.groupName);
       // Persist so a cold launch from the Live Activity can tell the server we left.
       mmkvStorage.setString(PTT_GROUP_ID_KEY, groupId);
@@ -695,7 +705,29 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           }
         });
 
-        await room.connect(livekitUrl, response.token, { autoSubscribe: true });
+        // room.connect rejection is the most common silent failure on bad
+        // network. Tear down the half-open join and surface the error to the
+        // caller; otherwise the UI sits with the connecting indicator forever
+        // and onTransmissionStarted runs on a dead room.
+        try {
+          await room.connect(livekitUrl, response.token, { autoSubscribe: true });
+        } catch (err) {
+          roomRef.current = null;
+          if (USE_NATIVE_PTT && nativePTTChannelIdRef.current) {
+            await nativePTTService.leaveChannel(nativePTTChannelIdRef.current).catch(() => null);
+            nativePTTChannelIdRef.current = null;
+            nativePTTActiveRef.current = false;
+          } else if (Platform.OS === 'android' && callUUIDRef.current) {
+            callKitService.endCall(callUUIDRef.current);
+            callUUIDRef.current = null;
+          }
+          AudioSession?.stopAudioSession();
+          usePTTStore.getState().disconnect();
+          mmkvStorage.delete(PTT_GROUP_ID_KEY);
+          mmkvStorage.delete(PTT_CHANNEL_ID_KEY);
+          const msg = err instanceof Error ? err.message : 'Failed to connect to voice channel';
+          throw new Error(msg);
+        }
         // Pre-publish mic track muted with DTX for instant unmute on first press.
         // Wrapped in try-catch: on first launch iOS may not have the audio session
         // fully provisioned yet — fall back to on-demand enable in that case.

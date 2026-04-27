@@ -1,20 +1,22 @@
 # GatherSafe
 
-**Encrypted real-time communication for church security teams.**
+**Secure real-time communication for church security teams.**
 
 
-GatherSafe provides church security teams with encrypted text messaging, push-to-talk voice, hierarchical group management, panic alerts, location sharing, and incident logging — all in one cross-platform mobile app.
+GatherSafe provides church security teams with secure text messaging, push-to-talk voice, hierarchical group management, panic alerts, location sharing, and incident logging — all in one cross-platform mobile app.
 
 ## Features
 
-- **Encrypted Messaging** — End-to-end encrypted text and image messages using the Signal Protocol
+- **Secure Messaging** — TLS in transit, AES-256-GCM at rest, biometric/PIN device lock for text and image messages
 - **Push-to-Talk** — Walkie-talkie style voice communication with configurable hardware button mapping
 - **Group Hierarchy** — Lead groups that monitor all sub-groups, with sub-group isolation
-- **Panic Alerts** — One-tap emergency alerts with GPS coordinates broadcast to all teams
+- **Panic Alerts** — One-tap emergency alerts with GPS coordinates broadcast to targeted teams
 - **Team Location** — Real-time map view of team member positions
-- **Incident Logging** — Encrypted incident reports with photos and timestamps
+- **Incident Logging** — Encrypted-at-rest incident reports with photos and timestamps
 - **Background Operation** — PTT works even when the phone is locked or app is in background
 - **Bluetooth PTT** — Support for external push-to-talk buttons
+
+See [docs/SECURITY_MODEL.md](./docs/SECURITY_MODEL.md) for the threat model and the encryption design.
 
 ## Tech Stack
 
@@ -25,7 +27,7 @@ GatherSafe provides church security teams with encrypted text messaging, push-to
 | Backend | Fastify + TypeScript |
 | Database | PostgreSQL (Prisma ORM) |
 | Real-time | Socket.IO + LiveKit (WebRTC SFU) |
-| Encryption | Signal Protocol (text) + SRTP (voice) |
+| Encryption | AES-256-GCM (text, server-managed keys) + SRTP (voice) |
 | Queue | Redis + BullMQ |
 
 ## Quick Start
@@ -74,7 +76,7 @@ See [CLAUDE.md](./CLAUDE.md) for detailed architecture, directory structure, and
 
 1. **Foundation & Auth** — User registration, login, base UI
 2. **Groups & Hierarchy** — Group CRUD, lead/sub group system
-3. **Encrypted Messaging** — E2E encrypted text chat
+3. **Secure Messaging** — TLS in transit, AES-GCM at rest, biometric device lock
 4. **Push-to-Talk** — LiveKit voice, hardware buttons, background audio
 5. **Alerts & Safety** — Panic button, alert levels, notifications
 6. **Location & Map** — Team tracking, geofencing, check-in

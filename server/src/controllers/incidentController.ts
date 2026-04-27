@@ -1,6 +1,19 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../config/database';
 import { NotFoundError, AuthorizationError, ValidationError } from '../utils/errors';
+import { assertAllowedHttpsUrl } from '../utils/validators';
+import { env } from '../config/env';
+
+// Hostnames whose URLs we allow tenants to attach to incident photos.
+// Anything outside this list is refused — the previous code accepted any
+// string, including pixel-tracking URLs that capture IP/UA of every
+// responder who opens the incident.
+function allowedPhotoHosts(): string[] {
+  const supabaseHost = (() => {
+    try { return new URL(env.SUPABASE_URL).hostname; } catch { return null; }
+  })();
+  return [supabaseHost].filter((h): h is string => !!h);
+}
 
 interface CreateBody {
   title: string;
@@ -171,6 +184,11 @@ export async function addPhoto(
   if (!encryptedUrl) {
     throw new ValidationError('encryptedUrl is required');
   }
+  // Reject arbitrary client-supplied URLs — must point at our own Supabase
+  // bucket (uploaded via the authenticated upload endpoint). Without this
+  // tenants could attach pixel-tracking URLs that capture every responder's
+  // IP and User-Agent when they open the incident.
+  assertAllowedHttpsUrl(encryptedUrl, allowedPhotoHosts());
 
   const photo = await prisma.incidentPhoto.create({
     data: { incidentId: id, encryptedUrl },

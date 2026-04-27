@@ -8,11 +8,14 @@ const envSchema = z.object({
   // Redis
   REDIS_URL: z.string().url().default('redis://127.0.0.1:6379'),
 
-  // JWT
-  JWT_SECRET: z.string().min(16),
-  JWT_REFRESH_SECRET: z.string().min(16),
+  // JWT — secrets must be ≥32 chars (256-bit) for HS256.
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+  JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET must be at least 32 characters'),
   JWT_ACCESS_EXPIRY: z.string().default('15m'),
   JWT_REFRESH_EXPIRY: z.string().default('7d'),
+
+  // RevenueCat HMAC: when set, webhook signature is verified (recommended in production).
+  REVENUECAT_HMAC_SECRET: z.string().optional(),
 
   // Supabase (database + file storage)
   SUPABASE_URL: z.string().url(),

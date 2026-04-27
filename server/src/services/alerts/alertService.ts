@@ -109,6 +109,77 @@ export async function createAlert(params: {
   return alert;
 }
 
+/**
+ * Permission gate for delete/resolve. Allows:
+ *   - Org admins (org-wide)
+ *   - Admins of any group the alert targeted
+ *   - Admins of a group in the alert's campus when the alert has no targets
+ *     (e.g. ACTIVE_SHOOTER which broadcasts org/campus-wide)
+ *
+ * Was previously "any group admin in the org", which let Campus A admins
+ * delete Campus B alerts. Throws AuthorizationError when the caller does
+ * not satisfy any of the above.
+ */
+async function assertCanManageAlert(
+  alertId: string,
+  userId: string,
+  organizationId: string,
+): Promise<void> {
+  const orgAdmin = await prisma.user.findFirst({
+    where: { id: userId, isOrgAdmin: true, organizationId },
+    select: { id: true },
+  });
+  if (orgAdmin) return;
+
+  const alert = await prisma.alert.findUnique({
+    where: { id: alertId },
+    select: {
+      campusId: true,
+      targetGroups: { select: { groupId: true } },
+    },
+  });
+  if (!alert) throw new NotFoundError('Alert');
+
+  const targetGroupIds = alert.targetGroups.map((g) => g.groupId);
+
+  if (targetGroupIds.length > 0) {
+    const adminOfTarget = await prisma.groupMembership.findFirst({
+      where: {
+        userId,
+        role: 'ADMIN',
+        groupId: { in: targetGroupIds },
+      },
+      select: { id: true },
+    });
+    if (adminOfTarget) return;
+  } else if (alert.campusId) {
+    // Campus-scoped alert with no explicit groups (e.g. broadcast); any
+    // group admin within that campus may manage it.
+    const adminInCampus = await prisma.groupMembership.findFirst({
+      where: {
+        userId,
+        role: 'ADMIN',
+        group: { organizationId, campusId: alert.campusId },
+      },
+      select: { id: true },
+    });
+    if (adminInCampus) return;
+  } else {
+    // Org-wide alert with no campus and no target groups (legacy): any group
+    // admin in the org may manage it. This preserves prior behaviour for
+    // org-wide alerts without leaking cross-campus authority for scoped ones.
+    const adminInOrg = await prisma.groupMembership.findFirst({
+      where: { userId, role: 'ADMIN', group: { organizationId } },
+      select: { id: true },
+    });
+    if (adminInOrg) return;
+  }
+
+  throw new AuthorizationError(
+    'Only the alert creator, an org admin, or an admin of a targeted group can manage this alert',
+  );
+}
+
 export async function getUserVisibleGroupIds(userId: string, organizationId: string): Promise<string[]> {
   const memberships = await prisma.groupMembership.findMany({
     where: { userId, group: { organizationId, alertsEnabled: true } },
@@ -143,15 +214,8 @@ export async function deleteAlertById(alertId: string, userId: string, organizat
     throw new AuthorizationError('Alert does not belong to your organization');
   }
 
-  // Only the alert triggerer, an org admin, or a group admin can delete alerts
   if (alert.triggeredById !== userId) {
-    const [orgAdmin, adminMembership] = await Promise.all([
-      prisma.user.findFirst({ where: { id: userId, isOrgAdmin: true } }),
-      prisma.groupMembership.findFirst({ where: { userId, role: 'ADMIN', group: { organizationId } } }),
-    ]);
-    if (!orgAdmin && !adminMembership) {
-      throw new AuthorizationError('Only the alert creator or a group admin can delete alerts');
-    }
+    await assertCanManageAlert(alert.id, userId, organizationId);
   }
 
   await prisma.alert.delete({ where: { id: alertId } });
@@ -165,15 +229,8 @@ export async function resolveAlertById(alertId: string, userId: string, organiza
   }
   if (alert.resolvedAt) return alert;
 
-  // Only the alert triggerer, an org admin, or a group admin can resolve alerts
   if (alert.triggeredById !== userId) {
-    const [orgAdmin, adminMembership] = await Promise.all([
-      prisma.user.findFirst({ where: { id: userId, isOrgAdmin: true } }),
-      prisma.groupMembership.findFirst({ where: { userId, role: 'ADMIN', group: { organizationId } } }),
-    ]);
-    if (!orgAdmin && !adminMembership) {
-      throw new AuthorizationError('Only the alert creator or a group admin can resolve alerts');
-    }
+    await assertCanManageAlert(alert.id, userId, organizationId);
   }
 
   return prisma.alert.update({

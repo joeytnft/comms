@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../config/database';
 import { authenticate } from '../middleware/auth';
+import { canUserAccessGroup } from '../services/groups/hierarchyService';
 
 export async function pttLogRoutes(app: FastifyInstance) {
   // GET /ptt-logs/:groupId — fetch voice log history for a group
@@ -13,11 +14,11 @@ export async function pttLogRoutes(app: FastifyInstance) {
       const { cursor } = request.query;
       const { userId } = request;
 
-      // Verify group membership
-      const membership = await prisma.groupMembership.findUnique({
-        where: { groupId_userId: { groupId, userId } },
-      });
-      if (!membership) {
+      // Use the hierarchy-aware accessor: lead-group members can read sub-group
+      // logs, and the call also asserts the group is in the caller's org so a
+      // stale cross-tenant membership row cannot leak data.
+      const allowed = await canUserAccessGroup(userId, groupId, request.organizationId);
+      if (!allowed) {
         return reply.status(403).send({ error: 'FORBIDDEN', message: 'Not a member of this group' });
       }
 

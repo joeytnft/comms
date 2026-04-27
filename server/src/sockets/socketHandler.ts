@@ -9,6 +9,8 @@ import { setupAlertSocket } from './alertSocket';
 interface SocketUser {
   userId: string;
   organizationId: string;
+  // null when the user is an org admin (unscoped) or has no campus assignment.
+  campusId: string | null;
 }
 
 declare module 'socket.io' {
@@ -33,6 +35,10 @@ export function setupSocketHandlers(io: Server) {
       socket.user = {
         userId: decoded.userId,
         organizationId: decoded.organizationId,
+        // Carry campusId from the JWT so socket-side broadcasts can be scoped
+        // by campus the same way the HTTP path is. Previously dropped — every
+        // socket event ran org-wide regardless of the user's campus.
+        campusId: decoded.campusId ?? null,
       };
       next();
     } catch {
@@ -45,6 +51,11 @@ export function setupSocketHandlers(io: Server) {
 
     // Join the user's organization room for org-wide broadcasts
     socket.join(`org:${socket.user.organizationId}`);
+    // Join the per-campus room when the user has a campus assignment so
+    // campus-scoped broadcasts can target them precisely.
+    if (socket.user.campusId) {
+      socket.join(`campus:${socket.user.campusId}`);
+    }
 
     // Set up chat event handlers
     setupChatSocket(io, socket);

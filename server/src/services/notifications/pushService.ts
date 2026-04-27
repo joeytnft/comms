@@ -30,40 +30,89 @@ function getExpo() {
   return _expoCache;
 }
 
+// Resolve push tokens for the recipients of an alert. Filters by:
+//   - alert.targetGroups → users in those groups (and their lead group, since
+//     fan-out has already been done at create time so targetGroups already
+//     contains the parents)
+//   - alert.campusId    → only users assigned to that campus, when set
+//   - alertType === 'ACTIVE_SHOOTER' → bypass group filter (broadcast), still
+//     scoped by campusId when set
+async function resolveAlertRecipientTokens(
+  alertId: string,
+  isActiveShooter: boolean,
+): Promise<string[]> {
+  const { Expo } = await getExpo();
+
+  const alert = await prisma.alert.findUnique({
+    where: { id: alertId },
+    select: {
+      organizationId: true,
+      campusId: true,
+      targetGroups: { select: { groupId: true } },
+    },
+  });
+  if (!alert) return [];
+
+  const targetGroupIds = alert.targetGroups.map((g) => g.groupId);
+
+  // Build a where clause that respects group + campus targeting.
+  const whereClauses: Array<Record<string, unknown>> = [
+    { organizationId: alert.organizationId },
+    { expoPushToken: { not: null } },
+  ];
+
+  if (alert.campusId) {
+    whereClauses.push({
+      OR: [
+        { campusId: alert.campusId },
+        // Org admins still receive broadcasts even when campus-scoped, so
+        // they can respond from another campus if needed.
+        { isOrgAdmin: true },
+      ],
+    });
+  }
+
+  if (!isActiveShooter && targetGroupIds.length > 0) {
+    whereClauses.push({
+      OR: [
+        { memberships: { some: { groupId: { in: targetGroupIds } } } },
+        { isOrgAdmin: true },
+      ],
+    });
+  }
+
+  const users = await prisma.user.findMany({
+    where: { AND: whereClauses },
+    select: { expoPushToken: true },
+  });
+
+  return users
+    .map((u) => u.expoPushToken!)
+    .filter((t) => Expo.isExpoPushToken(t));
+}
+
 // ── Critical Alert (Active Shooter) ──────────────────────────────────────────
 // iOS: requires com.apple.developer.usernotifications.critical-alerts entitlement
 // from Apple (must be manually requested at developer.apple.com/contact/request/).
 // The `sound.critical: true` field bypasses mute switch and Do Not Disturb.
 // Android: routes to the `critical-alerts` channel which has bypassDnd + ALARM usage.
 export async function sendCriticalAlertPushNotification(
-  organizationId: string,
+  _organizationId: string,
   alertId: string,
   triggeredByName: string,
 ): Promise<void> {
-  const { expo, Expo } = await getExpo();
-
-  const users = await prisma.user.findMany({
-    where: { organizationId, expoPushToken: { not: null } },
-    select: { expoPushToken: true },
-  });
-
-  const tokens = users
-    .map((u) => u.expoPushToken!)
-    .filter((t) => Expo.isExpoPushToken(t));
-
+  const { expo } = await getExpo();
+  const tokens = await resolveAlertRecipientTokens(alertId, /*isActiveShooter*/ true);
   if (tokens.length === 0) return;
 
   const messages: ExpoPushMessage[] = tokens.map((token) => ({
     to: token as ExpoPushToken,
-    // iOS Critical Alert — bypasses mute and Do Not Disturb at full volume
     sound: { critical: true, volume: 1.0, name: 'default' },
     title: '🚨 ACTIVE SHOOTER',
     body: `${triggeredByName} has reported an active shooter. Respond immediately.`,
     priority: 'high',
-    // Expire quickly — a stale active-shooter alert is worse than none
-    expiration: Math.floor(Date.now() / 1000) + 300, // 5 minutes
+    expiration: Math.floor(Date.now() / 1000) + 300,
     data: { alertId, level: 'EMERGENCY', alertType: 'ACTIVE_SHOOTER', type: 'alert' },
-    // Android: routes to the bypassDnd critical-alerts channel
     channelId: 'critical-alerts',
   }));
 
@@ -80,31 +129,23 @@ export async function sendCriticalAlertPushNotification(
 }
 
 export async function sendAlertPushNotifications(
-  organizationId: string,
+  _organizationId: string,
   alertId: string,
   level: string,
-  message: string | null,
+  _message: string | null,
   triggeredByName: string,
 ): Promise<void> {
-  const { expo, Expo } = await getExpo();
-
-  // Fetch all push tokens for active org members
-  const users = await prisma.user.findMany({
-    where: { organizationId, expoPushToken: { not: null } },
-    select: { expoPushToken: true },
-  });
-
-  const tokens = users
-    .map((u) => u.expoPushToken!)
-    .filter((t) => Expo.isExpoPushToken(t));
-
+  const { expo } = await getExpo();
+  const tokens = await resolveAlertRecipientTokens(alertId, /*isActiveShooter*/ false);
   if (tokens.length === 0) return;
 
   const levelEmoji = level === 'EMERGENCY' ? '🚨' : level === 'WARNING' ? '⚠️' : 'ℹ️';
   const title = `${levelEmoji} ${level} Alert`;
-  const body = message
-    ? `${triggeredByName}: ${message}`
-    : `Alert triggered by ${triggeredByName}`;
+  // Drop the plaintext alert message from the push body — push goes through
+  // Apple/Google/Expo and may be cached server-side. Devices fetch the alert
+  // payload via authenticated API on tap; the body just nudges the user to
+  // open the app.
+  const body = `${triggeredByName} triggered an alert. Tap to view details.`;
 
   const messages: ExpoPushMessage[] = tokens.map((token) => ({
     to: token as ExpoPushToken,

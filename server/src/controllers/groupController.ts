@@ -8,6 +8,7 @@ import {
   ValidationError,
 } from '../utils/errors';
 import * as hierarchyService from '../services/groups/hierarchyService';
+import { PLAN_LIMITS } from '../config/subscriptions';
 
 interface CreateGroupBody {
   name: string;
@@ -78,9 +79,17 @@ function formatMembership(m: { role: string; [key: string]: unknown }) {
 }
 
 function generateInviteCode(): string {
-  // 8-char alphanumeric code, e.g. "A3K9X2M7"
-  return crypto.randomBytes(4).toString('hex').toUpperCase();
+  // 16 hex chars (64 bits) — guessing budget is now ~10^19, vs the previous
+  // 8-char (32-bit) codes that were brute-forceable in days at 100 req/min.
+  // Combined with rate-limiting on /groups/join this makes online attacks
+  // computationally infeasible.
+  return crypto.randomBytes(8).toString('hex').toUpperCase();
 }
+
+// Invite codes silently expire after this period. Admin can re-issue at any
+// time. Aligns with how org/team-style apps treat shareable links — short
+// lifetime reduces the window where a leaked code is useful.
+const INVITE_CODE_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
 
 async function findGroupInOrg(groupId: string, organizationId: string) {
   const group = await prisma.group.findFirst({
@@ -485,7 +494,9 @@ export async function generateInvite(
     throw new AuthorizationError('Only group admins can generate invite codes');
   }
 
-  // Generate a unique code (retry on collision)
+  // Generate a unique code (retry on collision). 64-bit code space + 5
+  // retries gives effectively-zero probability of failure under any
+  // realistic group count.
   let code: string;
   let attempts = 0;
   do {
@@ -495,13 +506,14 @@ export async function generateInvite(
     attempts++;
   } while (attempts < 5);
 
+  const expiresAt = new Date(Date.now() + INVITE_CODE_TTL_MS);
   const group = await prisma.group.update({
     where: { id: request.params.id },
-    data: { inviteCode: code },
-    select: { id: true, inviteCode: true },
+    data: { inviteCode: code, inviteCodeExpiresAt: expiresAt },
+    select: { id: true, inviteCode: true, inviteCodeExpiresAt: true },
   });
 
-  reply.send({ inviteCode: group.inviteCode });
+  reply.send({ inviteCode: group.inviteCode, expiresAt: group.inviteCodeExpiresAt });
 }
 
 /**
@@ -520,7 +532,7 @@ export async function revokeInvite(
 
   await prisma.group.update({
     where: { id: request.params.id },
-    data: { inviteCode: null },
+    data: { inviteCode: null, inviteCodeExpiresAt: null },
   });
 
   reply.status(204).send();
@@ -541,11 +553,23 @@ export async function joinByInvite(
 
   const group = await prisma.group.findUnique({
     where: { inviteCode },
-    select: { id: true, name: true, organizationId: true },
+    select: {
+      id: true,
+      name: true,
+      organizationId: true,
+      type: true,
+      inviteCodeExpiresAt: true,
+    },
   });
 
   if (!group) {
     throw new NotFoundError('Group with that invite code');
+  }
+
+  // Reject expired codes (legacy codes with NULL expiry are still accepted —
+  // admins should rotate them; the rotated codes will carry an expiry).
+  if (group.inviteCodeExpiresAt && group.inviteCodeExpiresAt < new Date()) {
+    throw new AuthorizationError('This invite code has expired — ask an admin for a new one');
   }
 
   // User must be in the same organization
@@ -559,6 +583,40 @@ export async function joinByInvite(
   });
   if (existing) {
     throw new ConflictError('You are already a member of this group');
+  }
+
+  // Enforce subscription / plan limits before creating the membership. Without
+  // this an org admin could share an invite link that lets users grow the
+  // group beyond the seat cap — the create-group path enforces this but
+  // join-by-invite previously bypassed it.
+  const orgRecord = await prisma.organization.findUnique({
+    where: { id: group.organizationId },
+    select: {
+      subscriptionTier: true,
+      subscriptionStatus: true,
+      pcoIntegrationEnabled: true,
+    },
+  });
+  if (!orgRecord) {
+    throw new NotFoundError('Organization');
+  }
+  if (orgRecord.subscriptionStatus !== 'ACTIVE') {
+    throw new AuthorizationError(
+      'This group\'s organization has an inactive subscription — ask an admin to renew.',
+    );
+  }
+  if (!orgRecord.pcoIntegrationEnabled) {
+    const limits = PLAN_LIMITS[orgRecord.subscriptionTier];
+    if (limits.maxMembers !== -1) {
+      const memberCount = await prisma.user.count({
+        where: { organizationId: group.organizationId },
+      });
+      if (memberCount >= limits.maxMembers) {
+        throw new AuthorizationError(
+          `This organization has reached its member limit (${limits.maxMembers}).`,
+        );
+      }
+    }
   }
 
   await prisma.groupMembership.create({

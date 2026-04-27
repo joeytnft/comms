@@ -1,6 +1,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { COLORS, TYPOGRAPHY, SPACING } from '@/config/theme';
+import { reportCrash } from '@/utils/logger';
 
 interface Props {
   children: ReactNode;
@@ -22,8 +23,12 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // TODO: Send to crash reporting service (e.g. Sentry)
-    console.error('[ErrorBoundary] Uncaught error:', error, errorInfo);
+    reportCrash({
+      err: error,
+      context: 'ErrorBoundary',
+      fatal: true,
+      extra: { componentStack: errorInfo.componentStack },
+    });
   }
 
   handleRestart = () => {
