@@ -5,8 +5,16 @@ export const APP_VERSION = '0.1.0';
 
 // API
 export const API_TIMEOUT = 30000; // 30 seconds
-export const SOCKET_RECONNECT_ATTEMPTS = 10;
-export const SOCKET_RECONNECT_DELAY = 2000; // 2 seconds
+
+// Socket reconnect tuning. We use true exponential backoff with jitter via
+// socket.io-client's built-in reconnection logic. There is intentionally no
+// upper bound on attempts — the previous 10-attempt cap meant a 20-second
+// outage left users permanently disconnected until they manually reopened
+// the app, which was a recurring user complaint.
+export const SOCKET_RECONNECT_ATTEMPTS = Infinity;
+export const SOCKET_RECONNECT_DELAY = 1000;        // initial backoff (ms)
+export const SOCKET_RECONNECT_DELAY_MAX = 30000;   // cap each individual wait
+export const SOCKET_RECONNECT_JITTER = 0.5;        // ±50% randomisation
 
 // Auth
 export const ACCESS_TOKEN_KEY = 'guardian_access_token';
@@ -17,7 +25,6 @@ export const PIN_KEY = 'guardian_pin';
 // Encryption
 export const KEY_ALGORITHM = 'AES-GCM';
 export const KEY_LENGTH = 256;
-export const SIGNAL_STORE_KEY = 'guardian_signal_store';
 
 // PTT
 export const PTT_MAX_TRANSMIT_DURATION = 60000; // 60 seconds max

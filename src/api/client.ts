@@ -11,6 +11,20 @@ class ApiClient {
     reject: (error: unknown) => void;
   }> = [];
 
+  /**
+   * In-flight GET de-duplication. Two screens that both call
+   * `apiClient.get('/groups')` on mount used to fire two identical HTTP
+   * requests in parallel; this map collapses them into one round trip and
+   * gives both callers the same Promise. Keyed by URL + serialised params,
+   * so callers with different filters do not share a response.
+   *
+   * Only GET is deduplicated — mutating verbs are intentionally untouched
+   * because two callers genuinely intending the same POST should fire two
+   * POSTs. The map drops entries as soon as the underlying request settles
+   * (success or failure), so a failed read can be retried immediately.
+   */
+  private inflightGets = new Map<string, Promise<unknown>>();
+
   constructor() {
     this.client = axios.create({
       baseURL: ENV.apiUrl,
@@ -108,9 +122,28 @@ class ApiClient {
     return this.client;
   }
 
-  async get<T>(url: string, params?: Record<string, unknown>) {
-    const response = await this.client.get<T>(url, { params });
-    return response.data;
+  async get<T>(url: string, params?: Record<string, unknown>): Promise<T> {
+    // Stable cache key. JSON.stringify(undefined) → undefined, so we fall
+    // back to '' to keep the key consistent with no-params calls.
+    const paramKey = params ? JSON.stringify(params) : '';
+    const key = `${url}::${paramKey}`;
+
+    const existing = this.inflightGets.get(key);
+    if (existing) return existing as Promise<T>;
+
+    const promise = this.client
+      .get<T>(url, { params })
+      .then((response) => response.data)
+      .finally(() => {
+        // Remove ourselves from the map only AFTER the promise settles.
+        // Callers awaiting a still-pending request continue to get the
+        // existing promise (cached above); a brand-new request fires only
+        // once the previous one has resolved or rejected.
+        this.inflightGets.delete(key);
+      });
+
+    this.inflightGets.set(key, promise);
+    return promise;
   }
 
   async post<T>(url: string, data?: unknown) {
