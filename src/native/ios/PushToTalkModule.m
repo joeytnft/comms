@@ -33,6 +33,14 @@
 @end
 #endif
 
+// Private helpers — declared so the compiler resolves selectors used from
+// inside async completion blocks defined earlier in the file.
+@interface PushToTalkModule (Private)
+- (void)_registerAudioInterruptionObservers;
+- (void)_handleAudioInterruption:(NSNotification *)notif;
+- (void)_handleRouteChange:(NSNotification *)notif;
+@end
+
 // ─── Implementation ───────────────────────────────────────────────────────────
 
 @implementation PushToTalkModule {
@@ -47,6 +55,14 @@
     // the framework's internal dispatch boundaries. Tracking join state lets us
     // skip the redundant join request entirely.
     BOOL _isChannelJoined;
+    // Tracks whether we're mid-transmission. Used in incomingPushResult to
+    // honour Apple's half-duplex contract: if a remote push arrives while the
+    // local user is transmitting, we MUST stop transmitting before returning
+    // an active remote participant or the framework throws.
+    BOOL _isTransmitting;
+    // Set true when AVAudioSession observers have been wired up so we don't
+    // double-register on subsequent channel joins.
+    BOOL _audioObserversRegistered;
 #endif
     BOOL _hasListeners;
 }
@@ -106,6 +122,51 @@ RCT_EXPORT_MODULE(PushToTalkModule)
 
 // ─── JS-facing methods ────────────────────────────────────────────────────────
 
+/**
+ * Create the PTChannelManager singleton at app launch — BEFORE any channel
+ * is joined. Apple's docs:
+ *
+ *   "Initialize the channel manager as soon as possible during startup to
+ *    ensure the framework can restore existing channels and deliver push
+ *    notifications to the app."
+ *
+ * Without an early preinit, a PT channel that iOS persists across app
+ * relaunches (e.g. after a crash) cannot be restored: the framework needs
+ * a live channelManager + restorationDelegate to call back into. JS calls
+ * this from PTTProvider mount; subsequent calls are no-ops because
+ * channelManagerWithDelegate returns the same shared instance.
+ *
+ * Note: useManualAudio = YES is intentionally NOT set here — that switch
+ * is what tells WebRTC the framework owns the audio session, and we only
+ * want it on while a channel is actually joined. It gets flipped inside
+ * the initialize: method below.
+ */
+RCT_EXPORT_METHOD(preinit:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+{
+#ifdef PTTM_HAS_FRAMEWORK
+    if (@available(iOS 16.0, *)) {
+        if (_channelManager) { resolve(nil); return; }
+        __weak typeof(self) weak = self;
+        [PTChannelManager channelManagerWithDelegate:self
+                                restorationDelegate:self
+                                  completionHandler:^(PTChannelManager *mgr, NSError *err) {
+            __strong typeof(weak) strong = weak;
+            if (!strong) { resolve(nil); return; }
+            if (err) {
+                reject(@"PTT_PREINIT_ERROR", err.localizedDescription, err);
+                return;
+            }
+            strong->_channelManager = mgr;
+            [strong _registerAudioInterruptionObservers];
+            resolve(nil);
+        }];
+        return;
+    }
+#endif
+    resolve(nil);
+}
+
 RCT_EXPORT_METHOD(initialize:(NSString *)channelId
                   channelName:(NSString *)channelName
                   resolver:(RCTPromiseResolveBlock)resolve
@@ -124,6 +185,7 @@ RCT_EXPORT_METHOD(initialize:(NSString *)channelId
             __strong typeof(weak) strong = weak;
             if (!strong) { resolve(nil); return; }
             strong->_channelManager = mgr;
+            [strong _registerAudioInterruptionObservers];
 
             // Take WebRTC out of automatic-audio mode for the entire PTT session.
             // While a PT channel is joined, Apple's PushToTalk framework owns the
@@ -323,6 +385,7 @@ RCT_EXPORT_METHOD(setServiceStatus:(NSString *)channelId
            channelUUID:(NSUUID *)channelUUID
     didBeginTransmittingFromSource:(PTChannelTransmitRequestSource)source API_AVAILABLE(ios(16.0))
 {
+    _isTransmitting = YES;
     [self emit:@"onPTTTransmitStart" body:@{@"channelId": channelUUID.UUIDString}];
 }
 
@@ -330,6 +393,7 @@ RCT_EXPORT_METHOD(setServiceStatus:(NSString *)channelId
            channelUUID:(NSUUID *)channelUUID
     didEndTransmittingFromSource:(PTChannelTransmitRequestSource)source API_AVAILABLE(ios(16.0))
 {
+    _isTransmitting = NO;
     [self emit:@"onPTTTransmitStop" body:@{@"channelId": channelUUID.UUIDString}];
 }
 
@@ -365,6 +429,18 @@ RCT_EXPORT_METHOD(setServiceStatus:(NSString *)channelId
 {
     NSString *sender = pushPayload[@"senderName"];
     if (!sender) return [PTPushResult leaveChannelPushResult];
+
+    // Half-duplex collision: if the local user is currently transmitting and a
+    // remote PTT push arrives, Apple requires us to stop the local transmission
+    // BEFORE returning an active remote participant — otherwise the framework
+    // raises an error. The system batches stop-transmit + activate-remote-
+    // participant together without deactivating the audio session, so the
+    // remote audio plays back without a stale gap.
+    if (_isTransmitting && _channelManager && _channelUUID) {
+        [_channelManager stopTransmittingWithChannelUUID:_channelUUID];
+        _isTransmitting = NO;
+    }
+
     PTParticipant *participant = [[PTParticipant alloc] initWithName:sender image:nil];
     return [PTPushResult pushResultForActiveRemoteParticipant:participant];
 }
@@ -456,6 +532,59 @@ RCT_EXPORT_METHOD(setServiceStatus:(NSString *)channelId
     [self emit:@"onPTTAudioDeactivated" body:@{
         @"channelId": _channelUUID.UUIDString ?: @"",
     }];
+}
+
+// ─── AVAudioSession interruption + route-change observers ───────────────────
+// Apple's "Reduce network latency and handle audio interruptions" doc
+// section explicitly tells PTT apps to monitor and respond to AVAudioSession
+// notifications. The PT framework already handles "can't transmit during a
+// cellular call" by firing failedToBeginTransmittingInChannelWithUUID, but
+// out-of-band interruptions and route changes (AirPods unplugged, etc.) need
+// to be at least visible in logs so we can diagnose user reports.
+
+- (void)_registerAudioInterruptionObservers
+{
+    if (_audioObserversRegistered) return;
+    _audioObserversRegistered = YES;
+    NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+    [nc addObserver:self
+           selector:@selector(_handleAudioInterruption:)
+               name:AVAudioSessionInterruptionNotification
+             object:nil];
+    [nc addObserver:self
+           selector:@selector(_handleRouteChange:)
+               name:AVAudioSessionRouteChangeNotification
+             object:nil];
+}
+
+- (void)_handleAudioInterruption:(NSNotification *)notif
+{
+    NSNumber *typeNum = notif.userInfo[AVAudioSessionInterruptionTypeKey];
+    AVAudioSessionInterruptionType type = (AVAudioSessionInterruptionType)typeNum.unsignedIntegerValue;
+    if (type == AVAudioSessionInterruptionTypeBegan) {
+        NSLog(@"[PTT] AVAudioSession interruption began (likely incoming call)");
+        // The framework will fire failedToBeginTransmittingInChannelWithUUID
+        // on its own when this happens mid-press; nothing else to do here.
+    } else if (type == AVAudioSessionInterruptionTypeEnded) {
+        NSNumber *optsNum = notif.userInfo[AVAudioSessionInterruptionOptionKey];
+        BOOL shouldResume = ((AVAudioSessionInterruptionOptions)optsNum.unsignedIntegerValue
+                             & AVAudioSessionInterruptionOptionShouldResume) != 0;
+        NSLog(@"[PTT] AVAudioSession interruption ended (shouldResume=%d)", shouldResume);
+    }
+}
+
+- (void)_handleRouteChange:(NSNotification *)notif
+{
+    NSNumber *reasonNum = notif.userInfo[AVAudioSessionRouteChangeReasonKey];
+    AVAudioSessionRouteChangeReason reason = (AVAudioSessionRouteChangeReason)reasonNum.unsignedIntegerValue;
+    NSLog(@"[PTT] AVAudioSession route change reason=%lu", (unsigned long)reason);
+    // No action needed — AVAudioSession reroutes audio automatically. WebRTC
+    // picks up the new route on the next captured frame.
+}
+
+- (void)dealloc
+{
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 // ─── PTChannelRestorationDelegate ────────────────────────────────────────────
