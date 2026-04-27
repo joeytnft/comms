@@ -63,6 +63,14 @@
     // Set true when AVAudioSession observers have been wired up so we don't
     // double-register on subsequent channel joins.
     BOOL _audioObserversRegistered;
+    // Set true immediately before calling leaveChannelWithUUID so the
+    // didLeaveChannelWithUUID delegate can distinguish our explicit leave from
+    // the stale leave iOS queues for the previous session when initialize() is
+    // called. Group IDs produce a deterministic UUID v5, so the previous and
+    // current session share the same UUID — without this flag the stale leave
+    // clears _channelUUID and every subsequent requestBeginTransmitting rejects
+    // with PTT_NOT_INITIALIZED, making PTT work only once per app launch.
+    BOOL _isLeavingIntentionally;
 #endif
     BOOL _hasListeners;
 }
@@ -283,6 +291,7 @@ RCT_EXPORT_METHOD(leaveChannel:(NSString *)channelId
             reject(@"PTT_NOT_INITIALIZED", @"PTT channel not initialized", nil);
             return;
         }
+        _isLeavingIntentionally = YES;
         [_channelManager leaveChannelWithUUID:_channelUUID];
         _channelManager   = nil;
         _channelUUID      = nil;
@@ -376,8 +385,20 @@ RCT_EXPORT_METHOD(setServiceStatus:(NSString *)channelId
     didLeaveChannelWithUUID:(NSUUID *)channelUUID
                      reason:(PTChannelLeaveReason)reason API_AVAILABLE(ios(16.0))
 {
+    BOOL wasIntentional = _isLeavingIntentionally;
+    _isLeavingIntentionally = NO;
     _isChannelJoined = NO;
-    _channelUUID = nil;
+    // Only null out _channelUUID for a leave we explicitly requested.
+    // iOS queues a didLeaveChannelWithUUID for the PREVIOUS session when
+    // initialize() is called and delivers it asynchronously — typically right
+    // after the first PTT button release when the main thread becomes free.
+    // Because the UUID is deterministic (UUID v5 of the group ID), previous
+    // and current sessions share the same UUID. Without this guard that stale
+    // callback clears _channelUUID and every subsequent startTransmitting call
+    // hits the !_channelUUID nil-check and rejects silently.
+    if (wasIntentional) {
+        _channelUUID = nil;
+    }
     [self emit:@"onPTTChannelLeft" body:@{@"channelId": channelUUID.UUIDString}];
 }
 
