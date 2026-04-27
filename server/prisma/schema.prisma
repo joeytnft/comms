@@ -216,8 +216,9 @@ model Group {
   campusId        String?
   parentGroupId   String?   // Points to lead group (for sub-groups)
   iconColor       String?
-  inviteCode      String?   @unique  // Shareable code for self-join
-  groupKey        String?   // Shared AES-256 key (hex) for message encryption
+  inviteCode             String?   @unique  // Shareable code for self-join
+  inviteCodeExpiresAt    DateTime? // Codes silently expire after 14 days; admin can re-issue
+  groupKey               String?   // Shared AES-256 key (hex) for message encryption
   alertsEnabled   Boolean   @default(true)  // Whether members can send/receive alerts
   createdBy       String
   createdAt       DateTime  @default(now())

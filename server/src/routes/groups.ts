@@ -9,8 +9,19 @@ export async function groupRoutes(app: FastifyInstance) {
   // Hierarchy — must be before /:id to avoid param conflict
   app.get('/hierarchy', groupController.getHierarchy);
 
-  // Join by invite code — must be before /:id
-  app.post('/join', groupController.joinByInvite);
+  // Join by invite code — must be before /:id. Throttle aggressively:
+  // 64-bit codes are infeasible to brute-force at any sane request rate
+  // anyway, but the limiter shuts down credential-stuffing-style noise
+  // and protects the DB roundtrip on each guess.
+  app.post(
+    '/join',
+    {
+      config: {
+        rateLimit: { max: 10, timeWindow: '1 minute' },
+      },
+    },
+    groupController.joinByInvite,
+  );
 
   // CRUD
   app.get('/', groupController.listGroups);

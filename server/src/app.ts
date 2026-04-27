@@ -7,6 +7,7 @@ import multipart from '@fastify/multipart';
 import { Server } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { redis } from './config/redis';
+import { prisma } from './config/database';
 import { env } from './config/env';
 import { logger } from './utils/logger';
 import { AppError } from './utils/errors';
@@ -106,9 +107,44 @@ export async function buildApp() {
     limits: { fileSize: 8 * 1024 * 1024 }, // 8MB per file
   });
 
-// Health check
+// Liveness probe — cheap, no dependencies. K8s/Railway use this to decide
+  // whether the process is up at all. Returns 200 unconditionally.
   app.get('/health', async () => {
     return { status: 'ok', timestamp: new Date().toISOString() };
+  });
+
+  // Readiness probe — actually exercises Postgres and Redis so the load
+  // balancer stops sending traffic when our backing services are down.
+  // Returns 200 only when both checks pass; otherwise 503 with details.
+  app.get('/health/ready', async (_req, reply) => {
+    const checks: { postgres: 'ok' | 'fail'; redis: 'ok' | 'fail' } = {
+      postgres: 'fail',
+      redis: 'fail',
+    };
+    const errors: Record<string, string> = {};
+
+    try {
+      // SELECT 1 is the conventional zero-cost connection test for Postgres.
+      await prisma.$queryRaw`SELECT 1`;
+      checks.postgres = 'ok';
+    } catch (err) {
+      errors.postgres = err instanceof Error ? err.message : 'unknown';
+    }
+
+    try {
+      await redis.ping();
+      checks.redis = 'ok';
+    } catch (err) {
+      errors.redis = err instanceof Error ? err.message : 'unknown';
+    }
+
+    const allOk = checks.postgres === 'ok' && checks.redis === 'ok';
+    return reply.status(allOk ? 200 : 503).send({
+      status: allOk ? 'ok' : 'degraded',
+      checks,
+      ...(allOk ? {} : { errors }),
+      timestamp: new Date().toISOString(),
+    });
   });
 
   // API routes
