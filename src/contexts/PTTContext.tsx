@@ -13,25 +13,24 @@ import { callKitService } from '@/services/callKitService';
 import { bluetoothPTTService } from '@/services/bluetoothPTTService';
 import { liveActivityService } from '@/services/liveActivityService';
 import { useAuthStore } from '@/store/useAuthStore';
-import { secureStorage } from '@/utils/secureStorage';
 import { mmkvStorage } from '@/utils/mmkv';
-import { ACCESS_TOKEN_KEY } from '@/config/constants';
-import { ENV as AppEnv } from '@/config/env';
+import { apiClient } from '@/api/client';
 
-// HTTP helper for ptt:start / ptt:stop / ptt:native_log.
-// Uses a fresh TCP connection each call so iOS audio session activation (which
-// silently breaks the long-lived WebSocket) does not cause events to be lost.
+// HTTP helper for ptt:start / ptt:stop / ptt:native_log / register-token.
+// Routed through apiClient (NOT bespoke fetch) so the response interceptor
+// catches expired access tokens, runs the refresh flow, and retries the
+// request — without it, the access token silently expires after 15 minutes
+// and every subsequent transmission is rejected with 401, which the user
+// sees as "first transmission works, every press after that is ignored
+// by the server but Apple's PTT framework still plays its tones."
 async function pttPost(groupId: string, endpoint: string, body?: Record<string, unknown>): Promise<void> {
-  const accessToken = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
-  const res = await fetch(`${AppEnv.apiUrl}/ptt/${groupId}/${endpoint}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-    },
-    body: JSON.stringify(body ?? {}),
-  });
-  if (!res.ok) console.warn(`[PTT] HTTP ${endpoint} returned ${res.status}`);
+  try {
+    await apiClient.post(`/ptt/${groupId}/${endpoint}`, body ?? {});
+  } catch (err: unknown) {
+    // 401 is already handled (refresh + retry) by the apiClient interceptor
+    // before we see this rejection — anything reaching here is a real failure.
+    console.warn(`[PTT] HTTP ${endpoint} failed`, err instanceof Error ? err.message : err);
+  }
 }
 
 const LIVE_ACTIVITY_ID_KEY = 'ptt_live_activity_id';
@@ -567,15 +566,10 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
               unsubToken?.();
               unsubToken = null;
               try {
-                const accessToken = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
-                await fetch(`${AppEnv.apiUrl}/ptt/${groupId}/register-token`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-                  },
-                  body: JSON.stringify({ token }),
-                });
+                // Use apiClient so the call inherits the 401-refresh interceptor.
+                // The previous bespoke fetch sent the cached access token directly
+                // and silently failed once it expired.
+                await apiClient.post(`/ptt/${groupId}/register-token`, { token });
               } catch (err) {
                 console.warn('[PTT] Failed to register push token:', err);
               }
