@@ -3,6 +3,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../config/database';
 import { NotFoundError, ValidationError, AuthorizationError, ConflictError } from '../utils/errors';
 import { sendInviteEmail } from '../services/emailService';
+import { assertValidPublicKey } from '../utils/validators';
 
 interface UpdateProfileBody {
   displayName?: string;
@@ -113,6 +114,7 @@ export async function updatePublicKey(
   if (!publicKey) {
     throw new ValidationError('Public key is required');
   }
+  assertValidPublicKey(publicKey);
 
   await prisma.user.update({
     where: { id: request.userId },

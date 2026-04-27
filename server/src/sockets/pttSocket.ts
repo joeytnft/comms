@@ -17,6 +17,7 @@ import {
   startTransmissionEgress,
   stopTransmissionEgress,
 } from '../services/ptt/livekitService';
+import { canUserAccessGroup } from '../services/groups/hierarchyService';
 
 const execFileAsync = promisify(execFile);
 const SESSION_TTL = 7200; // 2-hour safety net for stale Redis keys
@@ -82,11 +83,17 @@ async function savePttLog(
       if (uploadErr) {
         logger.warn({ err: uploadErr }, '[PTT] Audio upload failed — logging call without recording');
       } else {
-        const { data: { publicUrl } } = getSupabase()
+        // Signed URL with TTL — bucket is private. Removed members and the
+        // public internet cannot guess and replay these URLs forever.
+        const { data: signed, error: signErr } = await getSupabase()
           .storage
           .from(env.SUPABASE_PTT_BUCKET)
-          .getPublicUrl(filename);
-        audioUrl = publicUrl;
+          .createSignedUrl(filename, 60 * 60 * 6);
+        if (signErr || !signed?.signedUrl) {
+          logger.warn({ err: signErr, filename }, '[PTT] Failed to create signed URL after upload');
+        } else {
+          audioUrl = signed.signedUrl;
+        }
       }
     } catch (uploadErr) {
       logger.warn({ err: uploadErr }, '[PTT] Audio upload failed — logging call without recording');
@@ -113,7 +120,28 @@ function isValidGroupId(val: unknown): val is string {
 }
 
 export function setupPTTSocket(io: Server, socket: Socket) {
-  const { userId } = socket.user;
+  const { userId, organizationId } = socket.user as { userId: string; organizationId: string };
+
+  // Single helper used by every event below — confirms the caller is in this
+  // group (directly or via parent LEAD membership) AND that the group is in
+  // their org. Without the org cross-check a stale cross-tenant membership
+  // row would let the caller eavesdrop on another church's PTT room.
+  async function authorizeGroupOrFail(
+    groupId: string,
+    eventName: string,
+  ): Promise<{ displayName: string } | null> {
+    const allowed = await canUserAccessGroup(userId, groupId, organizationId);
+    if (!allowed) {
+      logger.warn({ userId, groupId, organizationId, eventName }, '[PTT] socket access denied');
+      socket.emit('ptt:error', { message: 'Not a member of this group' });
+      return null;
+    }
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { displayName: true },
+    });
+    return { displayName: user?.displayName ?? 'Unknown' };
+  }
 
   socket.on('ptt:join', async (data: { groupId: string }) => {
     if (!data || !isValidGroupId(data.groupId)) {
@@ -121,23 +149,15 @@ export function setupPTTSocket(io: Server, socket: Socket) {
       return;
     }
     const { groupId } = data;
-
-    const membership = await prisma.groupMembership.findUnique({
-      where: { groupId_userId: { groupId, userId } },
-      include: { user: { select: { displayName: true } } },
-    });
-
-    if (!membership) {
-      socket.emit('ptt:error', { message: 'Not a member of this group' });
-      return;
-    }
+    const ctx = await authorizeGroupOrFail(groupId, 'ptt:join');
+    if (!ctx) return;
 
     const room = `ptt:${groupId}`;
     socket.join(room);
 
     socket.to(room).emit('ptt:member_joined', {
       userId,
-      displayName: membership.user.displayName,
+      displayName: ctx.displayName,
       groupId,
     });
 
@@ -170,6 +190,8 @@ export function setupPTTSocket(io: Server, socket: Socket) {
       return;
     }
     const { groupId } = data;
+    const ctx = await authorizeGroupOrFail(groupId, 'ptt:start');
+    if (!ctx) return;
     const room = `ptt:${groupId}`;
     const mimeType = data.mimeType || 'audio/webm';
     // Always log at info so we can tell from Railway whether the event reached
@@ -245,6 +267,8 @@ export function setupPTTSocket(io: Server, socket: Socket) {
   socket.on('ptt:stop', async (data: { groupId: string }) => {
     if (!data || !isValidGroupId(data.groupId)) return;
     const { groupId } = data;
+    const ctx = await authorizeGroupOrFail(groupId, 'ptt:stop');
+    if (!ctx) return;
     const room = `ptt:${groupId}`;
 
     try {
@@ -314,17 +338,33 @@ export function setupPTTSocket(io: Server, socket: Socket) {
   // Native client submits a completed recording after upload
   socket.on('ptt:native_log', async (data: { groupId: string; audioUrl?: string; durationMs: number }) => {
     if (!data || !isValidGroupId(data.groupId)) return;
+    const ctx = await authorizeGroupOrFail(data.groupId, 'ptt:native_log');
+    if (!ctx) return;
+
+    // Drop arbitrary URLs — only accept Supabase-hosted ones (we'd be the
+    // ones who signed them). Same defence as the HTTP nativeLog.
+    let safeAudioUrl: string | undefined;
+    if (data.audioUrl) {
+      try {
+        const u = new URL(data.audioUrl);
+        const supabaseHost = new URL(env.SUPABASE_URL).hostname;
+        if (u.protocol === 'https:' && u.hostname === supabaseHost) {
+          safeAudioUrl = data.audioUrl;
+        }
+      } catch { /* drop */ }
+    }
+    const safeDurationMs =
+      Number.isFinite(data.durationMs) && data.durationMs >= 0 && data.durationMs < 60 * 60 * 1000
+        ? Math.floor(data.durationMs)
+        : 0;
+
     try {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { displayName: true },
-      });
       const savedLog = await prisma.pttLog.create({
         data: {
           groupId: data.groupId,
           senderId: userId,
-          durationMs: data.durationMs || 0,
-          ...(data.audioUrl ? { audioUrl: data.audioUrl } : {}),
+          durationMs: safeDurationMs,
+          ...(safeAudioUrl ? { audioUrl: safeAudioUrl } : {}),
         },
       });
       const room = `ptt:${data.groupId}`;
@@ -333,9 +373,9 @@ export function setupPTTSocket(io: Server, socket: Socket) {
         id: savedLog.id,
         groupId: data.groupId,
         userId,
-        displayName: user?.displayName ?? 'Unknown',
-        audioUrl: data.audioUrl,
-        durationMs: data.durationMs || 0,
+        displayName: ctx.displayName,
+        audioUrl: safeAudioUrl,
+        durationMs: safeDurationMs,
         createdAt,
       });
     } catch (err) {
@@ -344,8 +384,10 @@ export function setupPTTSocket(io: Server, socket: Socket) {
   });
 
   // Relay raw audio chunk to other web clients and buffer in Redis for durable log.
-  socket.on('ptt:audio_chunk', (data: { groupId: string; chunk: ArrayBuffer; mimeType: string }) => {
+  socket.on('ptt:audio_chunk', async (data: { groupId: string; chunk: ArrayBuffer; mimeType: string }) => {
     if (!data || !isValidGroupId(data.groupId)) return;
+    const ctx = await authorizeGroupOrFail(data.groupId, 'ptt:audio_chunk');
+    if (!ctx) return;
     const room = `ptt:${data.groupId}`;
     socket.to(room).emit('ptt:audio_chunk', { chunk: data.chunk, mimeType: data.mimeType });
 

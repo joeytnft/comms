@@ -116,21 +116,23 @@ export async function getGroupHierarchy(organizationId: string) {
  * - They are a direct member
  * - They are a member of the parent LEAD group (for SUB groups)
  */
-export async function canUserAccessGroup(userId: string, groupId: string) {
-  // Check direct membership
+export async function canUserAccessGroup(userId: string, groupId: string, organizationId?: string) {
+  // Always look up the group up front so we can cross-check organisation
+  // membership when the caller passed an org. Without this guard a stale
+  // membership row can grant access to a group in another tenant.
+  const group = await prisma.group.findUnique({
+    where: { id: groupId },
+    select: { parentGroupId: true, organizationId: true },
+  });
+  if (!group) return false;
+  if (organizationId && group.organizationId !== organizationId) return false;
+
   const directMembership = await prisma.groupMembership.findUnique({
     where: { groupId_userId: { groupId, userId } },
   });
-
   if (directMembership) return true;
 
-  // Check if the group is a SUB group and user is in its parent LEAD group
-  const group = await prisma.group.findUnique({
-    where: { id: groupId },
-    select: { parentGroupId: true },
-  });
-
-  if (group?.parentGroupId) {
+  if (group.parentGroupId) {
     const parentMembership = await prisma.groupMembership.findUnique({
       where: { groupId_userId: { groupId: group.parentGroupId, userId } },
     });

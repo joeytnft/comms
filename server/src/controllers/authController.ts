@@ -9,8 +9,16 @@ import {
   ValidationError,
 } from '../utils/errors';
 import { sendPasswordResetEmail } from '../services/emailService';
+import { assertStrongPassword } from '../utils/validators';
 
 const RESET_TOKEN_EXPIRY_MINUTES = 60;
+
+// Pre-computed bcrypt hash of a string the user can never enter — same cost
+// as real password hashes. We compare against this on missing-user paths so
+// the response time matches the real login path and the caller cannot tell
+// whether a given email is registered.
+const FAKE_PASSWORD_HASH =
+  '$2a$12$CwTycUXWue0Thq9StjUM0uJ8kFDJP4yqi4eMXX8zMy2Qr3pPL.g1G';
 
 interface RegisterBody {
   email: string;
@@ -68,9 +76,7 @@ export async function register(
     throw new ValidationError('Provide only one of: organizationCode, groupInviteCode, organizationName');
   }
 
-  if (password.length < 8) {
-    throw new ValidationError('Password must be at least 8 characters');
-  }
+  assertStrongPassword(password);
 
   // Check if email already exists
   const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -206,7 +212,16 @@ export async function login(
       accountStatus: true, createdAt: true, lastSeenAt: true,
     },
   });
-  if (!user) {
+
+  // Always run bcrypt.compare even for missing users so login latency does
+  // not depend on whether the email is registered (account-enumeration
+  // timing oracle defence). Without this, missing-user responses return in
+  // ~1ms while real ones take ~100ms at SALT_ROUNDS=12, which is trivially
+  // observable from a script.
+  const passwordHash = user?.passwordHash ?? FAKE_PASSWORD_HASH;
+  const isValidPassword = await bcrypt.compare(password, passwordHash);
+
+  if (!user || !isValidPassword) {
     throw new AuthenticationError('Invalid email or password');
   }
 
@@ -214,11 +229,6 @@ export async function login(
     throw new AuthenticationError(
       'Your account has not been activated yet. Check your email for an invite link or use the "Have an invite?" option on the login screen.',
     );
-  }
-
-  const isValidPassword = await bcrypt.compare(password, user.passwordHash);
-  if (!isValidPassword) {
-    throw new AuthenticationError('Invalid email or password');
   }
 
   // Update last seen — use select to avoid reading columns that may not exist in the DB yet
@@ -283,12 +293,19 @@ export async function refresh(
     throw new ValidationError('Refresh token is required');
   }
 
+  const tokenHash = hashToken(refreshToken);
   const storedToken = await prisma.refreshToken.findUnique({
-    where: { token: hashToken(refreshToken) },
+    where: { token: tokenHash },
     include: { user: { select: { id: true, organizationId: true, campusId: true, isOrgAdmin: true } } },
   });
 
   if (!storedToken) {
+    // Token not found. Could be: never existed, already rotated past, or
+    // an attacker presenting a captured token after the legit user rotated.
+    // We can't tell which from a single request, but if we can identify a
+    // recent rotation chain that included this hash via the `parentTokenHash`
+    // column we'd revoke the chain. For now, reject and rely on the rotation
+    // delete to keep replay impossible.
     throw new AuthenticationError('Invalid refresh token');
   }
 
@@ -331,10 +348,21 @@ export async function logout(
   const { refreshToken } = request.body;
 
   if (refreshToken) {
-    // Delete the specific refresh token (look up by hash)
-    await prisma.refreshToken.deleteMany({
+    // Find the row so we know who it belongs to, then delete every refresh
+    // token that user owns. Without this a stolen token survives logout
+    // because we'd only delete the row the legit user just rotated past.
+    const stored = await prisma.refreshToken.findUnique({
       where: { token: hashToken(refreshToken) },
+      select: { userId: true },
     });
+    if (stored) {
+      await prisma.refreshToken.deleteMany({ where: { userId: stored.userId } });
+    } else {
+      // Best-effort delete by hash for legacy callers.
+      await prisma.refreshToken.deleteMany({
+        where: { token: hashToken(refreshToken) },
+      });
+    }
   }
 
   reply.status(204).send();
@@ -376,7 +404,7 @@ export async function resetPassword(
   const { token, password } = request.body;
 
   if (!token || !password) throw new ValidationError('Token and new password are required');
-  if (password.length < 8) throw new ValidationError('Password must be at least 8 characters');
+  assertStrongPassword(password);
 
   const record = await prisma.passwordResetToken.findUnique({ where: { token } });
 
@@ -403,7 +431,7 @@ export async function acceptInvite(
   const { token, password } = request.body;
 
   if (!token || !password) throw new ValidationError('Token and password are required');
-  if (password.length < 8) throw new ValidationError('Password must be at least 8 characters');
+  assertStrongPassword(password);
 
   const user = await prisma.user.findUnique({
     where: { inviteToken: token },

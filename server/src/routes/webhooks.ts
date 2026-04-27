@@ -79,12 +79,19 @@ export async function webhookRoutes(app: FastifyInstance) {
         if (match) storagePath = match[1];
       }
 
-      logger.info({ egressId, userId, groupId, storagePath }, '[Webhook] Building public URL for PTT recording');
+      logger.info({ egressId, userId, groupId, storagePath }, '[Webhook] Building signed URL for PTT recording');
 
-      const { data: { publicUrl } } = getSupabase()
+      // Signed URL with TTL — bucket is configured private. Recipients
+      // re-fetch logs from the API to refresh the URL when needed.
+      const { data: signed, error: signErr } = await getSupabase()
         .storage
         .from(env.SUPABASE_PTT_BUCKET)
-        .getPublicUrl(storagePath);
+        .createSignedUrl(storagePath, 60 * 60 * 6);
+      if (signErr || !signed?.signedUrl) {
+        logger.warn({ err: signErr, egressId, storagePath }, '[Webhook] Failed to create signed URL');
+        return reply.status(204).send();
+      }
+      const audioUrl = signed.signedUrl;
 
       // Search up to 5 minutes back — the ptt:native_log socket event that creates
       // the log arrives quickly but network delays can push the window in edge cases.
@@ -101,16 +108,16 @@ export async function webhookRoutes(app: FastifyInstance) {
       if (recentLog) {
         await prisma.pttLog.update({
           where: { id: recentLog.id },
-          data: { audioUrl: publicUrl },
+          data: { audioUrl },
         });
 
         getIO()?.to(`ptt:${groupId}`).emit('ptt:log_updated', {
           id: recentLog.id,
           groupId,
-          audioUrl: publicUrl,
+          audioUrl,
         });
 
-        logger.info({ logId: recentLog.id, egressId, publicUrl }, '[Webhook] Backfilled PTT audio URL');
+        logger.info({ logId: recentLog.id, egressId }, '[Webhook] Backfilled PTT audio URL');
       } else {
         logger.warn({ egressId, userId, groupId }, '[Webhook] No matching pttLog found within 5 minutes — audio URL not backfilled');
       }
