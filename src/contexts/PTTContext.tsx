@@ -136,11 +136,15 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // yet. We queue the leave emit here and flush it once connect() fires.
   const pendingLeaveGroupIdRef = useRef<string | null>(null);
 
-  // End the Live Activity, falling back to the MMKV-persisted ID if the in-memory
-  // ref was lost (e.g. process was killed and restarted by iOS in the background).
+  // End every Live Activity owned by this app, not just the one we last
+  // tracked. The native module ends ALL activities when called with an empty
+  // string — that catches orphans left behind by rapid channel switches,
+  // restoration paths where the in-memory ref was lost, or an interrupted
+  // start whose then-callback never landed an ID into liveActivityIdRef.
+  // Without this the lock screen accumulates duplicate cards (one per join)
+  // even after we believe we cleaned up.
   const endLiveActivity = useCallback(() => {
-    const id = liveActivityIdRef.current ?? mmkvStorage.getString(LIVE_ACTIVITY_ID_KEY) ?? null;
-    liveActivityService.end(id);
+    liveActivityService.end(null); // null → '' → end-all
     liveActivityIdRef.current = null;
     mmkvStorage.delete(LIVE_ACTIVITY_ID_KEY);
   }, []);
@@ -596,7 +600,15 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         // native PTT is active. When native PTT IS active, the PTT framework takes
         // priority in the Dynamic Island (transmit button), but it provides no lock
         // screen expanded view — our Live Activity fills that gap.
+        //
+        // Tear down any previously-running activity FIRST. Without this, switching
+        // from the lead group to a sub-group leaves the lead activity alive while
+        // the new one starts: the lock screen shows two cards and the Dynamic
+        // Island pill snaps to whichever started most recently. End-all (in
+        // endLiveActivity) clears every owned activity, so the next start is
+        // unambiguous.
         if (usePTTStore.getState().config.showLiveActivity) {
+          endLiveActivity();
           const orgName = useAuthStore.getState().organization?.name ?? 'GatherSafe';
           liveActivityService.start(response.groupName, orgName)
             .then((id) => {
@@ -853,7 +865,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       usePTTStore.getState().fetchParticipants(groupId);
       usePTTLogStore.getState().fetchLogs(groupId);
     },
-    [socket],
+    [socket, endLiveActivity],
   );
 
   // ─── leaveChannel ───────────────────────────────────────────────────────────
