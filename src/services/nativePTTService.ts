@@ -75,6 +75,18 @@ async function leaveChannel(channelId: string): Promise<void> {
   return PushToTalkModule.leaveChannel(channelId);
 }
 
+/**
+ * Restore the framework's joined state after iOS delivers a stale
+ * didLeaveChannelWithUUID (queued during initialize for the previous session).
+ * Calls requestJoinChannelWithUUID with the preserved UUID so subsequent
+ * requestBeginTransmittingWithChannelUUID succeeds instead of firing
+ * failedToBeginTransmittingInChannelWithUUID.
+ */
+async function rejoinChannel(channelId: string): Promise<void> {
+  if (!isAvailable) return;
+  if (typeof PushToTalkModule.rejoinChannel !== 'function') return;
+  return PushToTalkModule.rejoinChannel(channelId);
+}
 
 /** Call when the user presses the PTT button. */
 async function beginTransmitting(channelId: string): Promise<void> {
@@ -192,6 +204,7 @@ export const nativePTTService = {
   // Channel lifecycle
   joinChannel,
   leaveChannel,
+  rejoinChannel,
 
   // Transmission control
   beginTransmitting,

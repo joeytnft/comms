@@ -122,6 +122,11 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // resulting onPTTChannelLeft event (which iOS queues and fires asynchronously,
   // sometimes hundreds of ms later) is not mistaken for a real user-initiated leave.
   const cleanupLeaveRef = useRef(false);
+  // True after we've already issued one rejoinChannel for this session in
+  // response to a stale leave. Caps the rejoin chain at one attempt so the
+  // rejoin's own follow-up stale leave is consumed (via cleanupLeaveRef
+  // re-arm) without triggering yet another rejoin → leave loop.
+  const hasRejoinedAfterStaleLeaveRef = useRef(false);
 
   // Always-current socket ref so native PTT callbacks (registered once) can emit
   // even when the socket reconnects and the `socket` variable changes identity.
@@ -328,15 +333,31 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       if (cleanupLeaveRef.current) {
         cleanupLeaveRef.current = false;
         // iOS delivered the stale didLeaveChannelWithUUID for the previous
-        // session (same deterministic UUID v5). The framework already queued
-        // didJoinChannelWithUUID for the CURRENT session as part of the single
-        // requestJoinChannelWithUUID call inside initialize() — that callback
-        // will set _isChannelJoined=YES without us doing anything here.
+        // session (same deterministic UUID v5). Despite the symmetric
+        // didJoinChannelWithUUID for the new session, the framework actually
+        // transitions the channel to "left" state when this stale leave fires
+        // — every subsequent requestBeginTransmittingWithChannelUUID rejects
+        // with failedToBeginTransmittingInChannelWithUUID, which surfaces as
+        // "second press flashes red then snaps back to green."
         //
-        // Do NOT call rejoinChannel / requestJoinChannelWithUUID here. A second
-        // join request creates another leave/join cycle; the resulting leave
-        // arrives after cleanupLeaveRef is already false and is mistaken for a
-        // real user-initiated leave, triggering a spurious full disconnect.
+        // Restore the joined state by calling rejoinChannel
+        // (requestJoinChannelWithUUID with the preserved UUID). The rejoin
+        // produces ONE more stale leave; re-arm cleanupLeaveRef so the next
+        // onChannelLeft consumes it instead of being read as a real user
+        // leave. The hasRejoinedAfterStaleLeaveRef gate keeps this to a
+        // single rejoin per session so the chain can't loop.
+        if (
+          USE_NATIVE_PTT &&
+          nativePTTChannelIdRef.current &&
+          !hasRejoinedAfterStaleLeaveRef.current
+        ) {
+          hasRejoinedAfterStaleLeaveRef.current = true;
+          cleanupLeaveRef.current = true;
+          // Failsafe: if the rejoin doesn't queue a follow-up stale leave,
+          // expire the re-armed grace so a real later leave isn't swallowed.
+          setTimeout(() => { cleanupLeaveRef.current = false; }, 1500);
+          nativePTTService.rejoinChannel(nativePTTChannelIdRef.current).catch(() => null);
+        }
         return;
       }
       // Ignore events for channels we are not currently in (e.g. race between
@@ -592,6 +613,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         // that fires during this join window (e.g. from mount-time leaveChannel cleanup
         // of a previous session with the same channel ID) is safely ignored.
         nativePTTChannelIdRef.current = null;
+        // Fresh session — allow one rejoin if iOS delivers a stale leave for it.
+        hasRejoinedAfterStaleLeaveRef.current = false;
 
         // Start the Live Activity for the lock screen status regardless of whether
         // native PTT is active. When native PTT IS active, the PTT framework takes
