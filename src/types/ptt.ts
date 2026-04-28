@@ -42,20 +42,6 @@ export interface PttLog {
   sender: { id: string; displayName: string; avatarUrl: string | null };
 }
 
-export interface Geofence {
-  id: string;
-  organizationId: string;
-  campusId: string;
-  name: string;
-  type: 'circle' | 'polygon';
-  latitude: number;
-  longitude: number;
-  radius: number; // metres (bounding circle for polygons)
-  polygon: number[][] | null; // GeoJSON ring [[lng, lat], ...] when type === 'polygon'
-  createdAt: string;
-  updatedAt: string;
-}
-
 export const DEFAULT_PTT_CONFIG: PTTConfig = {
   primaryButton: 'screen_button',
   beepOnTransmit: true,
