@@ -430,19 +430,60 @@ RCT_EXPORT_METHOD(setServiceStatus:(NSString *)channelId
 {
     BOOL wasIntentional = _isLeavingIntentionally;
     _isLeavingIntentionally = NO;
-    _isChannelJoined = NO;
-    // Only null out _channelUUID for a leave we explicitly requested.
-    // iOS queues a didLeaveChannelWithUUID for the PREVIOUS session when
-    // initialize() is called and delivers it asynchronously — typically right
-    // after the first PTT button release when the main thread becomes free.
-    // Because the UUID is deterministic (UUID v5 of the group ID), previous
-    // and current sessions share the same UUID. Without this guard that stale
-    // callback clears _channelUUID and every subsequent startTransmitting call
-    // hits the !_channelUUID nil-check and rejects silently.
+
+    // App-initiated leave (the user pressed Leave or we tore the session down):
+    // null the cached channel state, tell JS, done.
     if (wasIntentional) {
-        _channelUUID = nil;
+        _isChannelJoined = NO;
+        _channelUUID     = nil;
+        [self emit:@"onPTTChannelLeft" body:@{@"channelId": channelUUID.UUIDString}];
+        return;
     }
-    [self emit:@"onPTTChannelLeft" body:@{@"channelId": channelUUID.UUIDString}];
+
+    // System-initiated leave from outside the app (Dynamic Island / lock-screen
+    // Leave button) — `reason` is PTChannelLeaveReasonUserRequest. Treat as
+    // intentional from the framework's perspective and propagate to JS.
+    if (reason == PTChannelLeaveReasonUserRequest) {
+        _isChannelJoined = NO;
+        _channelUUID     = nil;
+        [self emit:@"onPTTChannelLeft" body:@{@"channelId": channelUUID.UUIDString}];
+        return;
+    }
+
+    // Anything else is a stale/internal leave queued by iOS — most commonly
+    // the deferred didLeaveChannelWithUUID for the PREVIOUS session that the
+    // framework queues during initialize() and delivers asynchronously, often
+    // right after the first PTT button release. The UUID is deterministic
+    // (v5 of the group ID), so the previous and current session share it.
+    //
+    // After this callback the framework actually transitions the channel to
+    // "left" state — every subsequent requestBeginTransmittingWithChannelUUID
+    // rejects with failedToBeginTransmittingInChannelWithUUID, surfacing as
+    // "second press flashes red then snaps back to green."
+    //
+    // Self-heal: immediately re-issue requestJoinChannelWithUUID with the
+    // preserved descriptor so the framework rejoins. Do NOT emit
+    // onPTTChannelLeft — JS still considers the session live, and we want it
+    // to stay that way. didJoinChannelWithUUID will fire shortly and reset
+    // _isChannelJoined = YES on its own.
+    NSLog(@"[PTT] Swallowing stale didLeaveChannelWithUUID (reason=%ld), auto-rejoining",
+          (long)reason);
+    if (_channelManager && _channelUUID && _channelDescriptor) {
+        @try {
+            [_channelManager requestJoinChannelWithUUID:_channelUUID
+                                             descriptor:_channelDescriptor];
+            // Leave _isChannelJoined as it was; didJoinChannelWithUUID will
+            // re-affirm it. This keeps initialize()'s "already joined" fast
+            // path honest if JS calls it again concurrently.
+        } @catch (NSException *ex) {
+            // Rejoin raised — fall back to telling JS so it can reset the UI.
+            _isChannelJoined = NO;
+            [self emit:@"onPTTChannelLeft" body:@{@"channelId": channelUUID.UUIDString}];
+        }
+    } else {
+        _isChannelJoined = NO;
+        [self emit:@"onPTTChannelLeft" body:@{@"channelId": channelUUID.UUIDString}];
+    }
 }
 
 - (void)channelManager:(PTChannelManager *)channelManager
