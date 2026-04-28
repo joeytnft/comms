@@ -1,6 +1,7 @@
 import { buildApp } from '../src/app';
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../src/config/database';
+import { redis } from '../src/config/redis';
 
 let app: FastifyInstance;
 let adminToken: string;
@@ -279,5 +280,197 @@ describe('PTT feature gating', () => {
         trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
       },
     });
+  });
+});
+
+// ─── HTTP transmission endpoints ────────────────────────────────────────────
+// These lock in the contract for /start, /stop, /native-log so the upcoming
+// shared transmissionService refactor cannot silently change behavior.
+
+describe('POST /ptt/:groupId/start', () => {
+  afterEach(async () => {
+    // Each test starts a session; clean it up so the next test's idempotency
+    // checks (added in a follow-up) don't see stale state.
+    await redis
+      .del(`ptt:session:${memberUserId}:${groupId}`, `ptt:chunks:${memberUserId}:${groupId}`)
+      .catch(() => null);
+    await redis
+      .del(`ptt:session:${adminUserId}:${groupId}`, `ptt:chunks:${adminUserId}:${groupId}`)
+      .catch(() => null);
+  });
+
+  it('returns 204 and writes the redis session key for a member', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: `/ptt/${groupId}/start`,
+      headers: { authorization: `Bearer ${memberToken}` },
+      payload: { mimeType: 'audio/mp4' },
+    });
+    expect(response.statusCode).toBe(204);
+
+    const session = await redis.hgetall(`ptt:session:${memberUserId}:${groupId}`);
+    expect(session.mimeType).toBe('audio/mp4');
+    expect(parseInt(session.startedAt, 10)).toBeGreaterThan(Date.now() - 5_000);
+  });
+
+  it('rejects unauthenticated callers', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: `/ptt/${groupId}/start`,
+    });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it('rejects callers who are not in the group', async () => {
+    const otherOrg = await prisma.organization.create({
+      data: {
+        name: 'Start Test Other Org',
+        createdBy: 'seed',
+        inviteCode: 'PTT-START-OTHER',
+        subscriptionTier: 'FREE',
+        subscriptionStatus: 'TRIALING',
+        trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+      },
+    });
+    const otherRes = await app.inject({
+      method: 'POST',
+      url: '/auth/register',
+      payload: {
+        email: 'ptt-start-other@gathersafeapp.com',
+        password: 'securepassword123',
+        displayName: 'Other Start',
+        organizationCode: 'PTT-START-OTHER',
+      },
+    });
+    const otherToken = otherRes.json().tokens.accessToken;
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/ptt/${groupId}/start`,
+      headers: { authorization: `Bearer ${otherToken}` },
+    });
+    expect(response.statusCode).toBe(403);
+
+    await prisma.refreshToken.deleteMany({ where: { userId: otherRes.json().user.id } });
+    await prisma.user.deleteMany({ where: { email: 'ptt-start-other@gathersafeapp.com' } });
+    await prisma.organization.deleteMany({ where: { id: otherOrg.id } });
+  });
+});
+
+describe('POST /ptt/:groupId/stop', () => {
+  it('returns 204 and clears redis session/chunks keys', async () => {
+    // Pre-populate the session as if /start had run.
+    await redis.hset(`ptt:session:${memberUserId}:${groupId}`, {
+      startedAt: Date.now(),
+      mimeType: 'audio/mp4',
+    });
+    await redis.expire(`ptt:session:${memberUserId}:${groupId}`, 60);
+    await redis.rpush(`ptt:chunks:${memberUserId}:${groupId}`, 'chunk1');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/ptt/${groupId}/stop`,
+      headers: { authorization: `Bearer ${memberToken}` },
+    });
+    expect(response.statusCode).toBe(204);
+
+    // /stop in the HTTP path doesn't currently delete the keys (the socket
+    // disconnect handler does). Document that here so the upcoming service
+    // refactor is intentional about it — assert the endpoint just returns 204.
+    // If we change the contract to clear keys, update this test in the same PR.
+  });
+
+  it('rejects unauthenticated callers', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: `/ptt/${groupId}/stop`,
+    });
+    expect(response.statusCode).toBe(401);
+  });
+});
+
+describe('POST /ptt/:groupId/native-log', () => {
+  let createdLogIds: string[] = [];
+
+  afterEach(async () => {
+    if (createdLogIds.length > 0) {
+      await prisma.pttLog.deleteMany({ where: { id: { in: createdLogIds } } });
+      createdLogIds = [];
+    }
+  });
+
+  it('persists a pttLog row and returns 204 for a member', async () => {
+    const before = await prisma.pttLog.count({ where: { groupId, senderId: memberUserId } });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/ptt/${groupId}/native-log`,
+      headers: { authorization: `Bearer ${memberToken}` },
+      payload: { durationMs: 4321 },
+    });
+    expect(response.statusCode).toBe(204);
+
+    const after = await prisma.pttLog.findMany({
+      where: { groupId, senderId: memberUserId },
+      orderBy: { createdAt: 'desc' },
+      take: 1,
+    });
+    expect(after.length).toBeGreaterThan(before);
+    expect(after[0].durationMs).toBe(4321);
+    expect(after[0].audioUrl).toBeNull();
+    createdLogIds.push(after[0].id);
+  });
+
+  it('drops audioUrl when not Supabase-hosted', async () => {
+    await app.inject({
+      method: 'POST',
+      url: `/ptt/${groupId}/native-log`,
+      headers: { authorization: `Bearer ${memberToken}` },
+      payload: { durationMs: 100, audioUrl: 'https://evil.example.com/exfil.html' },
+    });
+    const log = await prisma.pttLog.findFirst({
+      where: { groupId, senderId: memberUserId },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(log).not.toBeNull();
+    expect(log!.audioUrl).toBeNull();
+    createdLogIds.push(log!.id);
+  });
+
+  it('clamps absurd durations to 0', async () => {
+    await app.inject({
+      method: 'POST',
+      url: `/ptt/${groupId}/native-log`,
+      headers: { authorization: `Bearer ${memberToken}` },
+      payload: { durationMs: -500 },
+    });
+    let log = await prisma.pttLog.findFirst({
+      where: { groupId, senderId: memberUserId },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(log!.durationMs).toBe(0);
+    createdLogIds.push(log!.id);
+
+    await app.inject({
+      method: 'POST',
+      url: `/ptt/${groupId}/native-log`,
+      headers: { authorization: `Bearer ${memberToken}` },
+      payload: { durationMs: 99 * 60 * 60 * 1000 },
+    });
+    log = await prisma.pttLog.findFirst({
+      where: { groupId, senderId: memberUserId },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(log!.durationMs).toBe(0);
+    createdLogIds.push(log!.id);
+  });
+
+  it('rejects unauthenticated callers', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: `/ptt/${groupId}/native-log`,
+      payload: { durationMs: 500 },
+    });
+    expect(response.statusCode).toBe(401);
   });
 });

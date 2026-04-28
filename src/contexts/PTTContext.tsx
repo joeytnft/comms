@@ -126,6 +126,20 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // self-heals those silently, this stays in case the JS bundle and native
   // binary versions ever drift apart.
   const cleanupLeaveRef = useRef(false);
+  // Wall-clock time of the most recent successful join. Used to decide whether
+  // an unintentional Disconnected event likely reflects an expired LiveKit
+  // token (issued for ~6h) vs. a transient network failure that LiveKit's
+  // built-in auto-reconnect should have already handled.
+  const joinedAtRef = useRef<number>(0);
+  // Refs that point at the latest joinChannel/leaveChannel callbacks. The
+  // LiveKit Disconnected handler is registered inside joinChannel itself, so
+  // it can't reference those callbacks lexically without a TDZ headache.
+  // The effect below keeps these in sync on every render.
+  const joinChannelRef  = useRef<((groupId: string) => Promise<void>) | null>(null);
+  const leaveChannelRef = useRef<(() => void) | null>(null);
+  // Set true while an auto-rejoin is in flight so a second Disconnected
+  // doesn't kick off a parallel rejoin attempt.
+  const rejoinInFlightRef = useRef(false);
 
   // Always-current socket ref so native PTT callbacks (registered once) can emit
   // even when the socket reconnects and the `socket` variable changes identity.
@@ -714,9 +728,41 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
             if (!USE_NATIVE_PTT) {
               AudioSession?.stopAudioSession();
             }
-          } else {
-            usePTTStore.getState().setActiveSpeaker(null);
+            return;
           }
+
+          // Unintentional disconnect. LiveKit auto-reconnects transient
+          // network blips on its own (Reconnecting → Reconnected); reaching
+          // this handler means reconnect failed for good. The most common
+          // cause for a long-running PTT session is an expired access token
+          // (LiveKit issues them for ~6h by default). Try a transparent
+          // rejoin once when the session is old enough that a refresh is
+          // plausible — otherwise preserve the existing short-session
+          // behaviour of just clearing the active speaker.
+          const sessionAgeMs = Date.now() - joinedAtRef.current;
+          const TOKEN_REFRESH_THRESHOLD_MS = 5 * 60 * 60 * 1000; // 5h
+          const groupIdToRejoin = usePTTStore.getState().currentGroupId;
+          if (
+            !rejoinInFlightRef.current &&
+            groupIdToRejoin &&
+            sessionAgeMs > TOKEN_REFRESH_THRESHOLD_MS
+          ) {
+            rejoinInFlightRef.current = true;
+            console.info('[PTT] Long-session LiveKit disconnect — rejoining for fresh token');
+            // Defer to the next tick so the in-flight Disconnected handler
+            // unwinds before we tear the room down again.
+            setTimeout(() => {
+              try { leaveChannelRef.current?.(); } catch { /* ignore */ }
+              setTimeout(() => {
+                joinChannelRef.current?.(groupIdToRejoin)
+                  .catch((err) => console.warn('[PTT] Auto-rejoin failed:', err))
+                  .finally(() => { rejoinInFlightRef.current = false; });
+              }, 250);
+            }, 0);
+            return;
+          }
+
+          usePTTStore.getState().setActiveSpeaker(null);
         });
 
         // room.connect rejection is the most common silent failure on bad
@@ -725,6 +771,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         // and onTransmissionStarted runs on a dead room.
         try {
           await room.connect(livekitUrl, response.token, { autoSubscribe: true });
+          joinedAtRef.current = Date.now();
         } catch (err) {
           roomRef.current = null;
           if (Platform.OS === 'android' && callUUIDRef.current) {
@@ -1141,6 +1188,16 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   const updateConfig = useCallback((updates: Partial<PTTConfig>) => {
     usePTTStore.getState().updateConfig(updates);
   }, []);
+
+  // Keep the rejoin refs pointed at the latest callbacks. The LiveKit
+  // Disconnected handler registered inside joinChannel reaches into these
+  // refs (rather than referencing joinChannel/leaveChannel by name from a
+  // TDZ-y enclosing scope) when it needs to refresh the token after a
+  // long-session disconnect.
+  useEffect(() => {
+    joinChannelRef.current  = joinChannel;
+    leaveChannelRef.current = leaveChannel;
+  }, [joinChannel, leaveChannel]);
 
   // Hardware / BLE button → same as pressing the on-screen PTT button
   useHardwareButton({
