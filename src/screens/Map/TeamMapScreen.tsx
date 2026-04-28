@@ -63,7 +63,14 @@ export function TeamMapScreen() {
     initSharing();
   }, []);
 
-  // One-time setup on focus: campuses, alerts
+  // Fall back to the user's own campusId so campus-assigned users see their geofence
+  // even when no explicit campus view is selected.
+  const effectiveCampusId = activeCampusId ?? user?.campusId ?? null;
+
+  // One-time setup on focus: campuses, alerts. Also refetch geofence here so
+  // an admin's edit on the website is picked up the next time the user opens
+  // the map screen (the campus-change effect below only runs on switch, so
+  // without this the cached geofence stays stale for the whole session).
   useFocusEffect(
     useCallback(() => {
       if (subscription?.tier === 'PRO') {
@@ -74,16 +81,20 @@ export function TeamMapScreen() {
       }
       fetchAlerts({ active: true });
 
+      let cancelled = false;
+      if (effectiveCampusId) {
+        geofenceService.fetchGeofence(effectiveCampusId).then((gf) => {
+          if (cancelled) return;
+          setGeofence(gf);
+        });
+      }
+
       return () => {
+        cancelled = true;
         if (refreshInterval.current) clearInterval(refreshInterval.current);
       };
-    }, []),
+    }, [effectiveCampusId]),
   );
-
-  // Re-fetch locations and geofence whenever the selected campus changes (or on first focus).
-  // Fall back to the user's own campusId so campus-assigned users see their geofence
-  // even when no explicit campus view is selected.
-  const effectiveCampusId = activeCampusId ?? user?.campusId ?? null;
 
   useEffect(() => {
     let cancelled = false;
