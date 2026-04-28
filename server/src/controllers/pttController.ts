@@ -1,16 +1,15 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { createClient } from '@supabase/supabase-js';
 import { prisma } from '../config/database';
-import { redis } from '../config/redis';
 import { generateLiveKitToken, getRoomName } from '../config/livekit';
 import { getIO } from '../config/socketIO';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
 import { AuthorizationError, ValidationError } from '../utils/errors';
-import { startTransmissionEgress, stopTransmissionEgress } from '../services/ptt/livekitService';
-import { notifyTransmissionStarted, notifyTransmissionStopped } from '../services/apns/pttPushService';
-
-const SESSION_TTL = 7200;
+import {
+  beginTransmission,
+  endTransmission,
+} from '../services/ptt/transmissionService';
 
 // Signed URL TTL for PTT recordings. Mobile clients re-fetch the log (and
 // thus refresh URLs) on demand, so a relatively short window is fine.
@@ -253,6 +252,19 @@ export async function uploadAudio(
   reply.send({ audioUrl });
 }
 
+// Compute the set of socket IDs owned by `userId` in `room`. The HTTP path
+// excludes ALL of the user's sockets from the broadcast (the user's other
+// devices already know they pressed the button); the socket path only
+// excludes the originating socket. transmissionService takes whatever the
+// caller passes here, so this helper keeps the HTTP semantic in one place.
+async function getUserSocketIdsInRoom(roomName: string, userId: string): Promise<string[]> {
+  const io = getIO();
+  if (!io) return [];
+  const socketsInRoom = await io.in(roomName).fetchSockets();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return socketsInRoom.filter((s) => (s as any).user?.userId === userId).map((s) => s.id);
+}
+
 /**
  * POST /ptt/:groupId/start
  * HTTP alternative to the ptt:start socket event for iOS native PTT.
@@ -267,65 +279,13 @@ export async function transmitStart(
   const { userId } = request;
   const membership = await assertGroupAccess(groupId, userId, request.organizationId);
 
-  const room = `ptt:${groupId}`;
-  const displayName = membership.user.displayName;
-  const startedAt = new Date().toISOString();
+  logger.info(`[PTT] HTTP ptt:start from ${userId} in ptt:${groupId}`);
 
-  logger.info(`[PTT] HTTP ptt:start from ${userId} in ${room}`);
+  const excludeSocketIds = await getUserSocketIdsInRoom(`ptt:${groupId}`, userId);
 
-  const io = getIO();
-
-  // Fetch sockets once — reused for both the broadcast exclusion and APNs logic.
-  const socketsInRoom = await (io?.in(room).fetchSockets() ?? Promise.resolve([]));
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const transmitterSocketIds = socketsInRoom.filter((s) => (s as any).user?.userId === userId).map((s) => s.id);
-
-  // Broadcast to everyone in the room EXCEPT the transmitter.
-  // Using io.to(room) (all sockets) would echo ptt:speaking back to the sender,
-  // which sets their pttState to 'receiving' and shows themselves as the active speaker.
-  if (io) {
-    const target = transmitterSocketIds.length > 0 ? io.to(room).except(transmitterSocketIds) : io.to(room);
-    target.emit('ptt:speaking', { groupId, userId, displayName, startedAt });
-  }
-
-  const group = await prisma.group.findUnique({
-    where: { id: groupId },
-    select: { parentGroupId: true },
-  });
-  if (group?.parentGroupId && io) {
-    const parentRoom = `ptt:${group.parentGroupId}`;
-    const target = transmitterSocketIds.length > 0 ? io.to(parentRoom).except(transmitterSocketIds) : io.to(parentRoom);
-    target.emit('ptt:speaking', { groupId, userId, displayName, startedAt, fromSubGroup: true });
-  }
-
-  // APNs wake-up for offline members
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const onlineIds = new Set(socketsInRoom.map((s) => (s as any).user?.userId as string | undefined).filter((id): id is string => typeof id === 'string'));
-    const pushTokens = await prisma.pttPushToken.findMany({
-      where: { groupId, NOT: { userId: { in: [...onlineIds] } } },
-      select: { token: true },
-    });
-    if (pushTokens.length > 0) {
-      notifyTransmissionStarted(
-        pushTokens.map((t) => t.token),
-        groupId, userId, displayName,
-      ).catch((err) => logger.error({ err }, '[PTT] APNs notify start failed'));
-    }
-  } catch (err) {
-    logger.warn({ err }, '[PTT] Failed to send APNs notifications for HTTP ptt:start');
-  }
-
-  // Redis session (used for web audio-chunk reassembly)
-  const mimeType = request.body?.mimeType ?? 'audio/mp4';
-  const pipeline = redis.pipeline();
-  pipeline.hset(`ptt:session:${userId}:${groupId}`, { startedAt: Date.now(), mimeType });
-  pipeline.expire(`ptt:session:${userId}:${groupId}`, SESSION_TTL);
-  pipeline.del(`ptt:chunks:${userId}:${groupId}`);
-  await pipeline.exec();
-
-  startTransmissionEgress(groupId, userId).catch(
-    (err) => logger.warn({ err }, '[PTT] HTTP ptt:start: egress start failed'),
+  await beginTransmission(
+    { groupId, userId, displayName: membership.user.displayName },
+    { mimeType: request.body?.mimeType ?? 'audio/mp4', excludeSocketIds },
   );
 
   reply.status(204).send();
@@ -341,50 +301,15 @@ export async function transmitStop(
 ) {
   const { groupId } = request.params;
   const { userId } = request;
-  await assertGroupAccess(groupId, userId, request.organizationId);
+  const membership = await assertGroupAccess(groupId, userId, request.organizationId);
 
-  const room = `ptt:${groupId}`;
-  const endedAt = new Date().toISOString();
+  logger.info(`[PTT] HTTP ptt:stop from ${userId} in ptt:${groupId}`);
 
-  logger.info(`[PTT] HTTP ptt:stop from ${userId} in ${room}`);
+  const excludeSocketIds = await getUserSocketIdsInRoom(`ptt:${groupId}`, userId);
 
-  const io = getIO();
-  const socketsInRoomStop = await (io?.in(room).fetchSockets() ?? Promise.resolve([]));
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const stopperSocketIds = socketsInRoomStop.filter((s) => (s as any).user?.userId === userId).map((s) => s.id);
-
-  if (io) {
-    const target = stopperSocketIds.length > 0 ? io.to(room).except(stopperSocketIds) : io.to(room);
-    target.emit('ptt:stopped', { groupId, userId, endedAt });
-  }
-
-  const group = await prisma.group.findUnique({
-    where: { id: groupId },
-    select: { parentGroupId: true },
-  });
-  if (group?.parentGroupId && io) {
-    const parentRoom = `ptt:${group.parentGroupId}`;
-    const target = stopperSocketIds.length > 0 ? io.to(parentRoom).except(stopperSocketIds) : io.to(parentRoom);
-    target.emit('ptt:stopped', { groupId, userId, endedAt, fromSubGroup: true });
-  }
-
-  // APNs stop notifications
-  try {
-    const pushTokens = await prisma.pttPushToken.findMany({
-      where: { groupId },
-      select: { token: true },
-    });
-    if (pushTokens.length > 0) {
-      notifyTransmissionStopped(
-        pushTokens.map((t) => t.token), groupId,
-      ).catch((err) => logger.error({ err }, '[PTT] APNs notify stop failed'));
-    }
-  } catch (err) {
-    logger.warn({ err }, '[PTT] Failed to send APNs notifications for HTTP ptt:stop');
-  }
-
-  stopTransmissionEgress(userId, groupId).catch(
-    (err) => logger.warn({ err }, '[PTT] HTTP ptt:stop: egress stop failed'),
+  await endTransmission(
+    { groupId, userId, displayName: membership.user.displayName },
+    { excludeSocketIds },
   );
 
   reply.status(204).send();

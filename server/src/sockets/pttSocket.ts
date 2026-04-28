@@ -10,13 +10,9 @@ import { redis } from '../config/redis';
 import { logger } from '../utils/logger';
 import { env } from '../config/env';
 import {
-  notifyTransmissionStarted,
-  notifyTransmissionStopped,
-} from '../services/apns/pttPushService';
-import {
-  startTransmissionEgress,
-  stopTransmissionEgress,
-} from '../services/ptt/livekitService';
+  beginTransmission,
+  endTransmission,
+} from '../services/ptt/transmissionService';
 import { canUserAccessGroup } from '../services/groups/hierarchyService';
 
 const execFileAsync = promisify(execFile);
@@ -192,72 +188,15 @@ export function setupPTTSocket(io: Server, socket: Socket) {
     const { groupId } = data;
     const ctx = await authorizeGroupOrFail(groupId, 'ptt:start');
     if (!ctx) return;
-    const room = `ptt:${groupId}`;
-    const mimeType = data.mimeType || 'audio/webm';
-    // Always log at info so we can tell from Railway whether the event reached
-    // the server when debugging egress start failures.
-    logger.info(`[PTT] ptt:start received from ${userId} for ${room}`);
-
-    // Persist session metadata + clear any stale chunks from a prior session.
-    // Both keys are given a 2-hour TTL so Redis self-cleans if ptt:stop never fires.
-    const sessionKey = `ptt:session:${userId}:${groupId}`;
-    const chunksKey  = `ptt:chunks:${userId}:${groupId}`;
-    const pipeline = redis.pipeline();
-    pipeline.hset(sessionKey, { startedAt: Date.now(), mimeType });
-    pipeline.expire(sessionKey, SESSION_TTL);
-    pipeline.del(chunksKey);
-    await pipeline.exec();
 
     try {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { displayName: true },
-      });
-      const displayName = user?.displayName || 'Unknown';
-
-      socket.to(room).emit('ptt:speaking', {
-        groupId, userId, displayName, startedAt: new Date().toISOString(),
-      });
-
-      const socketsInRoom = await io.in(room).fetchSockets();
-      const onlineUserIds = new Set(
-        socketsInRoom.map((s) => (s as unknown as Socket).user?.userId).filter(Boolean),
+      // socket.to(room) excludes the originating socket only; the same user's
+      // other devices DO receive the event. Match that semantic by passing
+      // just this socket's id to the service.
+      await beginTransmission(
+        { groupId, userId, displayName: ctx.displayName },
+        { mimeType: data.mimeType, excludeSocketIds: [socket.id] },
       );
-
-      const pushTokens = await prisma.pttPushToken.findMany({
-        where: { groupId, NOT: { userId: { in: [...onlineUserIds] } } },
-        select: { token: true },
-      });
-
-      if (pushTokens.length > 0) {
-        notifyTransmissionStarted(
-          pushTokens.map((t) => t.token),
-          groupId, userId, displayName,
-        ).catch((err) => logger.error({ err }, '[PTT] APNs notify start failed'));
-      }
-
-      const group = await prisma.group.findUnique({
-        where: { id: groupId },
-        select: { parentGroupId: true, type: true },
-      });
-
-      if (group?.parentGroupId) {
-        socket.to(`ptt:${group.parentGroupId}`).emit('ptt:speaking', {
-          groupId, userId, displayName,
-          startedAt: new Date().toISOString(),
-          fromSubGroup: true,
-        });
-      }
-
-      // Start server-side LiveKit egress — this is the only path that actually
-      // records audio for iOS native PTT, since the client can't capture its
-      // own mic while LiveKit owns it.
-      logger.info(`[PTT] invoking startTransmissionEgress for ${userId} / ${groupId}`);
-      startTransmissionEgress(groupId, userId).catch(
-        (err) => logger.warn({ err }, '[PTT] Egress start failed'),
-      );
-
-      logger.info(`[PTT] ${userId} started transmitting in ${room}`);
     } catch (error) {
       logger.error({ err: error }, '[PTT] Error starting transmission');
       socket.emit('ptt:error', { message: 'Failed to start transmission' });
@@ -272,63 +211,52 @@ export function setupPTTSocket(io: Server, socket: Socket) {
     const room = `ptt:${groupId}`;
 
     try {
-      const endedAt = new Date().toISOString();
-      socket.to(room).emit('ptt:stopped', { groupId, userId, endedAt });
-
-      const pushTokensForStop = await prisma.pttPushToken.findMany({
-        where: { groupId },
-        select: { token: true },
-      });
-      if (pushTokensForStop.length > 0) {
-        notifyTransmissionStopped(
-          pushTokensForStop.map((t) => t.token), groupId,
-        ).catch((err) => logger.error({ err }, '[PTT] APNs notify stop failed'));
-      }
-
-      // Stop LiveKit egress
-      stopTransmissionEgress(userId, groupId).catch(
-        (err) => logger.warn({ err }, '[PTT] Egress stop failed'),
-      );
-
-      // Retrieve and flush Redis session + chunks
+      // Snapshot the session + chunks BEFORE handing off to the service.
+      // endTransmission atomically claims (deletes) the session key for
+      // idempotency, after which we'd lose the metadata needed to assemble
+      // and persist the recording.
       const sessionKey = `ptt:session:${userId}:${groupId}`;
       const chunksKey  = `ptt:chunks:${userId}:${groupId}`;
       const [sessionData, chunks64] = await Promise.all([
         redis.hgetall(sessionKey),
         redis.lrange(chunksKey, 0, -1),
       ]);
-      await redis.del(sessionKey, chunksKey);
 
+      const endedAt = new Date().toISOString();
+      const result = await endTransmission(
+        { groupId, userId, displayName: ctx.displayName },
+        { excludeSocketIds: [socket.id] },
+      );
+
+      if (!result.wasActive) {
+        // The disconnect handler (or another transport's stop) already cleaned
+        // up this session — do nothing else, but still drop any stale chunks
+        // we managed to read so they don't linger.
+        redis.del(chunksKey).catch(() => null);
+        return;
+      }
+
+      // Web-only: assemble the buffered chunks into a single recording and
+      // persist a pttLog row. Native clients upload via /ptt/:groupId/audio
+      // and don't write here.
       if (chunks64.length > 0 && sessionData?.startedAt) {
         const chunks    = chunks64.map((b) => Buffer.from(b, 'base64'));
         const startedAt = parseInt(sessionData.startedAt, 10);
         const mimeType  = sessionData.mimeType || 'audio/webm';
 
-        const result = await savePttLog(userId, groupId, chunks, mimeType, startedAt);
-        if (result) {
+        const log = await savePttLog(userId, groupId, chunks, mimeType, startedAt);
+        if (log) {
           io.to(room).emit('ptt:log_saved', {
             groupId, userId,
-            displayName: result.displayName,
-            audioUrl: result.audioUrl,
-            durationMs: result.durationMs,
+            displayName: log.displayName,
+            audioUrl: log.audioUrl,
+            durationMs: log.durationMs,
             createdAt: endedAt,
           });
         }
       }
-      // Native clients upload audio via POST /ptt/:groupId/audio and then
-      // emit ptt:native_log with the audioUrl — no server-side polling needed.
 
-      const group = await prisma.group.findUnique({
-        where: { id: groupId },
-        select: { parentGroupId: true },
-      });
-
-      if (group?.parentGroupId) {
-        socket.to(`ptt:${group.parentGroupId}`).emit('ptt:stopped', {
-          groupId, userId, endedAt, fromSubGroup: true,
-        });
-      }
-
+      await redis.del(chunksKey);
       logger.debug(`[PTT] ${userId} stopped transmitting in ${room}`);
     } catch (error) {
       logger.error({ err: error }, '[PTT] Error stopping transmission');
@@ -405,38 +333,16 @@ export function setupPTTSocket(io: Server, socket: Socket) {
 
         // If the user dropped mid-transmission, tell peers immediately so their
         // UI clears the active-speaker indicator rather than spinning forever.
-        // The session key is a Redis hash (written with HSET in ptt:start), so
-        // we must use EXISTS rather than GET — calling GET on a hash returns a
-        // WRONGTYPE error that silently swallows the ptt:stopped notification,
-        // leaving every peer stuck in the RECEIVING state indefinitely.
-        const sessionKey = `ptt:session:${userId}:${groupId}`;
-        const chunksKey  = `ptt:chunks:${userId}:${groupId}`;
-        redis.exists(sessionKey).then(async (exists) => {
-          if (exists > 0) {
-            const endedAt = new Date().toISOString();
-            io.to(room).emit('ptt:stopped', { groupId, userId, endedAt });
+        // endTransmission's atomic-claim semantics ensure that if the user
+        // also fired ptt:stop right before the disconnect, only one of the
+        // two paths actually broadcasts — whichever wins the Redis DEL race.
+        endTransmission(
+          { groupId, userId, displayName: '' /* unused for ptt:stopped */ },
+        ).catch((err) => logger.warn({ err, userId, groupId }, '[PTT] Disconnect cleanup failed'));
 
-            // Also notify the parent (lead) group room so lead-group members
-            // don't get stuck in RECEIVING when a sub-group user drops abruptly.
-            try {
-              const group = await prisma.group.findUnique({
-                where: { id: groupId },
-                select: { parentGroupId: true },
-              });
-              if (group?.parentGroupId) {
-                io.to(`ptt:${group.parentGroupId}`).emit('ptt:stopped', {
-                  groupId, userId, endedAt, fromSubGroup: true,
-                });
-              }
-            } catch { /* non-fatal */ }
-
-            redis.del(sessionKey, chunksKey).catch(() => null);
-          }
-        }).catch(() => null);
-
-        stopTransmissionEgress(userId, groupId).catch(
-          (err) => logger.warn({ err }, '[PTT] Egress stop on disconnect failed'),
-        );
+        // Also drop any chunks the user buffered. endTransmission only owns
+        // the session key; chunks live in a separate list.
+        redis.del(`ptt:chunks:${userId}:${groupId}`).catch(() => null);
       }
     }
   });
