@@ -47,9 +47,11 @@ export interface Geofence {
   organizationId: string;
   campusId: string;
   name: string;
+  type: 'circle' | 'polygon';
   latitude: number;
   longitude: number;
-  radius: number; // metres
+  radius: number; // metres (bounding circle for polygons)
+  polygon: number[][] | null; // GeoJSON ring [[lng, lat], ...] when type === 'polygon'
   createdAt: string;
   updatedAt: string;
 }

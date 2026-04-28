@@ -19,17 +19,21 @@ const isOnline = (updatedAt: string) =>
   Date.now() - new Date(updatedAt).getTime() < 300_000;
 
 export function TeamMapView({ locations, geofence, activeAlerts = [], style }: Props) {
-  // Include geofence center in bounds calculation
+  // Include geofence center / polygon vertices in bounds calculation so the
+  // shape is fully visible when the map auto-frames.
   const alertsWithCoords = activeAlerts.filter((a) => a.latitude != null && a.longitude != null);
+  const polyRing = geofence?.type === 'polygon' && geofence.polygon ? geofence.polygon : null;
   const allLats = [
     ...locations.map((l) => l.latitude),
     ...alertsWithCoords.map((a) => a.latitude!),
     ...(geofence ? [geofence.latitude] : []),
+    ...(polyRing ? polyRing.map(([, lat]) => lat) : []),
   ];
   const allLngs = [
     ...locations.map((l) => l.longitude),
     ...alertsWithCoords.map((a) => a.longitude!),
     ...(geofence ? [geofence.longitude] : []),
+    ...(polyRing ? polyRing.map(([lng]) => lng) : []),
   ];
   const lats = allLats.length ? allLats : [0];
   const lngs = allLngs.length ? allLngs : [0];
@@ -56,22 +60,38 @@ export function TeamMapView({ locations, geofence, activeAlerts = [], style }: P
         <rect x={PAD} y={PAD} width={W - PAD * 2} height={H - PAD * 2}
           fill="none" stroke={COLORS.gray700} strokeWidth="0.3" />
 
-        {/* Geofence circle — radius scaled relative to map extent */}
-        {geofence && (() => {
-          const cx = toX(geofence.longitude);
-          const cy = toY(geofence.latitude);
-          // 1 degree lat ≈ 111km. Map lngRange maps to (W - PAD*2) SVG units.
-          const metersPerSvgUnit = (lngRange * 111320) / (W - PAD * 2);
-          const r = geofence.radius / metersPerSvgUnit;
-          return (
-            <g key="geofence">
-              <circle cx={cx} cy={cy} r={r}
-                fill={COLORS.info + '18'} stroke={COLORS.info} strokeWidth="0.5" />
-              <text x={cx} y={cy - r - 1.5} textAnchor="middle"
-                fontSize="2.5" fill={COLORS.info}>{geofence.name}</text>
-            </g>
-          );
-        })()}
+        {/* Geofence boundary — polygon if drawn, circle otherwise */}
+        {geofence && polyRing && polyRing.length >= 3 ? (
+          (() => {
+            const pts = polyRing.map(([lng, lat]) => `${toX(lng)},${toY(lat)}`).join(' ');
+            const cx = toX(geofence.longitude);
+            const cy = toY(geofence.latitude);
+            return (
+              <g key="geofence">
+                <polygon points={pts}
+                  fill={COLORS.info + '18'} stroke={COLORS.info} strokeWidth="0.5" />
+                <text x={cx} y={cy} textAnchor="middle"
+                  fontSize="2.5" fill={COLORS.info}>{geofence.name}</text>
+              </g>
+            );
+          })()
+        ) : geofence ? (
+          (() => {
+            const cx = toX(geofence.longitude);
+            const cy = toY(geofence.latitude);
+            // 1 degree lat ≈ 111km. Map lngRange maps to (W - PAD*2) SVG units.
+            const metersPerSvgUnit = (lngRange * 111320) / (W - PAD * 2);
+            const r = geofence.radius / metersPerSvgUnit;
+            return (
+              <g key="geofence">
+                <circle cx={cx} cy={cy} r={r}
+                  fill={COLORS.info + '18'} stroke={COLORS.info} strokeWidth="0.5" />
+                <text x={cx} y={cy - r - 1.5} textAnchor="middle"
+                  fontSize="2.5" fill={COLORS.info}>{geofence.name}</text>
+              </g>
+            );
+          })()
+        ) : null}
 
         {locations.length === 0 && (
           <text x={W / 2} y={H / 2} textAnchor="middle" fontSize="4" fill={COLORS.textMuted}>

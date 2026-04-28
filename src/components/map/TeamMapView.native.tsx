@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, Image, StyleSheet } from 'react-native';
-import MapView, { Marker, Callout, Circle } from 'react-native-maps';
+import MapView, { Marker, Callout, Circle, Polygon } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { TeamMemberLocation, Geofence, Alert } from '@/types';
 import { ALERT_COLORS, ALERT_TYPE_DEFS } from '@/types/alert';
@@ -129,8 +129,18 @@ export function TeamMapView({ locations, geofence, activeAlerts = [], style }: P
           longitudeDelta: DELTA,
         }}
       >
-        {/* Geofence boundary circle */}
-        {geofence && (
+        {/* Geofence boundary — polygon if drawn, circle otherwise. The server
+            stores [lng, lat] pairs in GeoJSON ring order; react-native-maps
+            wants { latitude, longitude } objects, so we map them here. */}
+        {geofence && geofence.type === 'polygon' && geofence.polygon && geofence.polygon.length >= 3 ? (
+          <Polygon
+            key={geofence.id}
+            coordinates={geofence.polygon.map(([lng, lat]) => ({ latitude: lat, longitude: lng }))}
+            strokeColor={COLORS.info}
+            fillColor={COLORS.info + '20'}
+            strokeWidth={2}
+          />
+        ) : geofence ? (
           <Circle
             key={geofence.id}
             center={{ latitude: geofence.latitude, longitude: geofence.longitude }}
@@ -139,7 +149,7 @@ export function TeamMapView({ locations, geofence, activeAlerts = [], style }: P
             fillColor={COLORS.info + '20'}
             strokeWidth={2}
           />
-        )}
+        ) : null}
 
         {/* Alert pins — shown for active alerts with GPS coords, removed on resolve */}
         {activeAlerts
