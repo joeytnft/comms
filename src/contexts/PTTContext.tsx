@@ -93,29 +93,64 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
   // Web MediaRecorder ref
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  // Track when transmit started so durationMs is accurate
-  const transmitStartedAtRef = useRef<number>(0);
   // CallKit call UUID for the current PTT session (Android only)
   const callUUIDRef = useRef<string | null>(null);
   // Active PTT channel UUID (iOS native PTT)
   const nativePTTChannelIdRef = useRef<string | null>(null);
   // Set to true when the user deliberately calls leaveChannel
   const intentionalLeaveRef = useRef(false);
-  // True while we are between "transmission started" and audio session activated
-  const transmittingRef = useRef(false);
   // True only when native PTT framework successfully joined a channel this session
   const nativePTTActiveRef = useRef(false);
-  // True when the current transmission was initiated by the native PTT framework
-  // (Dynamic Island button, lock screen, Bluetooth accessory) rather than the
-  // in-app PTT button. Controls whether stopTransmitting() calls the framework.
-  const nativePTTButtonRef = useRef(false);
-  // Live Activity ID for the current PTT session (iOS 16.2+)
+  // Live Activity ID for the current PTT session (iOS 16.2+ — currently
+  // disabled at build time via app.json; the ref is retained as a no-op
+  // anchor in case Live Activities are re-enabled later).
   const liveActivityIdRef = useRef<string | null>(null);
   // Persists the last speaker name so the lock-screen card can show "Last: X"
+  // (also Live-Activity-only; see above).
   const lastSpeakerNameRef = useRef<string | null>(null);
-  // Set once per transmission, so we never emit ptt:start twice when both
-  // startTransmitting (foreground) and onAudioActivated (background/island) fire.
-  const pttStartEmittedRef = useRef(false);
+
+  // Press-lifecycle state. Replaces four previously-loose refs
+  // (transmittingRef, pttStartEmittedRef, nativePTTButtonRef,
+  // transmitStartedAtRef) that had to be reset together at every transition
+  // and got out of sync repeatedly. Single-write transitions via
+  // beginTransmit / markStartEmitted / endTransmit eliminate the impossible
+  // combinations (e.g. isTransmitting=true with startEmitted=true and
+  // startedAt=0) that the four-ref version allowed.
+  interface TransmitState {
+    isTransmitting: boolean;
+    startedAt: number;
+    startEmitted: boolean;
+    /**
+     * True when the current transmission was initiated by the native PTT
+     * framework (Dynamic Island, lock-screen, Bluetooth accessory) rather
+     * than the in-app PTT button. Controls whether stopTransmitting() asks
+     * the framework to deactivate (it does in both cases for the current
+     * implementation, but the flag is preserved for future divergence).
+     */
+    ownedByNativeButton: boolean;
+  }
+  const IDLE_TRANSMIT: TransmitState = {
+    isTransmitting: false,
+    startedAt: 0,
+    startEmitted: false,
+    ownedByNativeButton: false,
+  };
+  const transmitStateRef = useRef<TransmitState>({ ...IDLE_TRANSMIT });
+  const beginTransmit = useCallback((ownedByNativeButton: boolean) => {
+    transmitStateRef.current = {
+      isTransmitting: true,
+      startedAt: Date.now(),
+      startEmitted: false,
+      ownedByNativeButton,
+    };
+  }, []);
+  const markStartEmitted = useCallback(() => {
+    transmitStateRef.current = { ...transmitStateRef.current, startEmitted: true };
+  }, []);
+  const endTransmit = useCallback(() => {
+    transmitStateRef.current = { ...IDLE_TRANSMIT };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Safety net: auto-stop a transmission that was never explicitly stopped (e.g.
   // bug, crash, or stuck state from a reconnect mid-transmission).
   const safetyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -253,9 +288,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     const unsubStart = nativePTTService.onTransmissionStarted(({ source }) => {
       const { pttState } = usePTTStore.getState();
       if (pttState === 'transmitting') return;
-      nativePTTButtonRef.current = true; // framework owns this transmission
-      transmittingRef.current = true;
-      transmitStartedAtRef.current = Date.now();
+      beginTransmit(/* ownedByNativeButton */ true);
       usePTTStore.getState().setTransmitting(true);
       // ptt:start is emitted in onAudioActivated so egress begins only after
       // the mic is confirmed live — prevents silent recordings.
@@ -265,10 +298,9 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     // Transmission ended from ANY source
     const unsubEnd = nativePTTService.onTransmissionEnded((_) => {
       const { currentGroupId, pttState } = usePTTStore.getState();
-      transmittingRef.current = false;
-      pttStartEmittedRef.current = false;
+      const durationMs = Date.now() - transmitStateRef.current.startedAt;
+      endTransmit();
       if (pttState !== 'transmitting') return;
-      const durationMs = Date.now() - transmitStartedAtRef.current;
       usePTTStore.getState().setTransmitting(false);
       if (micTrackRef.current) { micTrackRef.current.mute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null); }
       // Clear Live Activity immediately — must not be gated on socket state
@@ -292,7 +324,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     // Transmission failed (e.g. active cellular call)
     const unsubFail = nativePTTService.onTransmissionFailed((_channelId, error) => {
       usePTTStore.getState().setTransmitting(false);
-      transmittingRef.current = false;
+      endTransmit();
       pttRecorderService.cancel();
       // Clear the Live Activity — startTransmitting already set isTransmitting:true,
       // but stopTransmitting returns early (wasTransmitting=false) once this handler
@@ -312,7 +344,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
     // iOS activates audio session — now safe to open mic or play audio
     const unsubActivated = nativePTTService.onAudioActivated(() => {
-      if (transmittingRef.current) {
+      if (transmitStateRef.current.isTransmitting) {
         const { currentGroupId } = usePTTStore.getState();
         // Unmute first so the LiveKit track is live before server starts egress
         if (micTrackRef.current) { micTrackRef.current.unmute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null); }
@@ -322,8 +354,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         // connection so it reaches the server regardless of socket state.
         // Guard prevents double-emit when startTransmitting already fired it
         // (foreground case where audio session was already active).
-        if (currentGroupId && !pttStartEmittedRef.current) {
-          pttStartEmittedRef.current = true;
+        if (currentGroupId && !transmitStateRef.current.startEmitted) {
+          markStartEmitted();
           pttPost(currentGroupId, 'start').catch(() => null);
         }
       }
@@ -931,8 +963,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     // the disconnect handler cleans it up — which can be seconds later.
     if (pttState === 'transmitting' && currentGroupId) {
       pttPost(currentGroupId, 'stop').catch(() => null);
-      transmittingRef.current = false;
-      pttStartEmittedRef.current = false;
+      endTransmit();
       usePTTStore.getState().setTransmitting(false);
     }
 
@@ -1008,7 +1039,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       socketConnected: (socketRef.current ?? socket)?.connected,
       nativePTTActive: nativePTTActiveRef.current,
       nativePTTChannelId: nativePTTChannelIdRef.current,
-      pttStartEmitted: pttStartEmittedRef.current,
+      pttStartEmitted: transmitStateRef.current.startEmitted,
     });
     if (!currentGroupId) {
       console.warn('[PTT] startTransmitting: no current group — user not joined to a channel');
@@ -1020,8 +1051,10 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     // the instant the user presses it — independent of socket/native-framework state.
     // Any downstream failure (socket down, native begin rejected) will reset via the
     // appropriate failure callback, but we never want the button stuck green after press.
-    transmittingRef.current = true;
-    transmitStartedAtRef.current = Date.now();
+    // ownedByNativeButton is reset to false here; if this turns out to be a
+    // framework-initiated press (Dynamic Island), the onTransmissionStarted
+    // handler will have already early-returned by then.
+    beginTransmit(/* ownedByNativeButton */ false);
     usePTTStore.getState().setTransmitting(true);
 
     // 45-second hard stop — prevents a frozen mic if stopTransmitting is never called
@@ -1033,9 +1066,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       // Call the underlying stop logic directly via the store snapshot rather than the
       // closure-captured stopTransmitting (avoids stale-closure issues with the timeout).
       const { currentGroupId: gid } = usePTTStore.getState();
-      if (!transmittingRef.current && usePTTStore.getState().pttState !== 'transmitting') return;
-      transmittingRef.current = false;
-      pttStartEmittedRef.current = false;
+      if (!transmitStateRef.current.isTransmitting && usePTTStore.getState().pttState !== 'transmitting') return;
+      endTransmit();
       usePTTStore.getState().setTransmitting(false);
       if (micTrackRef.current) micTrackRef.current.mute();
       else roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null);
@@ -1082,7 +1114,13 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         // and onAudioActivated below unmutes the LiveKit track + posts
         // ptt:start to the server. Slight first-press latency is the price
         // for keeping the channel alive.
-        nativePTTButtonRef.current = true;
+        // Re-mark this transmission as native-button-owned (beginTransmit
+        // above set it to false on the optimistic flip — overwrite now that
+        // we know the framework is going to handle it).
+        transmitStateRef.current = {
+          ...transmitStateRef.current,
+          ownedByNativeButton: true,
+        };
         nativePTTService.beginTransmitting(nativePTTChannelIdRef.current).catch((err) => {
           console.warn('[PTT] beginTransmitting failed', err);
         });
@@ -1112,9 +1150,10 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // ─── stopTransmitting ───────────────────────────────────────────────────────
   const stopTransmitting = useCallback(() => {
     const { currentGroupId, pttState } = usePTTStore.getState();
-    // Guard on transmittingRef too: a reconnect can reset the store (pttState → idle)
-    // while the mic track remains unmuted — without this check the mic stays live.
-    const wasTransmitting = pttState === 'transmitting' || transmittingRef.current;
+    // Guard on transmitStateRef too: a reconnect can reset the store
+    // (pttState → idle) while the mic track remains unmuted — without this
+    // check the mic stays live.
+    const wasTransmitting = pttState === 'transmitting' || transmitStateRef.current.isTransmitting;
 
     // Expire the stale-leave grace window on every button release — including
     // the case where onTransmissionFailed already reset state (wasTransmitting=false),
@@ -1132,11 +1171,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       safetyTimeoutRef.current = null;
     }
 
-    // Always reset the local state on release so the button can't get stuck red.
-    const durationMs = Date.now() - transmitStartedAtRef.current;
-    const startWasEmitted = pttStartEmittedRef.current;
-    transmittingRef.current = false;
-    pttStartEmittedRef.current = false;
+    // Snapshot the press-lifecycle fields before resetting so we can decide
+    // below whether to fire ptt:stop/native-log (only meaningful if start
+    // was actually emitted to the server).
+    const durationMs = Date.now() - transmitStateRef.current.startedAt;
+    const startWasEmitted = transmitStateRef.current.startEmitted;
+    endTransmit();
     if (pttState === 'transmitting') usePTTStore.getState().setTransmitting(false);
 
     // Always mute the mic first — this is safe to call even in the stuck-mic scenario
@@ -1163,7 +1203,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         // system UI updates. The didDeactivateAudioSession callback then
         // mutes the LiveKit mic via our handler.
         nativePTTService.stopTransmitting(nativePTTChannelIdRef.current).catch(() => null);
-        nativePTTButtonRef.current = false;
+        // ownedByNativeButton is already cleared by endTransmit() above.
         if (startWasEmitted) pttPost(currentGroupId, 'native-log', { durationMs }).catch(() => null);
       }
     } else {
