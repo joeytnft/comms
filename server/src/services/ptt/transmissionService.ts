@@ -147,10 +147,17 @@ export async function beginTransmission(
 }
 
 /**
- * End a transmission. Idempotent: if no session is active, the call is a
- * no-op (no broadcast, no APNs, no egress stop). This guards against the
- * common case where the iOS HTTP fallback fires ptt:stop after the socket
- * disconnect handler already cleaned up the same session.
+/**
+ * End a transmission. Idempotent via an atomic Redis claim: DEL returns the
+ * number of keys it removed, so only the first caller to actually delete the
+ * session key fans out the side-effects. Subsequent calls (the iOS HTTP
+ * fallback after the socket disconnect handler already cleaned up, or two
+ * stop events racing) early-return without re-broadcasting.
+ *
+ * Critical: the session key MUST be cleared here, not by the calling
+ * transport. Otherwise a successful start → stop → start cycle leaves the
+ * session row from the first transmission alive, and the second
+ * beginTransmission call sees alreadyActive=true and silently no-ops.
  */
 export async function endTransmission(
   ctx: TransmissionContext,
@@ -158,8 +165,8 @@ export async function endTransmission(
 ): Promise<{ wasActive: boolean }> {
   const { groupId, userId } = ctx;
 
-  const wasActive = await redis.exists(sessionKey(userId, groupId));
-  if (wasActive === 0) {
+  const claimed = await redis.del(sessionKey(userId, groupId));
+  if (claimed === 0) {
     logger.info(
       { userId, groupId },
       '[PTT] endTransmission: no active session — nothing to do',

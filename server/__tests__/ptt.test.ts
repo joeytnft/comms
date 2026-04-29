@@ -358,7 +358,7 @@ describe('POST /ptt/:groupId/start', () => {
 });
 
 describe('POST /ptt/:groupId/stop', () => {
-  it('returns 204 and clears redis session/chunks keys', async () => {
+  it('returns 204 and atomically clears the redis session key', async () => {
     // Pre-populate the session as if /start had run.
     await redis.hset(`ptt:session:${memberUserId}:${groupId}`, {
       startedAt: Date.now(),
@@ -374,10 +374,54 @@ describe('POST /ptt/:groupId/stop', () => {
     });
     expect(response.statusCode).toBe(204);
 
-    // /stop in the HTTP path doesn't currently delete the keys (the socket
-    // disconnect handler does). Document that here so the upcoming service
-    // refactor is intentional about it — assert the endpoint just returns 204.
-    // If we change the contract to clear keys, update this test in the same PR.
+    // endTransmission's atomic claim removes the session key. Without this,
+    // a subsequent /start sees alreadyActive=true (from the leftover session)
+    // and silently no-ops — this is the regression that broke "second press
+    // in same channel" twice in this codebase already.
+    const stillThere = await redis.exists(`ptt:session:${memberUserId}:${groupId}`);
+    expect(stillThere).toBe(0);
+
+    // Chunks are owned by the socket handler's post-stop cleanup (web only),
+    // not the service. Leave them alone here.
+    await redis.del(`ptt:chunks:${memberUserId}:${groupId}`).catch(() => null);
+  });
+
+  it('start → stop → start works (no idempotency lockout)', async () => {
+    // First cycle.
+    let res = await app.inject({
+      method: 'POST',
+      url: `/ptt/${groupId}/start`,
+      headers: { authorization: `Bearer ${memberToken}` },
+      payload: { mimeType: 'audio/mp4' },
+    });
+    expect(res.statusCode).toBe(204);
+    expect(await redis.exists(`ptt:session:${memberUserId}:${groupId}`)).toBe(1);
+
+    res = await app.inject({
+      method: 'POST',
+      url: `/ptt/${groupId}/stop`,
+      headers: { authorization: `Bearer ${memberToken}` },
+    });
+    expect(res.statusCode).toBe(204);
+    expect(await redis.exists(`ptt:session:${memberUserId}:${groupId}`)).toBe(0);
+
+    // Second cycle — the actual regression case.
+    res = await app.inject({
+      method: 'POST',
+      url: `/ptt/${groupId}/start`,
+      headers: { authorization: `Bearer ${memberToken}` },
+      payload: { mimeType: 'audio/mp4' },
+    });
+    expect(res.statusCode).toBe(204);
+    // The session must be re-created. If endTransmission failed to clear it
+    // earlier, beginTransmission's idempotency check returns alreadyActive
+    // and skips the hset, leaving the row stale.
+    const session = await redis.hgetall(`ptt:session:${memberUserId}:${groupId}`);
+    expect(session.mimeType).toBe('audio/mp4');
+    expect(parseInt(session.startedAt, 10)).toBeGreaterThan(Date.now() - 5_000);
+
+    // Cleanup.
+    await redis.del(`ptt:session:${memberUserId}:${groupId}`).catch(() => null);
   });
 
   it('rejects unauthenticated callers', async () => {
