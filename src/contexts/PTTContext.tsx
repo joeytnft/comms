@@ -15,6 +15,7 @@ import { liveActivityService } from '@/services/liveActivityService';
 import { useAuthStore } from '@/store/useAuthStore';
 import { mmkvStorage } from '@/utils/mmkv';
 import { apiClient } from '@/api/client';
+import { generateUUIDv4 } from '@/utils/uuid';
 
 // HTTP helper for ptt:start / ptt:stop / ptt:native_log / register-token.
 // Routed through apiClient (NOT bespoke fetch) so the response interceptor
@@ -882,14 +883,20 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
               }
             });
 
-            // iOS internally closes any existing PTT session when initialize() is called,
-            // queuing an onPTTChannelLeft that fires asynchronously — typically when the
-            // main thread is first freed, which is right after the first PTT button release.
-            // Set the flag here so onChannelLeft can consume that stale event before the
-            // channelId guard sees it (both old and new channelId are the same groupId).
+            // Generate a fresh UUID per join. iOS uses this UUID as the
+            // identity for the PTT channel; with a unique UUID per session,
+            // the deferred didLeaveChannelWithUUID iOS queues on initialize()
+            // refers to a UUID we no longer care about, so the native
+            // self-heal path doesn't have to disambiguate stale-vs-real
+            // leaves. cleanupLeaveRef stays armed as a defensive net.
+            const channelUUID = generateUUIDv4();
             cleanupLeaveRef.current = true;
 
-            const resolvedId = await nativePTTService.joinChannel(groupId, response.groupName);
+            const resolvedId = await nativePTTService.joinChannel(
+              groupId,
+              response.groupName,
+              channelUUID,
+            );
             nativePTTChannelIdRef.current = resolvedId;
             nativePTTActiveRef.current = true;
             if (resolvedId) mmkvStorage.setString(PTT_CHANNEL_ID_KEY, resolvedId);
