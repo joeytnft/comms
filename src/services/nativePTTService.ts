@@ -62,12 +62,20 @@ async function preinit(): Promise<void> {
 }
 
 /**
- * Join a PTT channel. Returns the resolved channel UUID (may differ from the
- * requested one when iOS normalises it).
+ * Join a PTT channel. `channelUUID` is a fresh RFC 4122 UUID generated per
+ * join — passing one ensures every join uses a distinct UUID even when the
+ * underlying group ID is the same, which avoids iOS queuing a stale
+ * didLeaveChannelWithUUID for the previous session that shares the new
+ * session's UUID. Returns the resolved channel UUID (typically the one
+ * passed in, normalised by iOS).
  */
-async function joinChannel(channelId: string, channelName: string): Promise<string> {
-  if (!isAvailable) return channelId;
-  return PushToTalkModule.initialize(channelId, channelName);
+async function joinChannel(
+  channelId: string,
+  channelName: string,
+  channelUUID?: string,
+): Promise<string> {
+  if (!isAvailable) return channelUUID ?? channelId;
+  return PushToTalkModule.initialize(channelId, channelName, channelUUID ?? null);
 }
 
 async function leaveChannel(channelId: string): Promise<void> {

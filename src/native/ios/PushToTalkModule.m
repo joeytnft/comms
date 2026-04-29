@@ -177,12 +177,32 @@ RCT_EXPORT_METHOD(preinit:(RCTPromiseResolveBlock)resolve
 
 RCT_EXPORT_METHOD(initialize:(NSString *)channelId
                   channelName:(NSString *)channelName
+                  channelUUID:(NSString *)channelUUIDString
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 {
 #ifdef PTTM_HAS_FRAMEWORK
     if (@available(iOS 16.0, *)) {
-        NSUUID *targetUUID = [PushToTalkModule channelUUIDForID:channelId];
+        // Prefer the UUID JS provided (a fresh per-join UUID v4 stored in
+        // MMKV). Fall back to the deterministic UUID v5 derivation only when
+        // JS didn't pass one — this preserves the legacy behaviour for any
+        // call site that hasn't been updated yet.
+        //
+        // Why fresh UUIDs instead of derived ones: deriving the UUID from the
+        // group ID meant every join produced the SAME UUID. iOS queues a
+        // didLeaveChannelWithUUID for the previous session whenever
+        // requestJoinChannelWithUUID is called, and because old/new sessions
+        // shared a UUID, the stale leave was indistinguishable from a real
+        // one. Most of the "second press fails" history traces to this. With
+        // fresh UUIDs the previous and current sessions have different UUIDs
+        // and the stale leave just refers to a channel we've already left.
+        NSUUID *targetUUID = nil;
+        if (channelUUIDString.length > 0) {
+            targetUUID = [[NSUUID alloc] initWithUUIDString:channelUUIDString];
+        }
+        if (!targetUUID) {
+            targetUUID = [PushToTalkModule channelUUIDForID:channelId];
+        }
         _channelUUID       = targetUUID;
         _channelDescriptor = [[PTChannelDescriptor alloc] initWithName:channelName image:nil];
         __weak typeof(self) weak = self;
