@@ -22,7 +22,8 @@
       "Bash(npx claude *)",
       "Bash(python3 -m json.tool)",
       "Bash(git config *)",
-      "Read(//usr/local/bin/**)"
+      "Read(//usr/local/bin/**)",
+      "Bash(npm install *)"
     ],
     "additionalDirectories": [
       "/home/joe7432/.claude"
