@@ -374,24 +374,29 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
     // System closed the channel.
     //
-    // Primary path: PushToTalkModule.m's didLeaveChannelWithUUID delegate now
-    // self-heals stale leaves queued by iOS during initialize() — it swallows
-    // them and immediately re-issues requestJoinChannelWithUUID without
-    // emitting onPTTChannelLeft. So in a fully-rebuilt build this handler only
-    // fires for genuine leaves (user pressed Leave in Dynamic Island, or our
-    // own leaveChannel call).
+    // The native module emits this for every onPTTChannelLeft, including
+    // stale leaves for previous-session UUIDs queued by iOS during
+    // initialize(). The channelId guard below filters those out: with
+    // fresh per-join UUIDs, the leaving UUID for a stale event won't
+    // match nativePTTChannelIdRef.current (which is the active session's
+    // UUID), so we early-return without disconnecting.
     //
-    // Defensive path: if the native code wasn't rebuilt and a stale leave
-    // still leaks through, the cleanupLeaveRef armed in joinChannel will
-    // consume it here so we don't tear down the session on a phantom event.
+    // cleanupLeaveRef is still armed in joinChannel as a defensive net for
+    // any path that might tear down the active channel right after join
+    // (e.g. mount-time leftover cleanup).
     const unsubLeft = nativePTTService.onChannelLeft((channelId) => {
+      // Stale leaves for previous-session UUIDs land here harmlessly: the
+      // active channel UUID is different, so we early-return. No disconnect.
+      if (!nativePTTChannelIdRef.current || channelId !== nativePTTChannelIdRef.current) {
+        return;
+      }
+      // Defensive: if a real leave event for the active channel arrives
+      // immediately after join (mount-time race), let cleanupLeaveRef
+      // consume it so we don't tear down the session.
       if (cleanupLeaveRef.current) {
         cleanupLeaveRef.current = false;
         return;
       }
-      // Ignore events for channels we are not currently in (e.g. race between
-      // leaveChannel and a rapid rejoin to a different group).
-      if (!nativePTTChannelIdRef.current || channelId !== nativePTTChannelIdRef.current) return;
 
       intentionalLeaveRef.current = true;
       const { currentGroupId } = usePTTStore.getState();
