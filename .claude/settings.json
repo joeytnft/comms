@@ -38,7 +38,8 @@
       "Bash(python3 -c ' *)",
       "Bash(node -e \"require\\('dotenv'\\)\")",
       "Bash(npm uninstall *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(grep -E '^pg$|^@prisma$')"
     ],
     "additionalDirectories": [
       "/home/joe7432/.claude"

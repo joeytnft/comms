@@ -1,31 +1,41 @@
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import pg from 'pg';
 import { env } from './env';
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
-function createPrismaClient(): PrismaClient {
+function buildConnectionString(): string {
+  let url = env.DATABASE_URL;
   const isLocal =
-    env.DATABASE_URL.includes('localhost') || env.DATABASE_URL.includes('127.0.0.1');
+    url.includes('localhost') || url.includes('127.0.0.1');
 
   if (!isLocal) {
     // Supabase connection pooler (pgbouncer, transaction mode) requires:
     //   sslmode=require   — TLS to the pooler endpoint
     //   pgbouncer=true    — disables Prisma features pgbouncer can't relay
-    //   connection_limit=1 — Prisma opens one connection; pooler multiplexes
-    // Append only the params that aren't already in the URL.
-    let url = process.env['DATABASE_URL'] ?? '';
+    // connection_limit is handled by pool max below (1 for prod)
     const params = new URLSearchParams();
     if (!url.includes('sslmode=')) params.append('sslmode', 'require');
     if (!url.includes('pgbouncer=')) params.append('pgbouncer', 'true');
-    if (!url.includes('connection_limit=')) params.append('connection_limit', '1');
     const qs = params.toString();
-    if (qs) {
-      url += (url.includes('?') ? '&' : '?') + qs;
-      process.env['DATABASE_URL'] = url;
-    }
+    if (qs) url += (url.includes('?') ? '&' : '?') + qs;
   }
 
+  return url;
+}
+
+function createPrismaClient(): PrismaClient {
+  const url = buildConnectionString();
+  const isLocal = url.includes('localhost') || url.includes('127.0.0.1');
+
+  // Use max:1 in production so Prisma opens one connection per instance;
+  // pgBouncer multiplexes across all Railway replicas.
+  const pool = new pg.Pool({ connectionString: url, max: isLocal ? 10 : 1 });
+  const adapter = new PrismaPg(pool);
+
   return new PrismaClient({
+    adapter,
     log: env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
   });
 }
