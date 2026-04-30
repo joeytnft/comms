@@ -37,7 +37,8 @@
       "WebSearch",
       "Bash(python3 -c ' *)",
       "Bash(node -e \"require\\('dotenv'\\)\")",
-      "Bash(npm uninstall *)"
+      "Bash(npm uninstall *)",
+      "Bash(npm run *)"
     ],
     "additionalDirectories": [
       "/home/joe7432/.claude"
