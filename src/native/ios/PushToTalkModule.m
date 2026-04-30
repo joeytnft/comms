@@ -551,7 +551,7 @@ RCT_EXPORT_METHOD(setServiceStatus:(NSString *)channelId
                                           channelUUID:(NSUUID *)channelUUID
                                           pushPayload:(NSDictionary *)pushPayload API_AVAILABLE(ios(16.0))
 {
-    NSString *sender = pushPayload[@"senderName"];
+    NSString *sender = pushPayload[@"activeSpeaker"] ?: pushPayload[@"senderName"];
     // A "stopped" push has no senderName. Returning leaveChannelPushResult here
     // causes iOS to leave the channel on every stop, breaking the next transmission
     // with error 1. nil participant clears the active speaker without leaving.
