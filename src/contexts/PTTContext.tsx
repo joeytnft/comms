@@ -167,6 +167,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // self-heals those silently, this stays in case the JS bundle and native
   // binary versions ever drift apart.
   const cleanupLeaveRef = useRef(false);
+  // Guard against two concurrent joinChannel() calls (rapid group switch).
+  const joinInProgressRef = useRef(false);
   // Wall-clock time of the most recent successful join. Used to decide whether
   // an unintentional Disconnected event likely reflects an expired LiveKit
   // token (issued for ~6h) vs. a transient network failure that LiveKit's
@@ -707,10 +709,16 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   const joinChannel = useCallback(
     async (groupId: string) => {
       clientLog('ptt:js:joinChannel:start', 'invoked', { groupId, socketReady: !!socket });
+      if (joinInProgressRef.current) {
+        clientLog('ptt:js:joinChannel:skipped', 'aborted — join already in progress');
+        return;
+      }
       if (!socket) {
         clientLog('ptt:js:joinChannel:noSocket', 'aborted — socket missing');
         return;
       }
+      joinInProgressRef.current = true;
+      try {
 
       // fetchToken can fail (network down, server 4xx/5xx). Without the catch
       // the promise rejects further down with no breadcrumb, and the UI is
@@ -1093,6 +1101,9 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         nativePTTActive: nativePTTActiveRef.current,
       });
       forceFlush(); // ensure join diagnostics land before any transmission starts
+      } finally {
+        joinInProgressRef.current = false;
+      }
     },
     [socket, endLiveActivity],
   );

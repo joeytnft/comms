@@ -552,7 +552,10 @@ RCT_EXPORT_METHOD(setServiceStatus:(NSString *)channelId
                                           pushPayload:(NSDictionary *)pushPayload API_AVAILABLE(ios(16.0))
 {
     NSString *sender = pushPayload[@"senderName"];
-    if (!sender) return [PTPushResult leaveChannelPushResult];
+    // A "stopped" push has no senderName. Returning leaveChannelPushResult here
+    // causes iOS to leave the channel on every stop, breaking the next transmission
+    // with error 1. nil participant clears the active speaker without leaving.
+    if (!sender) return [PTPushResult pushResultForActiveRemoteParticipant:nil];
 
     // Half-duplex collision: if the local user is currently transmitting and a
     // remote PTT push arrives, Apple requires us to stop the local transmission
