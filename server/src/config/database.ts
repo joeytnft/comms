@@ -31,7 +31,16 @@ function createPrismaClient(): PrismaClient {
 
   // Use max:1 in production so Prisma opens one connection per instance;
   // pgBouncer multiplexes across all Railway replicas.
-  const pool = new pg.Pool({ connectionString: url, max: isLocal ? 10 : 1 });
+  //
+  // Explicit `ssl` overrides connection-string parsing. Recent versions of
+  // pg-connection-string treat `sslmode=require` as `verify-full`, which
+  // rejects Supabase's pooler cert chain ("self-signed certificate in
+  // certificate chain"). We need TLS but cannot verify the chain here.
+  const pool = new pg.Pool({
+    connectionString: url,
+    max: isLocal ? 10 : 1,
+    ssl: isLocal ? false : { rejectUnauthorized: false },
+  });
   const adapter = new PrismaPg(pool);
 
   return new PrismaClient({
