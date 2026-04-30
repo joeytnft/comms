@@ -97,6 +97,10 @@ export async function startTransmissionEgress(groupId: string, userId: string): 
         EgressStatus.EGRESS_FAILED,
         EgressStatus.EGRESS_ABORTED,
         EgressStatus.EGRESS_LIMIT_REACHED,
+        // EGRESS_ENDING: stopEgress was already called and LiveKit is wrapping
+        // up. Treat as stale so a rapid stop/start cycle starts fresh egress
+        // rather than silently skipping the new transmission's recording.
+        EgressStatus.EGRESS_ENDING,
       ]);
       const isStale = !info || TERMINAL.has(info.status);
       if (!isStale) {
@@ -127,8 +131,9 @@ export async function startTransmissionEgress(groupId: string, userId: string): 
       { audioTrackId: trackSid },
     );
 
+    const egressStartedAt = new Date().toISOString();
     await redis.setex(`ptt:egress:${userId}:${groupId}`, 3600, egress.egressId);
-    await redis.setex(`ptt:egress_meta:${egress.egressId}`, 3600, JSON.stringify({ userId, groupId }));
+    await redis.setex(`ptt:egress_meta:${egress.egressId}`, 3600, JSON.stringify({ userId, groupId, startedAt: egressStartedAt }));
     logger.info(`[LiveKit] Egress ${egress.egressId} started OK`);
   } catch (err) {
     logger.warn({ err }, '[LiveKit] startTransmissionEgress failed — continuing without egress');

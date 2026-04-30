@@ -60,8 +60,9 @@ export async function webhookRoutes(app: FastifyInstance) {
 
       let userId: string;
       let groupId: string;
+      let startedAt: string | undefined;
       try {
-        ({ userId, groupId } = JSON.parse(metaRaw));
+        ({ userId, groupId, startedAt } = JSON.parse(metaRaw));
       } catch {
         logger.warn({ egressId }, '[Webhook] Failed to parse egress meta');
         return reply.status(204).send();
@@ -93,16 +94,26 @@ export async function webhookRoutes(app: FastifyInstance) {
       }
       const audioUrl = signed.signedUrl;
 
-      // Search up to 5 minutes back — the ptt:native_log socket event that creates
-      // the log arrives quickly but network delays can push the window in edge cases.
+      // Match the pttLog that belongs to THIS egress, not a later one.
+      // When startedAt is available (stored since the fix), use a tight window
+      // around the transmission start time and pick the OLDEST matching row
+      // (asc order). Without startedAt, fall back to the prior 5-minute window.
+      // The orderBy was previously 'desc' which caused late egress_ended webhooks
+      // to backfill the NEWEST (wrong) log when the user transmitted twice rapidly.
+      const windowStart = startedAt
+        ? new Date(new Date(startedAt).getTime() - 30_000)
+        : new Date(Date.now() - 300_000);
+      const windowEnd = startedAt
+        ? new Date(new Date(startedAt).getTime() + 300_000)
+        : new Date();
       const recentLog = await prisma.pttLog.findFirst({
         where: {
           groupId,
           senderId: userId,
           audioUrl: null,
-          createdAt: { gte: new Date(Date.now() - 300_000) },
+          createdAt: { gte: windowStart, lte: windowEnd },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: 'asc' },
       });
 
       if (recentLog) {

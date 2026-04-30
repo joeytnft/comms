@@ -155,6 +155,10 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // Safety net: auto-stop a transmission that was never explicitly stopped (e.g.
   // bug, crash, or stuck state from a reconnect mid-transmission).
   const safetyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Set by stopTransmitting() (and the reconnect handler) so that a
+  // late-arriving onTransmissionEnded delegate — queued by iOS before the stop
+  // call landed — doesn't wipe a rapid re-press's beginTransmit() state.
+  const stopTransmittingCalledRef = useRef(false);
   // Set to true when the mount-cleanup leaveChannel() call is in flight so the
   // resulting onPTTChannelLeft event (which iOS queues and fires asynchronously,
   // sometimes hundreds of ms later) is not mistaken for a real user-initiated leave.
@@ -313,7 +317,15 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         pttStateBefore: pttState,
         startEmittedBefore: transmitStateRef.current.startEmitted,
         durationMs,
+        stopAlreadyCalled: stopTransmittingCalledRef.current,
       });
+      // stopTransmitting() (in-app button release) or the reconnect handler
+      // already called endTransmit() and sent ptt:stop. Consuming the flag
+      // here prevents this late delegate from wiping a rapid re-press's state.
+      if (stopTransmittingCalledRef.current) {
+        stopTransmittingCalledRef.current = false;
+        return;
+      }
       endTransmit();
       if (pttState !== 'transmitting') return;
       usePTTStore.getState().setTransmitting(false);
@@ -596,10 +608,30 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     };
 
     const handleSocketReconnect = () => {
-      const { currentGroupId, isConnected } = usePTTStore.getState();
+      const { currentGroupId, isConnected, pttState } = usePTTStore.getState();
       // Any ptt:speaking / ptt:stopped events we missed during the disconnection
       // are gone — reset so the UI doesn't stay stuck in RECEIVING.
       usePTTStore.getState().setActiveSpeaker(null);
+
+      // If the socket dropped mid-transmission the server already ended the
+      // session via its disconnect handler. Reset client state to match —
+      // without this, pttState stays 'transmitting' and every subsequent press
+      // is silently blocked by the "already transmitting" guard, leaving the
+      // user unable to key up until the 45-second safety timeout fires.
+      if (transmitStateRef.current.isTransmitting || pttState === 'transmitting') {
+        if (USE_NATIVE_PTT && nativePTTChannelIdRef.current) {
+          // Arm the flag so the late-arriving onTransmissionEnded delegate
+          // (which iOS may still deliver after stopTransmitting) doesn't wipe
+          // state for the next fresh transmission.
+          stopTransmittingCalledRef.current = true;
+          nativePTTService.stopTransmitting(nativePTTChannelIdRef.current).catch(() => null);
+        }
+        endTransmit();
+        usePTTStore.getState().setTransmitting(false);
+        if (micTrackRef.current) micTrackRef.current.mute();
+        else roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null);
+      }
+
       if (isConnected && currentGroupId) {
         socket.emit('ptt:join', { groupId: currentGroupId });
         if (USE_NATIVE_PTT && nativePTTChannelIdRef.current) {
@@ -1274,6 +1306,10 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     } else if (nativePTTActiveRef.current) {
       if (nativePTTChannelIdRef.current) {
         if (startWasEmitted) pttPost(currentGroupId, 'stop').catch(() => null);
+        // Arm before calling stopTransmitting so the onTransmissionEnded
+        // delegate (fired asynchronously by iOS after the stop call) knows
+        // cleanup was already handled and doesn't wipe a rapid re-press's state.
+        stopTransmittingCalledRef.current = true;
         // Every native-PTT transmission now goes through the framework
         // (beginTransmitting in startTransmitting), so the framework is
         // always in "transmitting" state on release — call stopTransmitting
