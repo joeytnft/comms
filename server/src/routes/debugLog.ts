@@ -84,8 +84,8 @@ function writeEvent(
     });
     redis.rpush(key, entry)
       .then((len) => {
-        if (len === 1) return redis.expire(key, SESSION_LOG_TTL);
-        if (len > SESSION_LOG_MAX) return redis.ltrim(key, -SESSION_LOG_MAX, -1);
+        if (len === 1) redis.expire(key, SESSION_LOG_TTL).catch(() => null);
+        else if (len > SESSION_LOG_MAX) redis.ltrim(key, -SESSION_LOG_MAX, -1).catch(() => null);
       })
       .catch(() => null);
   }
