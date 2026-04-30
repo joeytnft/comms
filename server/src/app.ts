@@ -33,6 +33,7 @@ import { setupSocketHandlers } from './sockets/socketHandler';
 import { webhookRoutes } from './routes/webhooks';
 import { organizationRoutes } from './routes/organizations';
 import { customAlertTypeRoutes } from './routes/customAlertTypes';
+import { debugLogRoutes } from './routes/debugLog';
 import { setIO } from './config/socketIO';
 
 export async function buildApp() {
@@ -168,6 +169,7 @@ export async function buildApp() {
   app.register(qualificationRoutes, { prefix: '/qualifications' });
   app.register(organizationRoutes, { prefix: '/organizations' });
   app.register(customAlertTypeRoutes, { prefix: '/custom-alert-types' });
+  app.register(debugLogRoutes, { prefix: '/debug-log' });
   app.register(webhookRoutes, { prefix: '/webhooks' });
 
   // Socket.IO setup
