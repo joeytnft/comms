@@ -1,5 +1,9 @@
 # CLAUDE.md — GatherSafe: Church Security Communication App
 
+## LiveKit Documentation
+
+LiveKit is a fast-evolving project. Always refer to the latest documentation. LiveKit provides an MCP server at `https://docs.livekit.io/mcp` with tools for browsing and searching docs. Key tools: `get_docs_overview`, `get_pages`, `docs_search`, `code_search`, `get_changelog`, `get_pricing_info`. Prefer browsing (`get_docs_overview`, `get_pages`) over search, and `docs_search` over `code_search`, as docs pages provide better context than raw code.
+
 ## Project Overview
 
 **GatherSafe** is a secure, real-time communication app built for church security teams. It runs on iOS and Android, providing encrypted-in-transit text messaging, push-to-talk (PTT) voice, hierarchical group management, panic alerts, location sharing, and incident logging. Sensitive content is encrypted at rest using server-managed AES-256 keys, biometric/PIN-locked on-device, and protected with TLS in transit. The server is not zero-knowledge — see `docs/SECURITY_MODEL.md` for the full threat model.
