@@ -6,6 +6,7 @@ RUN apt-get update -y && apt-get install -y openssl ffmpeg && rm -rf /var/lib/ap
 
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
+COPY prisma.config.ts ./
 
 RUN npm ci
 RUN npx prisma generate
@@ -24,6 +25,7 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./
 
 EXPOSE 3002
 
