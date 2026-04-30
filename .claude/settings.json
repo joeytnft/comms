@@ -33,7 +33,8 @@
       "Bash(grep -r 'previewFeatures\\\\|\\\\.middleware\\\\|$on\\\\b\\\\|$queryRaw\\\\|$executeRaw' /home/joe7432/comms/server/src '--include=*.ts' -n)",
       "Bash(npm i *)",
       "Bash(node -e \"require\\('pg'\\)\")",
-      "Bash(node -e \"require\\('@prisma/adapter-pg'\\)\")"
+      "Bash(node -e \"require\\('@prisma/adapter-pg'\\)\")",
+      "WebSearch"
     ],
     "additionalDirectories": [
       "/home/joe7432/.claude"
