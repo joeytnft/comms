@@ -71,6 +71,11 @@
     // clears _channelUUID and every subsequent requestBeginTransmitting rejects
     // with PTT_NOT_INITIALIZED, making PTT work only once per app launch.
     BOOL _isLeavingIntentionally;
+    // Set in incomingPushResultForChannelManager when we receive a stop push (no
+    // activeSpeaker). We return leaveChannelPushResult to satisfy Apple's non-nil
+    // requirement, but we don't want the JS layer to see a channel-left event —
+    // we self-heal immediately in didLeaveChannelWithUUID with this flag set.
+    BOOL _isLeaveFromStopPush;
 #endif
     BOOL _hasListeners;
 }
@@ -448,6 +453,27 @@ RCT_EXPORT_METHOD(setServiceStatus:(NSString *)channelId
     didLeaveChannelWithUUID:(NSUUID *)channelUUID
                      reason:(PTChannelLeaveReason)reason API_AVAILABLE(ios(16.0))
 {
+    // Stop-push leave: the server sent a pushtotalk push with no activeSpeaker,
+    // so incomingPushResultForChannelManager returned leaveChannelPushResult to
+    // avoid the nil-participant crash. Silently rejoin without notifying JS —
+    // the leave/rejoin is an implementation detail the UI does not need to see.
+    if (_isLeaveFromStopPush) {
+        _isLeaveFromStopPush = NO;
+        if (_channelManager && _channelUUID && _channelDescriptor) {
+            @try {
+                [_channelManager requestJoinChannelWithUUID:_channelUUID
+                                                 descriptor:_channelDescriptor];
+            } @catch (NSException *ex) {
+                _isChannelJoined = NO;
+                [self emit:@"onPTTChannelLeft" body:@{@"channelId": channelUUID.UUIDString}];
+            }
+        } else {
+            _isChannelJoined = NO;
+            [self emit:@"onPTTChannelLeft" body:@{@"channelId": channelUUID.UUIDString}];
+        }
+        return;
+    }
+
     BOOL wasIntentional = _isLeavingIntentionally;
     _isLeavingIntentionally = NO;
 
@@ -552,10 +578,16 @@ RCT_EXPORT_METHOD(setServiceStatus:(NSString *)channelId
                                           pushPayload:(NSDictionary *)pushPayload API_AVAILABLE(ios(16.0))
 {
     NSString *sender = pushPayload[@"activeSpeaker"] ?: pushPayload[@"senderName"];
-    // A "stopped" push has no senderName. Returning leaveChannelPushResult here
-    // causes iOS to leave the channel on every stop, breaking the next transmission
-    // with error 1. nil participant clears the active speaker without leaving.
-    if (!sender) return [PTPushResult pushResultForActiveRemoteParticipant:nil];
+    // A "stop" push has no activeSpeaker. We cannot pass nil to
+    // pushResultForActiveRemoteParticipant: — Apple throws NSException at line 34
+    // of PTPushResult.m (confirmed in TestFlight crash EXC_CRASH/SIGABRT).
+    // leaveChannelPushResult satisfies the non-nil requirement; the flag below
+    // lets didLeaveChannelWithUUID perform a silent self-heal rejoin without
+    // emitting onPTTChannelLeft to the JS layer.
+    if (!sender) {
+        _isLeaveFromStopPush = YES;
+        return [PTPushResult leaveChannelPushResult];
+    }
 
     // Half-duplex collision: if the local user is currently transmitting and a
     // remote PTT push arrives, Apple requires us to stop the local transmission

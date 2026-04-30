@@ -230,20 +230,18 @@ export async function notifyTransmissionStarted(
 
 /**
  * Notify all `deviceTokens` that transmission on `channelId` has ended.
- * The PTChannelManager will clear the active participant and deactivate the audio session.
+ *
+ * We intentionally do NOT send a pushtotalk APNs push here. A stop push
+ * (no activeSpeaker) would call incomingPushResultForChannelManager on
+ * background devices, which must return a non-nil PTPushResult — the only
+ * valid options being pushResultForActiveRemoteParticipant: (requires non-nil
+ * PTParticipant) or leaveChannelPushResult (forces a channel leave). Neither
+ * is desirable for a stop event. Live Activity pushes handle the speaker UI
+ * via ActivityKit, so the pushtotalk stop push is not needed.
  */
 export async function notifyTransmissionStopped(
-  deviceTokens: string[],
-  channelId: string,
+  _deviceTokens: string[],
+  _channelId: string,
 ): Promise<void> {
-  if (!env.APNS_KEY_ID) return;
-
-  const payload: PTTPushPayload = { channelId };
-  await Promise.allSettled(
-    deviceTokens.map((token) =>
-      sendPTTPush(token, payload).catch((err) =>
-        logger.error({ err, token }, '[APNs] notifyTransmissionStopped failed'),
-      ),
-    ),
-  );
+  // Intentional no-op — see comment above.
 }
