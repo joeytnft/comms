@@ -21,7 +21,8 @@
       "Bash(claude mcp *)",
       "Bash(npx claude *)",
       "Bash(python3 -m json.tool)",
-      "Bash(git config *)"
+      "Bash(git config *)",
+      "Read(//usr/local/bin/**)"
     ],
     "additionalDirectories": [
       "/home/joe7432/.claude"

@@ -16,7 +16,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { mmkvStorage } from '@/utils/mmkv';
 import { apiClient } from '@/api/client';
 import { generateUUIDv4 } from '@/utils/uuid';
-import { clientLog } from '@/services/clientLogger';
+import { clientLog, forceFlush, setClientContext, SESSION_ID } from '@/services/clientLogger';
 
 // HTTP helper for ptt:start / ptt:stop / ptt:native_log / register-token.
 // Routed through apiClient (NOT bespoke fetch) so the response interceptor
@@ -199,9 +199,32 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // Without this the lock screen accumulates duplicate cards (one per join)
   // even after we believe we cleaned up.
   const endLiveActivity = useCallback(() => {
+    const prevId = liveActivityIdRef.current;
     liveActivityService.end(null); // null → '' → end-all
     liveActivityIdRef.current = null;
     mmkvStorage.delete(LIVE_ACTIVITY_ID_KEY);
+    clientLog('liveActivity:end', 'Live Activity ended', { activityId: prevId });
+  }, []);
+
+  // On mount: capture device context once so every subsequent log event carries
+  // enough information to reconstruct the environment in Railway without a Mac.
+  useEffect(() => {
+    (async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const Device = require('expo-device');
+        setClientContext({
+          sessionId:   SESSION_ID,
+          platform:    Platform.OS,
+          osVersion:   Platform.Version,
+          deviceModel: Device.modelName ?? 'unknown',
+          deviceBrand: Device.brand ?? 'unknown',
+        });
+      } catch {
+        setClientContext({ sessionId: SESSION_ID, platform: Platform.OS, osVersion: Platform.Version });
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // On mount: if any PTT session artifacts were persisted from a previous process
@@ -642,6 +665,14 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
     // Notify system UI about connectivity changes
     const handleSocketDisconnect = () => {
+      const { currentGroupId, pttState } = usePTTStore.getState();
+      clientLog('socket:disconnect', 'socket disconnected', {
+        groupId: currentGroupId,
+        pttState,
+        isTransmitting: transmitStateRef.current.isTransmitting,
+        channelUUID: nativePTTChannelIdRef.current,
+      });
+      forceFlush(); // flush before transport is down
       if (USE_NATIVE_PTT && nativePTTChannelIdRef.current) {
         nativePTTService.setServiceStatus(nativePTTChannelIdRef.current, 'connecting').catch(() => null);
       }
@@ -740,8 +771,15 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
             .then((id) => {
               liveActivityIdRef.current = id;
               if (id) mmkvStorage.setString(LIVE_ACTIVITY_ID_KEY, id);
+              clientLog('liveActivity:start', id ? 'Live Activity started' : 'Live Activity start returned null', {
+                groupId, activityId: id, groupName: response.groupName,
+              });
             })
-            .catch(() => null);
+            .catch((err) => {
+              clientLog('liveActivity:startError', 'Live Activity start threw', {
+                groupId, error: err instanceof Error ? err.message : String(err),
+              });
+            });
         }
 
         if (Platform.OS === 'android' && !USE_NATIVE_PTT) {
@@ -817,6 +855,11 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
         room.on(RoomEvent!.Reconnecting, () => {
           console.warn('[PTT] LiveKit reconnecting...');
+          clientLog('livekit:reconnecting', 'LiveKit room reconnecting', {
+            groupId,
+            channelUUID: nativePTTChannelIdRef.current,
+            isTransmitting: transmitStateRef.current.isTransmitting,
+          });
           if (USE_NATIVE_PTT && nativePTTChannelIdRef.current) {
             nativePTTService.setServiceStatus(nativePTTChannelIdRef.current, 'connecting').catch(() => null);
           }
@@ -824,6 +867,10 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
         room.on(RoomEvent!.Reconnected, () => {
           console.info('[PTT] LiveKit reconnected');
+          clientLog('livekit:reconnected', 'LiveKit room reconnected', {
+            groupId,
+            channelUUID: nativePTTChannelIdRef.current,
+          });
           if (USE_NATIVE_PTT && nativePTTChannelIdRef.current) {
             nativePTTService.setServiceStatus(nativePTTChannelIdRef.current, 'ready').catch(() => null);
           }
@@ -831,6 +878,13 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
         room.on(RoomEvent!.Disconnected, () => {
           micTrackRef.current = null; // room cleanup releases the underlying track
+          clientLog('livekit:disconnected', 'LiveKit room disconnected', {
+            groupId,
+            intentional: intentionalLeaveRef.current,
+            sessionAgeMs: Date.now() - joinedAtRef.current,
+            isTransmitting: transmitStateRef.current.isTransmitting,
+          });
+          forceFlush();
           if (intentionalLeaveRef.current) {
             intentionalLeaveRef.current = false;
             usePTTStore.getState().disconnect();
@@ -1038,6 +1092,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         channelUUID: nativePTTChannelIdRef.current,
         nativePTTActive: nativePTTActiveRef.current,
       });
+      forceFlush(); // ensure join diagnostics land before any transmission starts
     },
     [socket, endLiveActivity],
   );
@@ -1051,6 +1106,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       isTransmitting: transmitStateRef.current.isTransmitting,
       channelUUID: nativePTTChannelIdRef.current,
     });
+    forceFlush(); // ensure any buffered events land before the socket closes
 
     // If the user leaves while transmitting, fire an HTTP stop before tearing down.
     // Without this the server-side egress keeps recording until the socket drops and

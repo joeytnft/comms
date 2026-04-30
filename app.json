@@ -76,6 +76,7 @@
         }
       ],
       "./plugins/withPushToTalk",
+      "./plugins/withLiveActivity",
       "./plugins/withPodfileFixes",
       "expo-location",
       "expo-camera",
