@@ -29,7 +29,10 @@
       "Bash(docker-compose up *)",
       "Bash(docker-compose logs *)",
       "Bash(docker network *)",
-      "Bash(docker-compose down *)"
+      "Bash(docker-compose down *)",
+      "Bash(grep -r 'previewFeatures\\\\|\\\\.middleware\\\\|$on\\\\b\\\\|$queryRaw\\\\|$executeRaw' /home/joe7432/comms/server/src '--include=*.ts' -n)",
+      "Bash(npm i *)",
+      "Bash(node -e \"require\\('pg'\\)\")"
     ],
     "additionalDirectories": [
       "/home/joe7432/.claude"
