@@ -136,8 +136,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ user: freshUser, organization: organization ?? null });
         await secureStorage.setItemAsync(USER_KEY, JSON.stringify(freshUser));
       } catch {
-        // Token may be expired — try refresh
-        await get().refreshSession();
+        // getMe() failed AND the interceptor's refresh attempt (if any) already failed
+        // and cleared the tokens. A second refreshSession() here races with the
+        // interceptor's own POST /auth/refresh, causing two concurrent refresh calls
+        // with the same token — one wins, one gets 401, and the interceptor's failure
+        // path clears state regardless. Just reset to logged-out.
+        await clearTokens();
+        set({ user: null, isAuthenticated: false, isLoading: false });
       }
     } catch {
       await clearTokens();

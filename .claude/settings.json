@@ -35,7 +35,8 @@
       "Bash(node -e \"require\\('pg'\\)\")",
       "Bash(node -e \"require\\('@prisma/adapter-pg'\\)\")",
       "WebSearch",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(node -e \"require\\('dotenv'\\)\")"
     ],
     "additionalDirectories": [
       "/home/joe7432/.claude"
