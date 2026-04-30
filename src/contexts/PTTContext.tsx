@@ -16,6 +16,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { mmkvStorage } from '@/utils/mmkv';
 import { apiClient } from '@/api/client';
 import { generateUUIDv4 } from '@/utils/uuid';
+import { clientLog } from '@/services/clientLogger';
 
 // HTTP helper for ptt:start / ptt:stop / ptt:native_log / register-token.
 // Routed through apiClient (NOT bespoke fetch) so the response interceptor
@@ -286,7 +287,14 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     // Transmission started from the native PTT framework (Dynamic Island, lock screen,
     // Bluetooth accessory) — NOT from the in-app PTT button (which calls startTransmitting()).
     const unsubStart = nativePTTService.onTransmissionStarted(({ source }) => {
-      const { pttState } = usePTTStore.getState();
+      const { pttState, currentGroupId } = usePTTStore.getState();
+      clientLog('ptt:delegate:didBeginTransmitting', `source=${source}`, {
+        source,
+        pttState,
+        groupId: currentGroupId,
+        channelUUID: nativePTTChannelIdRef.current,
+        alreadyTransmitting: pttState === 'transmitting',
+      });
       if (pttState === 'transmitting') return;
       beginTransmit(/* ownedByNativeButton */ true);
       usePTTStore.getState().setTransmitting(true);
@@ -299,6 +307,13 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     const unsubEnd = nativePTTService.onTransmissionEnded((_) => {
       const { currentGroupId, pttState } = usePTTStore.getState();
       const durationMs = Date.now() - transmitStateRef.current.startedAt;
+      clientLog('ptt:delegate:didEndTransmitting', 'delegate fired', {
+        groupId: currentGroupId,
+        channelUUID: nativePTTChannelIdRef.current,
+        pttStateBefore: pttState,
+        startEmittedBefore: transmitStateRef.current.startEmitted,
+        durationMs,
+      });
       endTransmit();
       if (pttState !== 'transmitting') return;
       usePTTStore.getState().setTransmitting(false);
@@ -323,6 +338,14 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
     // Transmission failed (e.g. active cellular call)
     const unsubFail = nativePTTService.onTransmissionFailed((_channelId, error) => {
+      const { currentGroupId, pttState } = usePTTStore.getState();
+      clientLog('ptt:delegate:onPTTError', error, {
+        channelId: _channelId,
+        activeChannelUUID: nativePTTChannelIdRef.current,
+        groupId: currentGroupId,
+        pttStateBefore: pttState,
+        wasTransmitting: transmitStateRef.current.isTransmitting,
+      });
       usePTTStore.getState().setTransmitting(false);
       endTransmit();
       pttRecorderService.cancel();
@@ -344,8 +367,14 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
     // iOS activates audio session — now safe to open mic or play audio
     const unsubActivated = nativePTTService.onAudioActivated(() => {
+      const { currentGroupId } = usePTTStore.getState();
+      clientLog('ptt:delegate:didActivateAudioSession', 'session activated', {
+        isTransmitting: transmitStateRef.current.isTransmitting,
+        startEmitted: transmitStateRef.current.startEmitted,
+        groupId: currentGroupId,
+        channelUUID: nativePTTChannelIdRef.current,
+      });
       if (transmitStateRef.current.isTransmitting) {
-        const { currentGroupId } = usePTTStore.getState();
         // Unmute first so the LiveKit track is live before server starts egress
         if (micTrackRef.current) { micTrackRef.current.unmute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null); }
         // HTTP ptt:start after audio session is confirmed live.
@@ -369,6 +398,9 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     // conflict and ends the PTT channel, which is why subsequent Dynamic Island
     // presses fail until the user re-joins the channel from the app.
     const unsubDeactivated = nativePTTService.onAudioDeactivated(() => {
+      clientLog('ptt:delegate:didDeactivateAudioSession', 'session deactivated', {
+        channelUUID: nativePTTChannelIdRef.current,
+      });
       if (micTrackRef.current) { micTrackRef.current.mute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null); }
     });
 
@@ -385,9 +417,15 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     // any path that might tear down the active channel right after join
     // (e.g. mount-time leftover cleanup).
     const unsubLeft = nativePTTService.onChannelLeft((channelId) => {
+      const isStale = !nativePTTChannelIdRef.current || channelId !== nativePTTChannelIdRef.current;
+      clientLog('ptt:delegate:didLeaveChannel', `stale=${isStale}`, {
+        leavingChannelId: channelId,
+        activeChannelUUID: nativePTTChannelIdRef.current,
+        cleanupArmed: cleanupLeaveRef.current,
+      });
       // Stale leaves for previous-session UUIDs land here harmlessly: the
       // active channel UUID is different, so we early-return. No disconnect.
-      if (!nativePTTChannelIdRef.current || channelId !== nativePTTChannelIdRef.current) {
+      if (isStale) {
         return;
       }
       // Defensive: if a real leave event for the active channel arrives
@@ -605,7 +643,11 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // ─── joinChannel ────────────────────────────────────────────────────────────
   const joinChannel = useCallback(
     async (groupId: string) => {
-      if (!socket) return;
+      clientLog('ptt:js:joinChannel:start', 'invoked', { groupId, socketReady: !!socket });
+      if (!socket) {
+        clientLog('ptt:js:joinChannel:noSocket', 'aborted — socket missing');
+        return;
+      }
 
       // fetchToken can fail (network down, server 4xx/5xx). Without the catch
       // the promise rejects further down with no breadcrumb, and the UI is
@@ -928,6 +970,10 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
             // leaves. cleanupLeaveRef stays armed as a defensive net.
             const channelUUID = generateUUIDv4();
             cleanupLeaveRef.current = true;
+            clientLog('ptt:js:joinChannel:nativeInit', 'calling initialize:', {
+              groupId,
+              channelUUID,
+            });
 
             const resolvedId = await nativePTTService.joinChannel(
               groupId,
@@ -955,6 +1001,11 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       usePTTStore.getState().setConnected(true);
       usePTTStore.getState().fetchParticipants(groupId);
       usePTTLogStore.getState().fetchLogs(groupId);
+      clientLog('ptt:js:joinChannel:done', 'joined', {
+        groupId,
+        channelUUID: nativePTTChannelIdRef.current,
+        nativePTTActive: nativePTTActiveRef.current,
+      });
     },
     [socket, endLiveActivity],
   );
@@ -962,6 +1013,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // ─── leaveChannel ───────────────────────────────────────────────────────────
   const leaveChannel = useCallback(() => {
     const { currentGroupId, pttState } = usePTTStore.getState();
+    clientLog('ptt:js:leaveChannel', 'invoked', {
+      groupId: currentGroupId,
+      pttState,
+      isTransmitting: transmitStateRef.current.isTransmitting,
+      channelUUID: nativePTTChannelIdRef.current,
+    });
 
     // If the user leaves while transmitting, fire an HTTP stop before tearing down.
     // Without this the server-side egress keeps recording until the socket drops and
@@ -1037,20 +1094,27 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // ─── startTransmitting ──────────────────────────────────────────────────────
   const startTransmitting = useCallback(() => {
     const { currentGroupId, pttState } = usePTTStore.getState();
-    console.info('[PTT] startTransmitting invoked', {
-      currentGroupId,
+    const ctx = {
+      groupId: currentGroupId,
       pttState,
       socketReady: !!(socketRef.current ?? socket),
       socketConnected: (socketRef.current ?? socket)?.connected,
       nativePTTActive: nativePTTActiveRef.current,
-      nativePTTChannelId: nativePTTChannelIdRef.current,
-      pttStartEmitted: transmitStateRef.current.startEmitted,
-    });
+      channelUUID: nativePTTChannelIdRef.current,
+      startEmitted: transmitStateRef.current.startEmitted,
+      isTransmitting: transmitStateRef.current.isTransmitting,
+    };
+    console.info('[PTT] startTransmitting invoked', ctx);
+    clientLog('ptt:js:startTransmitting', 'press received', ctx);
     if (!currentGroupId) {
       console.warn('[PTT] startTransmitting: no current group — user not joined to a channel');
+      clientLog('ptt:js:startTransmitting:noGroup', 'aborted — no current group');
       return;
     }
-    if (pttState === 'transmitting') return;
+    if (pttState === 'transmitting') {
+      clientLog('ptt:js:startTransmitting:alreadyTransmitting', 'aborted — already transmitting');
+      return;
+    }
 
     // Optimistically flip the UI to "transmitting" FIRST, so the button turns red
     // the instant the user presses it — independent of socket/native-framework state.
@@ -1159,6 +1223,15 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     // (pttState → idle) while the mic track remains unmuted — without this
     // check the mic stays live.
     const wasTransmitting = pttState === 'transmitting' || transmitStateRef.current.isTransmitting;
+    clientLog('ptt:js:stopTransmitting', 'release received', {
+      groupId: currentGroupId,
+      pttState,
+      wasTransmitting,
+      startEmitted: transmitStateRef.current.startEmitted,
+      ownedByNativeButton: transmitStateRef.current.ownedByNativeButton,
+      nativePTTActive: nativePTTActiveRef.current,
+      channelUUID: nativePTTChannelIdRef.current,
+    });
 
     // Expire the stale-leave grace window on every button release — including
     // the case where onTransmissionFailed already reset state (wasTransmitting=false),
