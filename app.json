@@ -67,7 +67,7 @@
         "android.permission.BLUETOOTH_CONNECT",
         "android.permission.ACCESS_NOTIFICATION_POLICY"
       ],
-      "versionCode": 2
+      "versionCode": 3
     },
     "plugins": [
       [
