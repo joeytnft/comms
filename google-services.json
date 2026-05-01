@@ -7,6 +7,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:599236306534:android:a0c9d9226da630f54eafa7",
+        "android_client_info": {
+          "package_name": "com.gathersafe2.www"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCrfjwwQB3eEt2J6rid9Al8Q-6Yhw4kvs4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:599236306534:android:54b4b3cd830155af4eafa7",
         "android_client_info": {
           "package_name": "com.gathersafeapp.app"
