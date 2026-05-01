@@ -102,6 +102,10 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   const intentionalLeaveRef = useRef(false);
   // True only when native PTT framework successfully joined a channel this session
   const nativePTTActiveRef = useRef(false);
+  // Timestamp after which the iOS PTT framework is considered ready for a new press.
+  // The framework has a brief unavailable window after a stop; pressing into it causes
+  // immediate onTransmissionFailed, which manifests as a red→green jitter to the user.
+  const transmitCooldownUntilRef = useRef(0);
   // Live Activity ID for the current PTT session (iOS 16.2+ — currently
   // disabled at build time via app.json; the ref is retained as a no-op
   // anchor in case Live Activities are re-enabled later).
@@ -349,9 +353,11 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       // here prevents this late delegate from wiping a rapid re-press's state.
       if (stopTransmittingCalledRef.current) {
         stopTransmittingCalledRef.current = false;
+        transmitCooldownUntilRef.current = Date.now() + 200;
         return;
       }
       endTransmit();
+      transmitCooldownUntilRef.current = Date.now() + 200;
       if (pttState !== 'transmitting') return;
       usePTTStore.getState().setTransmitting(false);
       if (micTrackRef.current) { micTrackRef.current.mute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(false).catch(() => null); }
@@ -385,6 +391,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       });
       usePTTStore.getState().setTransmitting(false);
       endTransmit();
+      transmitCooldownUntilRef.current = Date.now() + 200;
       pttRecorderService.cancel();
       // Clear the Live Activity — startTransmitting already set isTransmitting:true,
       // but stopTransmitting returns early (wasTransmitting=false) once this handler
@@ -1214,6 +1221,11 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       clientLog('ptt:js:startTransmitting:alreadyTransmitting', 'aborted — already transmitting');
       return;
     }
+    const cooldownRemaining = transmitCooldownUntilRef.current - Date.now();
+    if (nativePTTActiveRef.current && cooldownRemaining > 0) {
+      clientLog('ptt:js:startTransmitting:cooldown', 'aborted — framework cooldown', { cooldownRemaining });
+      return;
+    }
 
     // Optimistically flip the UI to "transmitting" FIRST, so the button turns red
     // the instant the user presses it — independent of socket/native-framework state.
@@ -1291,9 +1303,14 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         };
         nativePTTService.beginTransmitting(nativePTTChannelIdRef.current).catch((err) => {
           console.warn('[PTT] beginTransmitting failed', err);
+          endTransmit();
+          usePTTStore.getState().setTransmitting(false);
+          transmitCooldownUntilRef.current = Date.now() + 200;
         });
       } else {
         console.warn('[PTT] native PTT active but no channel id — cannot begin transmission');
+        endTransmit();
+        usePTTStore.getState().setTransmitting(false);
       }
     } else {
       // iOS (PTT framework unavailable or init failed) or Android
@@ -1354,6 +1371,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     const durationMs = Date.now() - transmitStateRef.current.startedAt;
     const startWasEmitted = transmitStateRef.current.startEmitted;
     endTransmit();
+    transmitCooldownUntilRef.current = Date.now() + 200;
     if (pttState === 'transmitting') usePTTStore.getState().setTransmitting(false);
 
     // Always mute the mic first — this is safe to call even in the stuck-mic scenario
