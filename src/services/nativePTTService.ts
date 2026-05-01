@@ -11,8 +11,9 @@ import { Platform, NativeModules, NativeEventEmitter } from 'react-native';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type PTTTransmitSource = 'user' | 'systemUI' | 'bluetooth';
-export type PTTServiceStatus  = 'ready' | 'connecting' | 'disrupted';
+export type PTTTransmitSource   = 'user' | 'systemUI' | 'bluetooth';
+export type PTTServiceStatus    = 'ready' | 'connecting' | 'disrupted';
+export type PTTChannelLeaveReason = 'user' | 'systemUI' | 'system';
 
 export interface PTTTransmissionEvent {
   channelId: string;
@@ -148,8 +149,11 @@ function onChannelJoined(cb: (channelId: string) => void): Unsubscribe {
   return on('onPTTChannelJoined', (d) => cb(d.channelId as string));
 }
 
-function onChannelLeft(cb: (channelId: string) => void): Unsubscribe {
-  return on('onPTTChannelLeft', (d) => cb(d.channelId as string));
+function onChannelLeft(cb: (channelId: string, reason: PTTChannelLeaveReason) => void): Unsubscribe {
+  return on('onPTTChannelLeft', (d) => cb(
+    d.channelId as string,
+    (d.reason as PTTChannelLeaveReason) ?? 'system',
+  ));
 }
 
 function onJoinFailed(cb: (channelId: string, error: string) => void): Unsubscribe {

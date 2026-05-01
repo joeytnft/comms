@@ -169,14 +169,14 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // late-arriving onTransmissionEnded delegate — queued by iOS before the stop
   // call landed — doesn't wipe a rapid re-press's beginTransmit() state.
   const stopTransmittingCalledRef = useRef(false);
-  // Set to true when the mount-cleanup leaveChannel() call is in flight so the
-  // resulting onPTTChannelLeft event (which iOS queues and fires asynchronously,
-  // sometimes hundreds of ms later) is not mistaken for a real user-initiated leave.
-  // Also armed in joinChannel as a defensive net for the deferred stale-leave
-  // that iOS queues during initialize() — although the native module now
-  // self-heals those silently, this stays in case the JS bundle and native
-  // binary versions ever drift apart.
-  const cleanupLeaveRef = useRef(false);
+  // Absolute timestamp until which system-initiated onPTTChannelLeft events for
+  // the active channel UUID are suppressed. Set to Date.now()+3000 at join.
+  // iOS fires multiple didLeaveChannelWithUUID events during rapid channel
+  // switching and during the native self-heal cascade; the 3-second window
+  // absorbs all of them without a one-shot boolean that could be prematurely
+  // consumed by the first event, leaving the second to freeze the PTT button.
+  // Events with reason="user" or "systemUI" bypass the window unconditionally.
+  const joinGraceWindowUntilRef = useRef(0);
   // Guard against two concurrent joinChannel() calls (rapid group switch).
   const joinInProgressRef = useRef(false);
   // Wall-clock time of the most recent successful join. Used to decide whether
@@ -271,10 +271,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         mmkvStorage.delete(LIVE_ACTIVITY_ID_KEY);
       }
       if (storedChannelId && USE_NATIVE_PTT) {
-        // Flag that a stale onPTTChannelLeft is now in flight — the iOS PTT framework
-        // queues this callback on the main thread and may deliver it hundreds of ms
-        // after leaveChannel returns (e.g. right when the user releases the PTT button).
-        cleanupLeaveRef.current = true;
+        // nativePTTChannelIdRef is null at mount — the resulting onPTTChannelLeft
+        // for the stale channel is caught by the isStale check in the handler.
         nativePTTService.leaveChannel(storedChannelId).catch(() => null);
         mmkvStorage.delete(PTT_CHANNEL_ID_KEY);
       }
@@ -469,26 +467,29 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     // match nativePTTChannelIdRef.current (which is the active session's
     // UUID), so we early-return without disconnecting.
     //
-    // cleanupLeaveRef is still armed in joinChannel as a defensive net for
-    // any path that might tear down the active channel right after join
-    // (e.g. mount-time leftover cleanup).
-    const unsubLeft = nativePTTService.onChannelLeft((channelId) => {
+    // A 3-second grace window is opened in joinChannel so system-initiated
+    // leaves landing immediately after join are suppressed without consuming
+    // a one-shot flag.
+    const unsubLeft = nativePTTService.onChannelLeft((channelId, reason) => {
       const isStale = !nativePTTChannelIdRef.current || channelId !== nativePTTChannelIdRef.current;
-      clientLog('ptt:delegate:didLeaveChannel', `stale=${isStale}`, {
+      const graceWindowActive = Date.now() < joinGraceWindowUntilRef.current;
+      clientLog('ptt:delegate:didLeaveChannel', `stale=${isStale} reason=${reason}`, {
         leavingChannelId: channelId,
         activeChannelUUID: nativePTTChannelIdRef.current,
-        cleanupArmed: cleanupLeaveRef.current,
+        reason,
+        graceWindowActive,
       });
       // Stale leaves for previous-session UUIDs land here harmlessly: the
       // active channel UUID is different, so we early-return. No disconnect.
       if (isStale) {
         return;
       }
-      // Defensive: if a real leave event for the active channel arrives
-      // immediately after join (mount-time race), let cleanupLeaveRef
-      // consume it so we don't tear down the session.
-      if (cleanupLeaveRef.current) {
-        cleanupLeaveRef.current = false;
+      // System-initiated leave within the post-join grace window. iOS fires
+      // multiple didLeaveChannelWithUUID events during rapid channel switching
+      // and from the native self-heal cascade. The 3-second window absorbs all
+      // of them; events with reason "user" or "systemUI" bypass it so a real
+      // Dynamic Island leave always takes effect immediately.
+      if (reason === 'system' && graceWindowActive) {
         return;
       }
 
@@ -1080,7 +1081,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
             // the deferred didLeaveChannelWithUUID iOS queues on initialize()
             // refers to a UUID we no longer care about, so the native
             // self-heal path doesn't have to disambiguate stale-vs-real
-            // leaves. cleanupLeaveRef stays armed as a defensive net.
+            // leaves. joinGraceWindowUntilRef is set below as a defensive net.
             const channelUUID = generateUUIDv4();
             joiningChannelIdRef.current = channelUUID;
             // Persist BEFORE the native join so the UUID survives a force-kill
@@ -1089,7 +1090,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
             // this the next cold launch has no stored UUID to call leaveChannel
             // with, leaving the Dynamic Island stuck until iOS times out.
             mmkvStorage.setString(PTT_CHANNEL_ID_KEY, channelUUID);
-            cleanupLeaveRef.current = true;
+            joinGraceWindowUntilRef.current = Date.now() + 3000;
             clientLog('ptt:js:joinChannel:nativeInit', 'calling initialize:', {
               groupId,
               channelUUID,
@@ -1375,14 +1376,6 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       nativePTTActive: nativePTTActiveRef.current,
       channelUUID: nativePTTChannelIdRef.current,
     });
-
-    // Expire the stale-leave grace window on every button release — including
-    // the case where onTransmissionFailed already reset state (wasTransmitting=false),
-    // which causes the early return below and would otherwise leave
-    // cleanupLeaveRef=true forever, silently swallowing the next real leave event.
-    if (cleanupLeaveRef.current) {
-      setTimeout(() => { cleanupLeaveRef.current = false; }, 1500);
-    }
 
     if (!currentGroupId || !wasTransmitting) return;
 
