@@ -47,7 +47,10 @@
       "Bash(git -C /home/joe7432/comms diff app.json)",
       "Bash(git -C /home/joe7432/comms add app.json)",
       "Bash(git -C /home/joe7432/comms commit -m \"chore: bump android compileSdkVersion to 36\")",
-      "Bash(git -C /home/joe7432/comms push)"
+      "Bash(git -C /home/joe7432/comms push)",
+      "Bash(sudo apt-get *)",
+      "Bash(ln -sf /usr/bin/adb \"/mnt/c/Users/joe74/AppData/Local/Android/Sdk/platform-tools/adb\")",
+      "Read(//mnt/c/Users/joe74/AppData/Local/Android/Sdk/platform-tools/**)"
     ],
     "additionalDirectories": [
       "/home/joe7432/.claude"
