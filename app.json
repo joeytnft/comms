@@ -67,7 +67,7 @@
         "android.permission.BLUETOOTH_CONNECT",
         "android.permission.ACCESS_NOTIFICATION_POLICY"
       ],
-      "versionCode": 3
+      "versionCode": 4
     },
     "plugins": [
       [
@@ -90,7 +90,7 @@
         "expo-build-properties",
         {
           "android": {
-            "compileSdkVersion": 35,
+            "compileSdkVersion": 36,
             "targetSdkVersion": 35,
             "minSdkVersion": 26
           },
