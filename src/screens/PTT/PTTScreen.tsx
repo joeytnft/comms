@@ -5,9 +5,11 @@ import { Audio, AVPlaybackStatus } from 'expo-av';
 import { usePTT } from '@/contexts/PTTContext';
 import { useGroupStore } from '@/store/useGroupStore';
 import { usePTTStore } from '@/store/usePTTStore';
+import { useAuthStore } from '@/store/useAuthStore';
 import { usePTTLogStore } from '@/store/usePTTLogStore';
 import { PTTButton } from '@/components/ptt/PTTButton';
 import { VoiceIndicator } from '@/components/ptt/VoiceIndicator';
+import { ConnectedMembersList } from '@/components/ptt/ConnectedMembersList';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
 import { Group, PttLog } from '@/types';
 
@@ -20,11 +22,13 @@ export function PTTScreen() {
     currentGroupName,
     activeSpeaker,
     connectedMemberCount,
+    connectedParticipants,
     startTransmitting,
     stopTransmitting,
     joinChannel,
     leaveChannel,
   } = usePTT();
+  const currentUser = useAuthStore((s) => s.user);
 
   const { groups, fetchGroups } = useGroupStore();
   const { error, clearError } = usePTTStore();
@@ -178,12 +182,17 @@ export function PTTScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Connected members count */}
+      {/* Connected members */}
       <View style={styles.statusBar}>
         <Text style={styles.statusText}>
           {connectedMemberCount} member{connectedMemberCount !== 1 ? 's' : ''} online
         </Text>
       </View>
+      <ConnectedMembersList
+        participants={connectedParticipants}
+        activeSpeakerId={activeSpeaker?.userId}
+        currentUserId={currentUser?.id}
+      />
 
       {/* Active speaker indicator */}
       {activeSpeaker && (

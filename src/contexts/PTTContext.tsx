@@ -70,6 +70,7 @@ interface PTTContextType {
   currentGroupName: string | null;
   activeSpeaker: { userId: string; displayName: string } | null;
   connectedMemberCount: number;
+  connectedParticipants: import('@/services/pttService').PTTParticipant[];
   startTransmitting: () => void;
   stopTransmitting: () => void;
   joinChannel: (groupId: string) => Promise<void>;
@@ -98,6 +99,11 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   const callUUIDRef = useRef<string | null>(null);
   // Active PTT channel UUID (iOS native PTT)
   const nativePTTChannelIdRef = useRef<string | null>(null);
+  // UUID of a channel join that is currently in flight (between the moment we
+  // generate the UUID and the moment joinChannel resolves). If the user taps
+  // Leave during this gap, nativePTTChannelIdRef is null but we still need
+  // a UUID to pass to requestLeaveChannelWithUUID so the Dynamic Island closes.
+  const joiningChannelIdRef = useRef<string | null>(null);
   // Set to true when the user deliberately calls leaveChannel
   const intentionalLeaveRef = useRef(false);
   // True only when native PTT framework successfully joined a channel this session
@@ -240,37 +246,43 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // queue a ptt:leave for when the socket reconnects — otherwise the server keeps
   // the user in the room indefinitely.
   useEffect(() => {
-    // Apple: "Initialize the channel manager as soon as possible during
-    // startup to ensure the framework can restore existing channels and
-    // deliver push notifications to the app." Without this preinit, an
-    // active PTT channel that iOS persisted across app relaunches (e.g.
-    // after a crash) cannot be restored — the framework needs a live
-    // channelManager + restorationDelegate before it will fire the
-    // restoration path. The call is idempotent.
-    nativePTTService.preinit().catch(() => null);
+    (async () => {
+      // Apple: "Initialize the channel manager as soon as possible during
+      // startup to ensure the framework can restore existing channels and
+      // deliver push notifications to the app." Without this preinit, an
+      // active PTT channel that iOS persisted across app relaunches (e.g.
+      // after a crash) cannot be restored — the framework needs a live
+      // channelManager + restorationDelegate before it will fire the
+      // restoration path. The call is idempotent.
+      //
+      // MUST await: leaveChannel below calls requestLeaveChannelWithUUID on
+      // _channelManager. If preinit hasn't finished, _channelManager is nil
+      // and the leave is a silent no-op — the Dynamic Island stays stuck.
+      await nativePTTService.preinit().catch(() => null);
 
-    if (usePTTStore.getState().isConnected) return;
+      if (usePTTStore.getState().isConnected) return;
 
-    const storedActivityId = mmkvStorage.getString(LIVE_ACTIVITY_ID_KEY);
-    const storedGroupId    = mmkvStorage.getString(PTT_GROUP_ID_KEY);
-    const storedChannelId  = mmkvStorage.getString(PTT_CHANNEL_ID_KEY);
+      const storedActivityId = mmkvStorage.getString(LIVE_ACTIVITY_ID_KEY);
+      const storedGroupId    = mmkvStorage.getString(PTT_GROUP_ID_KEY);
+      const storedChannelId  = mmkvStorage.getString(PTT_CHANNEL_ID_KEY);
 
-    if (storedActivityId) {
-      liveActivityService.end(storedActivityId);
-      mmkvStorage.delete(LIVE_ACTIVITY_ID_KEY);
-    }
-    if (storedChannelId && USE_NATIVE_PTT) {
-      // Flag that a stale onPTTChannelLeft is now in flight — the iOS PTT framework
-      // queues this callback on the main thread and may deliver it hundreds of ms
-      // after leaveChannel returns (e.g. right when the user releases the PTT button).
-      cleanupLeaveRef.current = true;
-      nativePTTService.leaveChannel(storedChannelId).catch(() => null);
-      mmkvStorage.delete(PTT_CHANNEL_ID_KEY);
-    }
-    if (storedGroupId) {
-      pendingLeaveGroupIdRef.current = storedGroupId;
-      mmkvStorage.delete(PTT_GROUP_ID_KEY);
-    }
+      if (storedActivityId) {
+        liveActivityService.end(storedActivityId);
+        mmkvStorage.delete(LIVE_ACTIVITY_ID_KEY);
+      }
+      if (storedChannelId && USE_NATIVE_PTT) {
+        // Flag that a stale onPTTChannelLeft is now in flight — the iOS PTT framework
+        // queues this callback on the main thread and may deliver it hundreds of ms
+        // after leaveChannel returns (e.g. right when the user releases the PTT button).
+        cleanupLeaveRef.current = true;
+        nativePTTService.leaveChannel(storedChannelId).catch(() => null);
+        mmkvStorage.delete(PTT_CHANNEL_ID_KEY);
+      }
+      if (storedGroupId) {
+        pendingLeaveGroupIdRef.current = storedGroupId;
+        mmkvStorage.delete(PTT_GROUP_ID_KEY);
+      }
+    })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1070,6 +1082,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
             // self-heal path doesn't have to disambiguate stale-vs-real
             // leaves. cleanupLeaveRef stays armed as a defensive net.
             const channelUUID = generateUUIDv4();
+            joiningChannelIdRef.current = channelUUID;
             cleanupLeaveRef.current = true;
             clientLog('ptt:js:joinChannel:nativeInit', 'calling initialize:', {
               groupId,
@@ -1081,6 +1094,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
               response.groupName,
               channelUUID,
             );
+            joiningChannelIdRef.current = null;
             nativePTTChannelIdRef.current = resolvedId;
             nativePTTActiveRef.current = true;
             if (resolvedId) mmkvStorage.setString(PTT_CHANNEL_ID_KEY, resolvedId);
@@ -1092,6 +1106,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
             // to direct LiveKit mode. Reactivate the session because the
             // framework is not going to manage it for us.
             console.warn('[PTT] Native PTT init failed, using direct LiveKit mode:', nativeErr);
+            joiningChannelIdRef.current = null;
             nativePTTChannelIdRef.current = null;
             AudioSession?.startAudioSession();
           }
@@ -1163,10 +1178,14 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       }
       subRoomsRef.current = [];
 
-      if (nativePTTActiveRef.current) {
-        if (nativePTTChannelIdRef.current) {
-          nativePTTService.leaveChannel(nativePTTChannelIdRef.current).catch(() => null);
+      if (nativePTTActiveRef.current || joiningChannelIdRef.current) {
+        // Use the active channel UUID, or the in-flight join UUID if joinChannel
+        // is mid-execution (nativePTTActiveRef is still false in that gap).
+        const channelToLeave = nativePTTChannelIdRef.current ?? joiningChannelIdRef.current;
+        if (channelToLeave) {
+          nativePTTService.leaveChannel(channelToLeave).catch(() => null);
           nativePTTChannelIdRef.current = null;
+          joiningChannelIdRef.current = null;
         }
         nativePTTActiveRef.current = false;
       } else if (Platform.OS === 'android') {
@@ -1464,6 +1483,9 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         currentGroupName: store.currentGroupName,
         activeSpeaker: store.activeSpeaker,
         connectedMemberCount: store.connectedMemberIds.length,
+        connectedParticipants: store.participants.filter((p) =>
+          store.connectedMemberIds.includes(p.userId),
+        ),
         startTransmitting,
         stopTransmitting,
         joinChannel,
