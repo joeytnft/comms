@@ -42,7 +42,12 @@
       "Bash(grep -E '^pg$|^@prisma$')",
       "Bash(chmod -R u+w /home/joe7432/comms/android)",
       "Bash(chmod -R 777 /home/joe7432/comms/android)",
-      "Bash(git -C /home/joe7432/comms status google-services.json)"
+      "Bash(git -C /home/joe7432/comms status google-services.json)",
+      "Bash(git -C /home/joe7432/comms status)",
+      "Bash(git -C /home/joe7432/comms diff app.json)",
+      "Bash(git -C /home/joe7432/comms add app.json)",
+      "Bash(git -C /home/joe7432/comms commit -m \"chore: bump android compileSdkVersion to 36\")",
+      "Bash(git -C /home/joe7432/comms push)"
     ],
     "additionalDirectories": [
       "/home/joe7432/.claude"
