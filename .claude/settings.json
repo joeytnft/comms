@@ -39,7 +39,8 @@
       "Bash(node -e \"require\\('dotenv'\\)\")",
       "Bash(npm uninstall *)",
       "Bash(npm run *)",
-      "Bash(grep -E '^pg$|^@prisma$')"
+      "Bash(grep -E '^pg$|^@prisma$')",
+      "Bash(chmod -R u+w /home/joe7432/comms/android)"
     ],
     "additionalDirectories": [
       "/home/joe7432/.claude"
