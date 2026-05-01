@@ -41,7 +41,8 @@
       "Bash(npm run *)",
       "Bash(grep -E '^pg$|^@prisma$')",
       "Bash(chmod -R u+w /home/joe7432/comms/android)",
-      "Bash(chmod -R 777 /home/joe7432/comms/android)"
+      "Bash(chmod -R 777 /home/joe7432/comms/android)",
+      "Bash(git -C /home/joe7432/comms status google-services.json)"
     ],
     "additionalDirectories": [
       "/home/joe7432/.claude"
