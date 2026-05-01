@@ -1083,6 +1083,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
             // leaves. cleanupLeaveRef stays armed as a defensive net.
             const channelUUID = generateUUIDv4();
             joiningChannelIdRef.current = channelUUID;
+            // Persist BEFORE the native join so the UUID survives a force-kill
+            // that occurs after iOS shows the Dynamic Island (during channel
+            // registration) but before JS could write it post-await. Without
+            // this the next cold launch has no stored UUID to call leaveChannel
+            // with, leaving the Dynamic Island stuck until iOS times out.
+            mmkvStorage.setString(PTT_CHANNEL_ID_KEY, channelUUID);
             cleanupLeaveRef.current = true;
             clientLog('ptt:js:joinChannel:nativeInit', 'calling initialize:', {
               groupId,
@@ -1097,7 +1103,9 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
             joiningChannelIdRef.current = null;
             nativePTTChannelIdRef.current = resolvedId;
             nativePTTActiveRef.current = true;
-            if (resolvedId) mmkvStorage.setString(PTT_CHANNEL_ID_KEY, resolvedId);
+            // resolvedId normally equals channelUUID; update only if they differ
+            // (e.g. UUID case normalisation by iOS returning uppercase).
+            if (resolvedId && resolvedId !== channelUUID) mmkvStorage.setString(PTT_CHANNEL_ID_KEY, resolvedId);
 
             // Report service as "ready" in system UI
             nativePTTService.setServiceStatus(resolvedId, 'ready').catch(() => null);
