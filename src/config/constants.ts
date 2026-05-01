@@ -20,6 +20,7 @@ export const SOCKET_RECONNECT_JITTER = 0.5;        // ±50% randomisation
 export const ACCESS_TOKEN_KEY = 'guardian_access_token';
 export const REFRESH_TOKEN_KEY = 'guardian_refresh_token';
 export const USER_KEY = 'guardian_user';
+export const ORG_KEY = 'guardian_org';
 export const PIN_KEY = 'guardian_pin';
 
 // Encryption

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { secureStorage } from '@/utils/secureStorage';
 import { User, AuthTokens, LoginCredentials, RegisterData } from '@/types';
-import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY } from '@/config/constants';
+import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY, ORG_KEY } from '@/config/constants';
 import { authService } from '@/services/authService';
 import { biometricAuth } from '@/utils/biometricAuth';
 
@@ -34,6 +34,7 @@ async function clearTokens(): Promise<void> {
   await secureStorage.deleteItemAsync(ACCESS_TOKEN_KEY);
   await secureStorage.deleteItemAsync(REFRESH_TOKEN_KEY);
   await secureStorage.deleteItemAsync(USER_KEY);
+  await secureStorage.deleteItemAsync(ORG_KEY);
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -56,6 +57,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await storeTokens(tokens);
       await secureStorage.setItemAsync(USER_KEY, JSON.stringify(user));
       set({ user, isAuthenticated: true, isLoading: false });
+      // Fetch org (including invite code) right after login
+      try {
+        const { organization } = await authService.getMe();
+        if (organization) {
+          set({ organization });
+          await secureStorage.setItemAsync(ORG_KEY, JSON.stringify(organization));
+        }
+      } catch { /* non-fatal */ }
     } catch (error) {
       set({ isLoading: false });
       throw error;
@@ -69,6 +78,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await storeTokens(tokens);
       await secureStorage.setItemAsync(USER_KEY, JSON.stringify(user));
       set({ user, isAuthenticated: true, isLoading: false });
+      // Fetch org (including invite code) right after register
+      try {
+        const { organization } = await authService.getMe();
+        if (organization) {
+          set({ organization });
+          await secureStorage.setItemAsync(ORG_KEY, JSON.stringify(organization));
+        }
+      } catch { /* non-fatal */ }
     } catch (error) {
       set({ isLoading: false });
       throw error;
@@ -107,6 +124,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const { user: freshUser, organization } = await authService.getMe();
         set({ user: freshUser, organization: organization ?? null });
         await secureStorage.setItemAsync(USER_KEY, JSON.stringify(freshUser));
+        if (organization) await secureStorage.setItemAsync(ORG_KEY, JSON.stringify(organization));
       } catch {
         // Non-fatal — tokens were refreshed, profile fetch can retry later
       }
@@ -128,13 +146,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       const user = JSON.parse(userJson) as User;
-      set({ user, isAuthenticated: true, isLoading: false });
+      // Restore org immediately from cache so invite code is visible before getMe() resolves
+      const orgJson = await secureStorage.getItemAsync(ORG_KEY);
+      const cachedOrg = orgJson ? JSON.parse(orgJson) as Organization : null;
+      set({ user, organization: cachedOrg, isAuthenticated: true, isLoading: false });
 
       // Validate the session by fetching current user in the background
       try {
         const { user: freshUser, organization } = await authService.getMe();
         set({ user: freshUser, organization: organization ?? null });
         await secureStorage.setItemAsync(USER_KEY, JSON.stringify(freshUser));
+        if (organization) await secureStorage.setItemAsync(ORG_KEY, JSON.stringify(organization));
       } catch {
         // getMe() failed AND the interceptor's refresh attempt (if any) already failed
         // and cleared the tokens. A second refreshSession() here races with the

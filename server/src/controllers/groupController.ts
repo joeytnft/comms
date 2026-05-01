@@ -413,7 +413,7 @@ export async function addMember(
     data: {
       groupId: request.params.id,
       userId: targetUserId,
-      role: role || 'MEMBER',
+      role: (role?.toUpperCase() as 'ADMIN' | 'MEMBER') || 'MEMBER',
     },
     include: {
       user: {

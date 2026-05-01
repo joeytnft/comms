@@ -112,12 +112,14 @@ export async function register(
   }
   // FLOW 3: Create new organization (admin signup)
   else if (organizationName) {
+    const { nanoid } = await import('nanoid');
     organization = await prisma.organization.create({
       data: {
         name: organizationName,
         createdBy: email, // Temporarily use email; will update with userId after user creation
         subscriptionTier: 'FREE',
         subscriptionStatus: 'ACTIVE',
+        inviteCode: nanoid(12),
       },
     });
   }
