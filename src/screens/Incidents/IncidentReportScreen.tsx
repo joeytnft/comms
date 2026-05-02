@@ -19,7 +19,10 @@ import { useIncidentStore } from '@/store/useIncidentStore';
 import { IncidentSeverity, SEVERITY_COLORS, SEVERITY_LABELS } from '@/types';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '@/config/theme';
 import { IncidentStackParamList } from '@/navigation/IncidentStackNavigator';
-import { apiClient } from '@/api/client';
+import * as FileSystem from 'expo-file-system';
+import { secureStorage } from '@/utils/secureStorage';
+import { ACCESS_TOKEN_KEY } from '@/config/constants';
+import { ENV } from '@/config/env';
 
 type Props = {
   navigation: NativeStackNavigationProp<IncidentStackParamList, 'IncidentReport'>;
@@ -28,14 +31,27 @@ type Props = {
 const SEVERITIES: IncidentSeverity[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 
 async function uploadPhoto(uri: string, mimeType: string): Promise<string> {
-  const formData = new FormData();
-  const ext = mimeType.split('/')[1] ?? 'jpg';
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  formData.append('file', { uri, type: mimeType, name: `photo.${ext}` } as any);
+  const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
 
-  // Do NOT set Content-Type — axios sets it with the multipart boundary automatically.
-  const res = await apiClient.post<{ url: string }>('/upload', formData);
-  return res.data.url;
+  // FileSystem.uploadAsync handles content:// and file:// URIs on Android correctly.
+  // Axios + FormData fails on Android because content:// URIs aren't readable by
+  // the XHR layer and the axios default Content-Type: application/json overrides
+  // the multipart boundary. uploadAsync streams the file natively instead.
+  const result = await FileSystem.uploadAsync(`${ENV.apiUrl}/upload`, uri, {
+    httpMethod: 'POST',
+    uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+    fieldName: 'file',
+    mimeType,
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (result.status !== 201) {
+    const body = JSON.parse(result.body) as { error?: string };
+    throw new Error(body.error ?? `Upload failed (${result.status})`);
+  }
+
+  const { url } = JSON.parse(result.body) as { url: string };
+  return url;
 }
 
 export function IncidentReportScreen({ navigation }: Props) {
