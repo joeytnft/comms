@@ -81,6 +81,7 @@
       "./plugins/withPodfileFixes",
       "expo-location",
       "expo-camera",
+      "expo-image-picker",
       "expo-notifications",
       "expo-secure-store",
       "expo-av",

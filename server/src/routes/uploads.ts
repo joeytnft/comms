@@ -23,35 +23,36 @@ const ALLOWED_MIME: Record<string, string> = {
 };
 const MAX_BYTES = 8 * 1024 * 1024; // 8MB
 
-interface UploadBody {
-  data: string;
-  mimeType: string;
-}
-
 export async function uploadRoutes(app: FastifyInstance) {
-  app.post<{ Body: UploadBody }>(
+  app.post(
     '/',
     { preHandler: [authenticate] },
     async (request, reply) => {
-      const { data, mimeType } = request.body ?? {};
-
-      if (!data || !mimeType) {
-        return reply.status(400).send({ error: 'Missing data or mimeType' });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const part = await (request as any).file();
+      if (!part) {
+        return reply.status(400).send({ error: 'No file provided' });
       }
 
+      const mimeType = (part.mimetype ?? '').toString().toLowerCase().trim();
       const ext = ALLOWED_MIME[mimeType];
       if (!ext) {
         return reply.status(400).send({ error: 'Unsupported file type' });
       }
 
-      const buffer = Buffer.from(data, 'base64');
+      const chunks: Buffer[] = [];
+      for await (const chunk of part.file) {
+        chunks.push(chunk as Buffer);
+      }
+      const buffer = Buffer.concat(chunks);
+
+      if (buffer.byteLength === 0) {
+        return reply.status(400).send({ error: 'File is empty' });
+      }
       if (buffer.byteLength > MAX_BYTES) {
         return reply.status(413).send({ error: 'File too large (max 8MB)' });
       }
 
-      // Scope uploads under the caller's org so a leaked URL is at least
-      // contained to one tenant's prefix, and so we can reason about who
-      // owns each object when we later need to rotate or audit them.
       const filename = `${request.organizationId}/${randomUUID()}.${ext}`;
 
       const { error } = await supabase.storage
@@ -63,8 +64,6 @@ export async function uploadRoutes(app: FastifyInstance) {
         return reply.status(500).send({ error: 'Upload failed' });
       }
 
-      // Signed URL with TTL — buckets are private. Clients re-fetch via the
-      // authenticated GET endpoints, which can refresh URLs as needed.
       const { data: signed, error: signErr } = await supabase.storage
         .from(BUCKET)
         .createSignedUrl(filename, 60 * 60 * 24); // 24h

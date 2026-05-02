@@ -19,7 +19,7 @@ import { useIncidentStore } from '@/store/useIncidentStore';
 import { IncidentSeverity, SEVERITY_COLORS, SEVERITY_LABELS } from '@/types';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '@/config/theme';
 import { IncidentStackParamList } from '@/navigation/IncidentStackNavigator';
-import { ENV } from '@/config/env';
+import { apiClient } from '@/api/client';
 
 type Props = {
   navigation: NativeStackNavigationProp<IncidentStackParamList, 'IncidentReport'>;
@@ -27,59 +27,15 @@ type Props = {
 
 const SEVERITIES: IncidentSeverity[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 
-async function uriToBase64(uri: string): Promise<{ data: string; mimeType: string }> {
-  if (Platform.OS === 'web') {
-    const blob = await fetch(uri).then((r) => r.blob());
-    const mimeType = blob.type || 'image/jpeg';
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        resolve({ data: result.split(',')[1], mimeType });
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  }
-  // Native: expo-image-picker base64 is requested via `base64: true` option
-  throw new Error('Use base64 option in ImagePicker for native');
-}
+async function uploadPhoto(uri: string, mimeType: string): Promise<string> {
+  const formData = new FormData();
+  const ext = mimeType.split('/')[1] ?? 'jpg';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  formData.append('file', { uri, type: mimeType, name: `photo.${ext}` } as any);
 
-async function uploadPhoto(uri: string, base64?: string, mimeType?: string): Promise<string> {
-  const { secureStorage } = await import('@/utils/secureStorage');
-  const { ACCESS_TOKEN_KEY } = await import('@/config/constants');
-  const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
-
-  let data: string;
-  let type: string = mimeType ?? 'image/jpeg';
-
-  if (base64) {
-    // Strip data URI prefix if present (some platforms include it)
-    data = base64.includes(',') ? base64.split(',')[1] : base64;
-  } else {
-    // Fallback: fetch the blob URI and convert (web only, when base64 not provided)
-    const result = await uriToBase64(uri);
-    data = result.data;
-    type = result.mimeType;
-  }
-
-  const response = await fetch(`${ENV.apiUrl}/upload`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ data, mimeType: type }),
-  });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({})) as { error?: string };
-    throw new Error(err.error ?? 'Photo upload failed');
-  }
-
-  const { url } = await response.json() as { url: string };
-  // The server returns the full Supabase public URL — do not prepend apiUrl
-  return url;
+  // Do NOT set Content-Type — axios sets it with the multipart boundary automatically.
+  const res = await apiClient.post<{ url: string }>('/upload', formData);
+  return res.data.url;
 }
 
 export function IncidentReportScreen({ navigation }: Props) {
@@ -113,7 +69,6 @@ export function IncidentReportScreen({ navigation }: Props) {
       mediaTypes: 'images',
       quality: 0.7,
       allowsMultipleSelection: false,
-      base64: true,
     };
 
     const result = source === 'camera'
@@ -126,7 +81,7 @@ export function IncidentReportScreen({ navigation }: Props) {
     const mimeType = asset.mimeType ?? 'image/jpeg';
     setIsUploadingPhoto(true);
     try {
-      const url = await uploadPhoto(asset.uri, asset.base64 ?? undefined, mimeType);
+      const url = await uploadPhoto(asset.uri, mimeType);
       setPhotos((prev) => [...prev, url]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Could not upload photo. Please try again.';
