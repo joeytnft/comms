@@ -1342,8 +1342,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       }
     } else {
       // iOS (PTT framework unavailable or init failed) or Android
-      console.info('[PTT] HTTP ptt:start (fallback path)', { currentGroupId });
+      clientLog('ptt:js:startTransmitting:fallback', 'HTTP ptt:start path', { groupId: currentGroupId, platform: Platform.OS });
       pttPost(currentGroupId, 'start').catch(() => null);
+      // markStartEmitted MUST be called here so stopTransmitting sends ptt:stop.
+      // On iOS native PTT this is called from onAudioActivated; on Android/fallback
+      // there is no equivalent callback so we mark it immediately after dispatching start.
+      markStartEmitted();
       if (micTrackRef.current) { micTrackRef.current.unmute(); } else { roomRef.current?.localParticipant.setMicrophoneEnabled(true).catch(() => null); }
       if (Platform.OS === 'android' && callUUIDRef.current) callKitService.setMuted(callUUIDRef.current, false);
       pttRecorderService.start().catch(() => null);
@@ -1427,6 +1431,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       }
     } else {
       // iOS (PTT framework unavailable or init failed) or Android
+      clientLog('ptt:js:stopTransmitting:fallback', 'HTTP ptt:stop path', { groupId: currentGroupId, platform: Platform.OS, startWasEmitted, durationMs });
       if (startWasEmitted) pttPost(currentGroupId, 'stop').catch(() => null);
       if (Platform.OS === 'android' && callUUIDRef.current) callKitService.setMuted(callUUIDRef.current, true);
       if (startWasEmitted) {
