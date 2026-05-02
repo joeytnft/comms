@@ -14,7 +14,9 @@
 
 import { Audio } from 'expo-av';
 import { Platform } from 'react-native';
-import { apiClient } from '@/api/client';
+import { secureStorage } from '@/utils/secureStorage';
+import { ACCESS_TOKEN_KEY } from '@/config/constants';
+import { ENV } from '@/config/env';
 
 const RECORDING_OPTIONS: Audio.RecordingOptions = {
   android: {

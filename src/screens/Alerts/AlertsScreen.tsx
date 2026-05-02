@@ -82,7 +82,7 @@ export function AlertsScreen() {
     resolveAlert,
     deleteAlert,
   } = useAlertStore();
-  const { types: customTypes, fetchTypes, createType, deleteType } = useCustomAlertTypeStore();
+  const { types: customTypes, fetchTypes, createType, deleteType, hiddenBuiltinTypes, hideBuiltinType } = useCustomAlertTypeStore();
   const { groups, fetchGroups } = useGroupStore();
   const { activeCampusId } = useCampusViewStore();
   const { fetchCampuses } = useCampusStore();
@@ -352,7 +352,7 @@ export function AlertsScreen() {
     const badgeColor = typeDef?.color ?? ALERT_COLORS[item.level];
     const badgeLabel = typeDef ? `${typeDef.emoji} ${typeDef.label}` : ALERT_LABELS[item.level];
     const isGlobal = item.targetGroups.length === 0;
-    const isOwner = item.triggeredBy.id === userId || !!user?.isOrgAdmin;
+    const isOwner = item.triggeredBy.id === userId || !!user?.isOrgAdmin || isAdmin;
 
     return (
       <View style={[styles.alertCard, { borderLeftColor: badgeColor }]}>
@@ -448,7 +448,7 @@ export function AlertsScreen() {
       <View style={styles.gridSection}>
         <Text style={styles.gridLabel}>TAP TO SEND ALERT</Text>
         <View style={styles.grid}>
-          {ALERT_TYPE_KEYS.filter((key) => key !== 'ACTIVE_SHOOTER').map((key) => {
+          {ALERT_TYPE_KEYS.filter((key) => key !== 'ACTIVE_SHOOTER' && !hiddenBuiltinTypes.has(key)).map((key) => {
             const d = ALERT_TYPE_DEFS[key];
             return (
               <TouchableOpacity
@@ -460,6 +460,18 @@ export function AlertsScreen() {
               >
                 <Text style={styles.typeEmoji}>{d.emoji}</Text>
                 <Text style={styles.typeLabel}>{d.label}</Text>
+                {isAdmin && (
+                  <TouchableOpacity
+                    style={styles.customDeleteBtn}
+                    onPress={() => RNAlert.alert('Hide Alert Type', `Hide "${d.label}" from this screen?`, [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Hide', style: 'destructive', onPress: () => hideBuiltinType(key) },
+                    ])}
+                    hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                  >
+                    <Text style={styles.customDeleteBtnText}>✕</Text>
+                  </TouchableOpacity>
+                )}
               </TouchableOpacity>
             );
           })}
@@ -470,7 +482,6 @@ export function AlertsScreen() {
               key={ct.id}
               style={[styles.typeButton, { backgroundColor: ct.color }]}
               onPress={() => openConfirm(null, ct)}
-              onLongPress={() => handleDeleteCustomType(ct.id)}
               disabled={triggering}
               activeOpacity={0.75}
             >
@@ -479,6 +490,15 @@ export function AlertsScreen() {
               <View style={styles.customBadge}>
                 <Text style={styles.customBadgeText}>CUSTOM</Text>
               </View>
+              {isAdmin && (
+                <TouchableOpacity
+                  style={styles.customDeleteBtn}
+                  onPress={() => handleDeleteCustomType(ct.id)}
+                  hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                >
+                  <Text style={styles.customDeleteBtnText}>✕</Text>
+                </TouchableOpacity>
+              )}
             </TouchableOpacity>
           ))}
 
@@ -919,6 +939,8 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   customBadgeText: { fontSize: 8, color: '#FFFFFF', fontWeight: '700', letterSpacing: 0.5 },
+  customDeleteBtn: { position: 'absolute', bottom: 6, right: 6, width: 18, height: 18, borderRadius: 9, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
+  customDeleteBtnText: { color: '#FFFFFF', fontSize: 10, fontWeight: '700', lineHeight: 12 },
   addCustomButton: {
     width: '48%',
     borderRadius: BORDER_RADIUS.md,
