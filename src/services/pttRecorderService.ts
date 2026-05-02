@@ -71,21 +71,23 @@ export const pttRecorderService = {
       const uri = recording.getURI();
       if (!uri) return null;
 
+      const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
       const formData = new FormData();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       formData.append('audio', { uri, type: 'audio/mp4', name: `ptt_${Date.now()}.m4a` } as any);
 
-      // Use apiClient (not bare fetch) so the 401→refresh→retry interceptor fires
-      // when the access token expires during a long PTT session. Raw fetch with a
-      // manually-read token would silently fail after 15 minutes of inactivity.
-      // Do NOT set Content-Type manually — axios must set it with the multipart boundary.
-      // Overriding it here strips the boundary and Fastify returns 406.
-      const res = await apiClient.post<{ audioUrl?: string }>(
-        `/ptt/${groupId}/audio`,
-        formData,
-      );
+      // Use fetch (not axios) — React Native's axios XHR adapter sends the
+      // default Content-Type: application/json even for FormData, which makes
+      // Fastify's multipart parser return 406. fetch sets the boundary correctly.
+      const response = await fetch(`${ENV.apiUrl}/ptt/${groupId}/audio`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
 
-      return res.data.audioUrl ?? null;
+      if (!response.ok) return null;
+      const json = await response.json() as { audioUrl?: string };
+      return json.audioUrl ?? null;
     } catch (err) {
       console.warn('[PTTRecorder] Upload failed:', err);
       return null;
