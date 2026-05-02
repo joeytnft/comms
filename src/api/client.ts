@@ -34,12 +34,18 @@ class ApiClient {
       },
     });
 
-    // Request interceptor — attach auth token
+    // Request interceptor — attach auth token and fix multipart uploads.
+    // React Native does NOT strip the axios default Content-Type: application/json
+    // when the body is FormData (unlike browsers). Deleting it here lets the
+    // native XHR layer set multipart/form-data; boundary=... automatically.
     this.client.interceptors.request.use(
       async (config: InternalAxiosRequestConfig) => {
         const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
+        }
+        if (config.data instanceof FormData) {
+          delete config.headers['Content-Type'];
         }
         return config;
       },
