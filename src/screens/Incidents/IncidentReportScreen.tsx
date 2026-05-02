@@ -19,7 +19,6 @@ import { useIncidentStore } from '@/store/useIncidentStore';
 import { IncidentSeverity, SEVERITY_COLORS, SEVERITY_LABELS } from '@/types';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS } from '@/config/theme';
 import { IncidentStackParamList } from '@/navigation/IncidentStackNavigator';
-import * as FileSystem from 'expo-file-system';
 import { secureStorage } from '@/utils/secureStorage';
 import { ACCESS_TOKEN_KEY } from '@/config/constants';
 import { ENV } from '@/config/env';
@@ -32,25 +31,27 @@ const SEVERITIES: IncidentSeverity[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 
 async function uploadPhoto(uri: string, mimeType: string): Promise<string> {
   const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
+  const ext = mimeType.split('/')[1] ?? 'jpg';
 
-  // FileSystem.uploadAsync handles content:// and file:// URIs on Android correctly.
-  // Axios + FormData fails on Android because content:// URIs aren't readable by
-  // the XHR layer and the axios default Content-Type: application/json overrides
-  // the multipart boundary. uploadAsync streams the file natively instead.
-  const result = await FileSystem.uploadAsync(`${ENV.apiUrl}/upload`, uri, {
-    httpMethod: 'POST',
-    uploadType: FileSystem.FileSystemUploadType.MULTIPART,
-    fieldName: 'file',
-    mimeType,
+  // Use fetch (not axios) — React Native's fetch properly handles content:// URIs
+  // in FormData on Android. Axios's XHR adapter fails on content:// URIs and also
+  // incorrectly sends Content-Type: application/json for FormData payloads.
+  const formData = new FormData();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  formData.append('file', { uri, type: mimeType, name: `photo.${ext}` } as any);
+
+  const response = await fetch(`${ENV.apiUrl}/upload`, {
+    method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
   });
 
-  if (result.status !== 201) {
-    const body = JSON.parse(result.body) as { error?: string };
-    throw new Error(body.error ?? `Upload failed (${result.status})`);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error ?? `Upload failed (${response.status})`);
   }
 
-  const { url } = JSON.parse(result.body) as { url: string };
+  const { url } = await response.json() as { url: string };
   return url;
 }
 
