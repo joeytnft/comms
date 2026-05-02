@@ -68,7 +68,11 @@
       "Bash(powershell.exe -Command ' *)",
       "Bash(powershell.exe -Command 'Get-Process | Where-Object { $_.MainWindowTitle -ne '\\\\'''\\\\'' } | Select-Object ProcessName, MainWindowTitle, @{N='\\\\''Pos'\\\\'';E={ $h=$_.MainWindowHandle; Add-Type -A System.Drawing 2>null; $r=New-Object System.Drawing.Rectangle; $r }} | Format-Table -AutoSize')",
       "Bash(/mnt/c/Users/joe74/AppData/Local/Android/Sdk/platform-tools/adb.exe shell *)",
-      "Bash(git -C /home/joe7432/comms diff --stat HEAD)"
+      "Bash(git -C /home/joe7432/comms diff --stat HEAD)",
+      "Bash(grep -o '\"content\":\\\\[{\"type\":\"text\",\"text\":\"[^\"]*\\\\\\(Railway\\\\|ERROR\\\\|Exception\\\\|android.*log\\\\|console\\\\\\)[^\"]*\"' /home/joe7432/.claude/projects/-home-joe7432-comms/65a5de3f-079d-4236-a7a3-2faf792e05cd.jsonl)",
+      "Bash(awk -F':' '{print $1}')",
+      "Bash(awk -F: '{print $1}')",
+      "Bash(python3)"
     ],
     "additionalDirectories": [
       "/home/joe7432/.claude",
