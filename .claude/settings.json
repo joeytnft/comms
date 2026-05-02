@@ -58,10 +58,16 @@
       "Bash(/mnt/c/Users/joe74/AppData/Local/Android/Sdk/platform-tools/adb.exe devices *)",
       "Bash(/mnt/c/Users/joe74/AppData/Local/Android/Sdk/platform-tools/adb.exe -s emulator-5554 install -r -d /mnt/c/Users/joe74/Downloads/app-debug.apk)",
       "Bash(/mnt/c/Users/joe74/AppData/Local/Android/Sdk/platform-tools/adb.exe -s emulator-5554 install -r -d \"C:\\\\\\\\Users\\\\\\\\joe74\\\\\\\\Downloads\\\\\\\\app-debug.apk\")",
-      "Bash(python3 -c \"import json; d=json.load\\(open\\('/home/joe7432/comms/app.json'\\)\\); print\\(json.dumps\\(d.get\\('expo',{}\\).get\\('plugins',[]\\), indent=2\\)\\)\")"
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('/home/joe7432/comms/app.json'\\)\\); print\\(json.dumps\\(d.get\\('expo',{}\\).get\\('plugins',[]\\), indent=2\\)\\)\")",
+      "Bash(/mnt/c/Users/joe74/AppData/Local/Android/Sdk/platform-tools/adb.exe logcat *)",
+      "Bash(echo \"Logcat PID: $!\")",
+      "Bash(echo \"PID: $!\")",
+      "Bash(kill 57712 57749)",
+      "Bash(echo \"Capturing to /tmp/rn_logcat.txt — PID: $!\")"
     ],
     "additionalDirectories": [
-      "/home/joe7432/.claude"
+      "/home/joe7432/.claude",
+      "/tmp"
     ]
   }
 }

@@ -85,6 +85,7 @@ export function IncidentReportScreen({ navigation }: Props) {
       setPhotos((prev) => [...prev, url]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Could not upload photo. Please try again.';
+      console.error('[PhotoUpload] failed:', msg, err);
       RNAlert.alert('Upload failed', msg);
     } finally {
       setIsUploadingPhoto(false);
