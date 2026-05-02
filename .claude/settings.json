@@ -50,7 +50,14 @@
       "Bash(git -C /home/joe7432/comms push)",
       "Bash(sudo apt-get *)",
       "Bash(ln -sf /usr/bin/adb \"/mnt/c/Users/joe74/AppData/Local/Android/Sdk/platform-tools/adb\")",
-      "Read(//mnt/c/Users/joe74/AppData/Local/Android/Sdk/platform-tools/**)"
+      "Read(//mnt/c/Users/joe74/AppData/Local/Android/Sdk/platform-tools/**)",
+      "Bash(grep -v \"^$\")",
+      "Bash(python3 -c \"import json,sys; p=json.load\\(sys.stdin\\); [print\\(k,v\\) for k,v in p.get\\('scripts',{}\\).items\\(\\)]\")",
+      "Bash(adb devices *)",
+      "Read(//mnt/c/Users/joe74/**)",
+      "Bash(/mnt/c/Users/joe74/AppData/Local/Android/Sdk/platform-tools/adb.exe devices *)",
+      "Bash(/mnt/c/Users/joe74/AppData/Local/Android/Sdk/platform-tools/adb.exe -s emulator-5554 install -r -d /mnt/c/Users/joe74/Downloads/app-debug.apk)",
+      "Bash(/mnt/c/Users/joe74/AppData/Local/Android/Sdk/platform-tools/adb.exe -s emulator-5554 install -r -d \"C:\\\\\\\\Users\\\\\\\\joe74\\\\\\\\Downloads\\\\\\\\app-debug.apk\")"
     ],
     "additionalDirectories": [
       "/home/joe7432/.claude"
