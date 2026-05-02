@@ -1343,7 +1343,11 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     } else {
       // iOS (PTT framework unavailable or init failed) or Android
       clientLog('ptt:js:startTransmitting:fallback', 'HTTP ptt:start path', { groupId: currentGroupId, platform: Platform.OS });
-      pttPost(currentGroupId, 'start').catch(() => null);
+      pttPost(currentGroupId, 'start').catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn('[PTT] pttPost start failed:', msg);
+        clientLog('ptt:js:startTransmitting:startFailed', msg, { groupId: currentGroupId });
+      });
       // markStartEmitted MUST be called here so stopTransmitting sends ptt:stop.
       // On iOS native PTT this is called from onAudioActivated; on Android/fallback
       // there is no equivalent callback so we mark it immediately after dispatching start.

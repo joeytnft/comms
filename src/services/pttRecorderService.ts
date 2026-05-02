@@ -76,10 +76,11 @@ export const pttRecorderService = {
       // Use apiClient (not bare fetch) so the 401→refresh→retry interceptor fires
       // when the access token expires during a long PTT session. Raw fetch with a
       // manually-read token would silently fail after 15 minutes of inactivity.
+      // Do NOT set Content-Type manually — axios must set it with the multipart boundary.
+      // Overriding it here strips the boundary and Fastify returns 406.
       const res = await apiClient.post<{ audioUrl?: string }>(
         `/ptt/${groupId}/audio`,
         formData,
-        { headers: { 'Content-Type': 'multipart/form-data' } },
       );
 
       return res.data.audioUrl ?? null;
