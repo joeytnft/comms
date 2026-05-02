@@ -101,6 +101,12 @@
         }
       ],
       [
+        "react-native-maps",
+        {
+          "googleMapsApiKey": "AIzaSyCrfjwwQB3eEt2J6rid9Al8Q-6Yhw4kvs4"
+        }
+      ],
+      [
         "react-native-ble-plx",
         {
           "isBackgroundEnabled": true,

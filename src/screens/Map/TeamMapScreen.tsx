@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState, memo } from 'react';
+import React, { useCallback, useEffect, useRef, useState, memo, Component, ReactNode } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -13,6 +13,24 @@ import { TeamMemberLocation, Geofence } from '@/types';
 import { TeamMapView } from '@/components/map/TeamMapView';
 import { geofenceService } from '@/services/geofenceService';
 import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS } from '@/config/theme';
+
+class MapErrorBoundary extends Component<{ children: ReactNode }, { crashed: boolean; message: string }> {
+  state = { crashed: false, message: '' };
+  static getDerivedStateFromError(err: Error) {
+    return { crashed: true, message: err.message };
+  }
+  render() {
+    if (this.state.crashed) {
+      return (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16 }}>
+          <Text style={{ color: COLORS.danger, textAlign: 'center', marginBottom: 8 }}>Map unavailable</Text>
+          <Text style={{ color: COLORS.textMuted, fontSize: 12, textAlign: 'center' }}>{this.state.message}</Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const MemberCard = memo(function MemberCard({ item }: { item: TeamMemberLocation }) {
   const isOnline = Date.now() - new Date(item.updatedAt).getTime() < 300_000;
@@ -169,7 +187,9 @@ export function TeamMapScreen() {
 
       <TouchableOpacity activeOpacity={1} onPress={handleMapTap}>
         <Animated.View style={[styles.map, { height: mapHeight }]}>
-          <TeamMapView locations={mapLocations} geofence={geofence} activeAlerts={activeAlerts} style={styles.mapInner} />
+          <MapErrorBoundary>
+            <TeamMapView locations={mapLocations} geofence={geofence} activeAlerts={activeAlerts} style={styles.mapInner} />
+          </MapErrorBoundary>
           <View style={styles.mapHint}>
             <Text style={styles.mapHintText}>{mapExpanded ? '▲ Double-tap to shrink' : '▼ Double-tap to expand'}</Text>
           </View>

@@ -57,7 +57,8 @@
       "Read(//mnt/c/Users/joe74/**)",
       "Bash(/mnt/c/Users/joe74/AppData/Local/Android/Sdk/platform-tools/adb.exe devices *)",
       "Bash(/mnt/c/Users/joe74/AppData/Local/Android/Sdk/platform-tools/adb.exe -s emulator-5554 install -r -d /mnt/c/Users/joe74/Downloads/app-debug.apk)",
-      "Bash(/mnt/c/Users/joe74/AppData/Local/Android/Sdk/platform-tools/adb.exe -s emulator-5554 install -r -d \"C:\\\\\\\\Users\\\\\\\\joe74\\\\\\\\Downloads\\\\\\\\app-debug.apk\")"
+      "Bash(/mnt/c/Users/joe74/AppData/Local/Android/Sdk/platform-tools/adb.exe -s emulator-5554 install -r -d \"C:\\\\\\\\Users\\\\\\\\joe74\\\\\\\\Downloads\\\\\\\\app-debug.apk\")",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('/home/joe7432/comms/app.json'\\)\\); print\\(json.dumps\\(d.get\\('expo',{}\\).get\\('plugins',[]\\), indent=2\\)\\)\")"
     ],
     "additionalDirectories": [
       "/home/joe7432/.claude"
