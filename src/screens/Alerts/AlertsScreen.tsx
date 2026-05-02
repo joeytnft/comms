@@ -26,6 +26,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { apiClient } from '@/api/client';
 import { ENDPOINTS } from '@/api/endpoints';
 import { ENV } from '@/config/env';
+import { secureStorage } from '@/utils/secureStorage';
+import { ACCESS_TOKEN_KEY } from '@/config/constants';
 import { useAlertStore } from '@/store/useAlertStore';
 import { useCustomAlertTypeStore } from '@/store/useCustomAlertTypeStore';
 import { useGroupStore } from '@/store/useGroupStore';
@@ -98,7 +100,7 @@ export function AlertsScreen() {
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[] | null>(null);
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locating, setLocating] = useState(false);
-  const [photo, setPhoto] = useState<{ uri: string; base64: string; mimeType: string } | null>(null);
+  const [photo, setPhoto] = useState<{ uri: string; mimeType: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
   // null = not yet checked, true/false = checked result
@@ -143,7 +145,6 @@ export function AlertsScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 0.7,
-      base64: true,
       allowsEditing: true,
       aspect: [4, 3],
     });
@@ -151,7 +152,6 @@ export function AlertsScreen() {
       const asset = result.assets[0];
       setPhoto({
         uri: asset.uri,
-        base64: asset.base64 ?? '',
         mimeType: asset.mimeType ?? 'image/jpeg',
       });
     }
@@ -165,7 +165,6 @@ export function AlertsScreen() {
     }
     const result = await ImagePicker.launchCameraAsync({
       quality: 0.7,
-      base64: true,
       allowsEditing: true,
       aspect: [4, 3],
     });
@@ -173,7 +172,6 @@ export function AlertsScreen() {
       const asset = result.assets[0];
       setPhoto({
         uri: asset.uri,
-        base64: asset.base64 ?? '',
         mimeType: asset.mimeType ?? 'image/jpeg',
       });
     }
@@ -253,16 +251,27 @@ export function AlertsScreen() {
     try {
       if (priorityTone) await playAlertTone();
 
-      // Upload photo if attached
+      // Upload photo if attached — use fetch so React Native handles the
+      // content:// URI and multipart boundary correctly (axios fails on both).
       let photoUrl: string | undefined;
-      if (photo?.base64) {
+      if (photo?.uri) {
         setUploading(true);
         try {
-          const res = await apiClient.post<{ url: string }>(ENDPOINTS.UPLOAD, {
-            data: photo.base64,
-            mimeType: photo.mimeType,
+          const token = await secureStorage.getItemAsync(ACCESS_TOKEN_KEY);
+          const mimeType = photo.mimeType ?? 'image/jpeg';
+          const ext = mimeType.split('/')[1] ?? 'jpg';
+          const formData = new FormData();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          formData.append('file', { uri: photo.uri, type: mimeType, name: `alert.${ext}` } as any);
+          const res = await fetch(`${ENV.apiUrl}${ENDPOINTS.UPLOAD}`, {
+            method: 'POST',
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            body: formData,
           });
-          photoUrl = res.url;
+          if (res.ok) {
+            const json = await res.json() as { url: string };
+            photoUrl = json.url;
+          }
         } finally {
           setUploading(false);
         }
@@ -280,7 +289,9 @@ export function AlertsScreen() {
         photoUrl,
         groupIds: selectedGroupIds ?? undefined,
       });
-    } catch {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[Alert] handleSend failed:', msg, err);
       RNAlert.alert('Error', 'Failed to send alert. Please try again.');
     } finally {
       setTriggering(false);
