@@ -67,7 +67,8 @@
       "Bash(/mnt/c/Users/joe74/AppData/Local/Android/Sdk/platform-tools/adb.exe emu *)",
       "Bash(powershell.exe -Command ' *)",
       "Bash(powershell.exe -Command 'Get-Process | Where-Object { $_.MainWindowTitle -ne '\\\\'''\\\\'' } | Select-Object ProcessName, MainWindowTitle, @{N='\\\\''Pos'\\\\'';E={ $h=$_.MainWindowHandle; Add-Type -A System.Drawing 2>null; $r=New-Object System.Drawing.Rectangle; $r }} | Format-Table -AutoSize')",
-      "Bash(/mnt/c/Users/joe74/AppData/Local/Android/Sdk/platform-tools/adb.exe shell *)"
+      "Bash(/mnt/c/Users/joe74/AppData/Local/Android/Sdk/platform-tools/adb.exe shell *)",
+      "Bash(git -C /home/joe7432/comms diff --stat HEAD)"
     ],
     "additionalDirectories": [
       "/home/joe7432/.claude",
