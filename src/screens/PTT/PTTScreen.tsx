@@ -23,14 +23,19 @@ export function PTTScreen() {
     activeSpeaker,
     connectedMemberCount,
     connectedParticipants,
+    broadcastToAll,
     startTransmitting,
     stopTransmitting,
     joinChannel,
     leaveChannel,
+    toggleBroadcastMode,
   } = usePTT();
   const currentUser = useAuthStore((s) => s.user);
 
   const { groups, fetchGroups } = useGroupStore();
+  const currentGroup = groups.find((g) => g.id === currentGroupId);
+  const isLeadGroup = currentGroup?.type === 'lead';
+  const isAdmin = currentGroup?.myRole === 'admin';
   const { error, clearError } = usePTTStore();
   const { logs, totalCounts, isLoading: logsLoading, error: logsError, fetchLogs } = usePTTLogStore();
   const [showGroupPicker, setShowGroupPicker] = useState(!isConnected);
@@ -202,6 +207,19 @@ export function PTTScreen() {
             isTransmitting={true}
           />
         </View>
+      )}
+
+      {/* Broadcast to All toggle — lead group admins only */}
+      {isLeadGroup && isAdmin && (
+        <TouchableOpacity
+          style={[styles.broadcastToggle, broadcastToAll && styles.broadcastToggleActive]}
+          onPress={toggleBroadcastMode}
+          disabled={pttState === 'transmitting'}
+        >
+          <Text style={[styles.broadcastToggleText, broadcastToAll && styles.broadcastToggleTextActive]}>
+            {broadcastToAll ? '📡 Broadcasting to All Sub-groups' : 'Broadcast to All'}
+          </Text>
+        </TouchableOpacity>
       )}
 
       {/* Main PTT button area */}
@@ -414,6 +432,28 @@ const styles = StyleSheet.create({
   speakerContainer: {
     paddingHorizontal: SPACING.lg,
     paddingBottom: SPACING.md,
+  },
+  broadcastToggle: {
+    alignSelf: 'center',
+    marginBottom: SPACING.md,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.warning,
+    backgroundColor: 'transparent',
+  },
+  broadcastToggleActive: {
+    backgroundColor: COLORS.warning,
+    borderColor: COLORS.warning,
+  },
+  broadcastToggleText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.warning,
+    fontWeight: '600',
+  },
+  broadcastToggleTextActive: {
+    color: COLORS.white,
   },
   pttArea: {
     flex: 1,

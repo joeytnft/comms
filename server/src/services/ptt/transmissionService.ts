@@ -44,11 +44,20 @@ export interface BeginOptions {
    *    other devices already know they're transmitting).
    */
   excludeSocketIds?: string[];
+  /**
+   * Lead group admin opted in to "Broadcast to All". When true, ptt:speaking
+   * is forwarded to all sub-group socket rooms so sub-group members are
+   * notified and can connect to the lead room for audio.
+   * Only meaningful when the transmitting group is a LEAD group.
+   */
+  broadcastToSubGroups?: boolean;
 }
 
 export interface EndOptions {
   /** Same semantics as BeginOptions.excludeSocketIds. */
   excludeSocketIds?: string[];
+  /** Must mirror BeginOptions.broadcastToSubGroups so the stop broadcast reaches the same rooms. */
+  broadcastToSubGroups?: boolean;
 }
 
 const room = (groupId: string) => `ptt:${groupId}`;
@@ -107,6 +116,8 @@ export async function beginTransmission(
     where: { id: groupId },
     select: { parentGroupId: true, type: true },
   });
+  // Sub-group → surface transmission upward to the lead group room so lead
+  // members see the active speaker indicator.
   if (group?.parentGroupId && io) {
     const target = (opts.excludeSocketIds && opts.excludeSocketIds.length > 0)
       ? io.to(room(group.parentGroupId)).except(opts.excludeSocketIds)
@@ -115,7 +126,10 @@ export async function beginTransmission(
       groupId, userId, displayName, startedAt, fromSubGroup: true,
     });
   }
-  if (group?.type === 'LEAD' && io) {
+  // Lead group "Broadcast to All": only when the lead admin explicitly opted in.
+  // Sub-group members receive ptt:speaking with fromLeadGroup:true and will
+  // dynamically connect to the lead room as listen-only for audio.
+  if (opts.broadcastToSubGroups && group?.type === 'LEAD' && io) {
     const subGroups = await prisma.group.findMany({
       where: { parentGroupId: groupId },
       select: { id: true },
@@ -160,7 +174,6 @@ export async function beginTransmission(
   return { alreadyActive: false };
 }
 
-/**
 /**
  * End a transmission. Idempotent via an atomic Redis claim: DEL returns the
  * number of keys it removed, so only the first caller to actually delete the
@@ -208,7 +221,7 @@ export async function endTransmission(
       : io.to(room(group.parentGroupId));
     target.emit('ptt:stopped', { groupId, userId, endedAt, fromSubGroup: true });
   }
-  if (group?.type === 'LEAD' && io) {
+  if (opts.broadcastToSubGroups && group?.type === 'LEAD' && io) {
     const subGroups = await prisma.group.findMany({
       where: { parentGroupId: groupId },
       select: { id: true },

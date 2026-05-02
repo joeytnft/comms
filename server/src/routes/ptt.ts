@@ -11,6 +11,9 @@ export async function pttRoutes(app: FastifyInstance) {
   // Get LiveKit token to join a group's PTT room
   app.get('/:groupId/token', pttController.getToken);
 
+  // Listen-only token for a lead group room (called by sub-group members during a broadcast)
+  app.get('/:groupId/lead-room-token', pttController.getLeadRoomToken);
+
   // Get participants in a PTT room
   app.get('/:groupId/participants', pttController.getParticipants);
 

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useCallback, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, Vibration } from 'react-native';
 import { AudioModule } from '@/utils/audioStub';
 import { PTTState, PTTConfig } from '@/types';
@@ -15,6 +15,7 @@ import { liveActivityService } from '@/services/liveActivityService';
 import { useAuthStore } from '@/store/useAuthStore';
 import { mmkvStorage } from '@/utils/mmkv';
 import { apiClient } from '@/api/client';
+import { pttService } from '@/services/pttService';
 import { generateUUIDv4 } from '@/utils/uuid';
 import { clientLog, forceFlush, setClientContext, SESSION_ID } from '@/services/clientLogger';
 
@@ -71,11 +72,15 @@ interface PTTContextType {
   activeSpeaker: { userId: string; displayName: string } | null;
   connectedMemberCount: number;
   connectedParticipants: import('@/services/pttService').PTTParticipant[];
+  /** True when lead group admin has "Broadcast to All" mode active. */
+  broadcastToAll: boolean;
   startTransmitting: () => void;
   stopTransmitting: () => void;
   joinChannel: (groupId: string) => Promise<void>;
   leaveChannel: () => void;
   updateConfig: (config: Partial<PTTConfig>) => void;
+  /** Lead group admin only: toggle whether transmissions broadcast to all sub-groups. */
+  toggleBroadcastMode: () => void;
 }
 
 const PTTContext = createContext<PTTContextType | undefined>(undefined);
@@ -193,6 +198,24 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // Set true while an auto-rejoin is in flight so a second Disconnected
   // doesn't kick off a parallel rejoin attempt.
   const rejoinInFlightRef = useRef(false);
+
+  // ── Broadcast-to-All state (lead group admin only) ──────────────────────────
+  // `broadcastToAll` is exposed to the UI so the toggle button re-renders.
+  // `broadcastToAllRef` keeps the current value in sync for callbacks that
+  // capture broadcastToAll in a closure (startTransmitting, stopTransmitting).
+  const [broadcastToAll, setBroadcastToAll] = useState(false);
+  const broadcastToAllRef = useRef(false);
+  const toggleBroadcastMode = useCallback(() => {
+    const next = !broadcastToAllRef.current;
+    broadcastToAllRef.current = next;
+    setBroadcastToAll(next);
+  }, []);
+
+  // Temporary listen-only room joined by sub-group members during a lead broadcast.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const leadBroadcastRoomRef = useRef<any>(null);
+  // Timer to disconnect from the lead broadcast room after a short idle window.
+  const leadBroadcastDisconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Always-current socket ref so native PTT callbacks (registered once) can emit
   // even when the socket reconnects and the `socket` variable changes identity.
@@ -554,12 +577,34 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       userId: string;
       displayName: string;
       startedAt: string;
+      fromLeadGroup?: boolean;
     }) => {
       // Ignore echoes of our own transmission — the server's HTTP broadcast path
       // uses io.to(room) which can reach our own socket before the exclusion filter
       // kicks in on slow connections.
       const localUserId = useAuthStore.getState().user?.id;
       if (data.userId === localUserId) return;
+
+      // Lead broadcast: sub-group member dynamically connects to the lead room
+      // so they can hear the audio. Cancelled disconnect timer if one is pending.
+      if (data.fromLeadGroup && Platform.OS !== 'web') {
+        if (leadBroadcastDisconnectTimerRef.current) {
+          clearTimeout(leadBroadcastDisconnectTimerRef.current);
+          leadBroadcastDisconnectTimerRef.current = null;
+        }
+        if (!leadBroadcastRoomRef.current && Room && RoomEvent) {
+          pttService.getLeadRoomToken(data.groupId)
+            .then(async (res) => {
+              if (leadBroadcastRoomRef.current) return; // already connected by parallel call
+              const bRoom = new Room({ dynacast: false });
+              bRoom.on(RoomEvent.Disconnected, () => { leadBroadcastRoomRef.current = null; });
+              await bRoom.connect(res.livekitUrl || ENV.livekitUrl, res.token, { autoSubscribe: true });
+              leadBroadcastRoomRef.current = bRoom;
+              console.info(`[PTT] Connected to lead broadcast room ${res.groupName} (listen-only)`);
+            })
+            .catch((err) => console.warn('[PTT] Failed to join lead broadcast room:', err));
+        }
+      }
 
       usePTTStore.getState().setActiveSpeaker({
         userId: data.userId,
@@ -589,7 +634,17 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       });
     };
 
-    const handleStopped = () => {
+    const handleStopped = (data?: { fromLeadGroup?: boolean }) => {
+      // Schedule disconnect from the temporary lead broadcast room after a short
+      // idle window so rapid multi-transmission broadcasts don't reconnect every time.
+      if (data?.fromLeadGroup && leadBroadcastRoomRef.current) {
+        if (leadBroadcastDisconnectTimerRef.current) clearTimeout(leadBroadcastDisconnectTimerRef.current);
+        leadBroadcastDisconnectTimerRef.current = setTimeout(() => {
+          leadBroadcastDisconnectTimerRef.current = null;
+          leadBroadcastRoomRef.current?.disconnect();
+          leadBroadcastRoomRef.current = null;
+        }, 5000); // 5s grace: lead admin may transmit again quickly
+      }
       usePTTStore.getState().setActiveSpeaker(null);
       // Clear system UI speaker indicator
       if (USE_NATIVE_PTT && nativePTTChannelIdRef.current) {
@@ -1049,37 +1104,6 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           if (failed > 0) console.warn(`[PTT] ${failed} sub-group room(s) failed to connect`);
         }
 
-        // Sub-group: connect to the parent Lead group room as a listen-only subscriber
-        // so sub-group members hear Lead group transmissions in real time.
-        if (response.leadGroupRoom) {
-          const lg = response.leadGroupRoom;
-          try {
-            const leadRoom = new Room!({ dynacast: false });
-            leadRoom.on(RoomEvent!.ActiveSpeakersChanged, (speakers: Array<{ identity: string; name?: string }>) => {
-              const remote = speakers.find((s) => s.identity !== leadRoom.localParticipant?.identity);
-              if (remote) {
-                usePTTStore.getState().setActiveSpeaker({
-                  userId: remote.identity,
-                  displayName: remote.name ?? remote.identity,
-                  startedAt: new Date().toISOString(),
-                });
-                if (USE_NATIVE_PTT && nativePTTChannelIdRef.current) {
-                  nativePTTService.setActiveRemoteParticipant(
-                    nativePTTChannelIdRef.current,
-                    remote.name ?? remote.identity,
-                  ).catch(() => null);
-                }
-              }
-            });
-            leadRoom.on(RoomEvent!.Disconnected, () => {});
-            await leadRoom.connect(livekitUrl, lg.token, { autoSubscribe: true });
-            subRoomsRef.current = [...subRoomsRef.current, leadRoom];
-            console.info(`[PTT] Connected to lead group room ${lg.groupName} (listen-only)`);
-          } catch (err) {
-            console.warn('[PTT] Failed to connect to lead group listen-only room:', err);
-          }
-        }
-
         // ── Hand audio session ownership to Apple's PTT framework ───────────
         if (USE_NATIVE_PTT) {
           // Release our hold on the AVAudioSession before joining the PTT
@@ -1217,6 +1241,19 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         subRoom.disconnect();
       }
       subRoomsRef.current = [];
+
+      // Disconnect any temporary lead broadcast room (sub-group member during broadcast)
+      if (leadBroadcastDisconnectTimerRef.current) {
+        clearTimeout(leadBroadcastDisconnectTimerRef.current);
+        leadBroadcastDisconnectTimerRef.current = null;
+      }
+      if (leadBroadcastRoomRef.current) {
+        leadBroadcastRoomRef.current.disconnect();
+        leadBroadcastRoomRef.current = null;
+      }
+      // Reset broadcast mode when leaving channel
+      broadcastToAllRef.current = false;
+      setBroadcastToAll(false);
 
       if (nativePTTActiveRef.current || joiningChannelIdRef.current) {
         // Use the active channel UUID, or the in-flight join UUID if joinChannel
@@ -1374,7 +1411,9 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     } else {
       // iOS (PTT framework unavailable or init failed) or Android
       clientLog('ptt:js:startTransmitting:fallback', 'HTTP ptt:start path', { groupId: currentGroupId, platform: Platform.OS });
-      pttPost(currentGroupId, 'start').catch((err: unknown) => {
+      const startBody: Record<string, unknown> = {};
+      if (broadcastToAllRef.current) startBody.broadcastToAll = true;
+      pttPost(currentGroupId, 'start', startBody).catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err);
         console.warn('[PTT] pttPost start failed:', msg);
         clientLog('ptt:js:startTransmitting:startFailed', msg, { groupId: currentGroupId });
@@ -1449,7 +1488,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       mediaRecorderRef.current = null;
     } else if (nativePTTActiveRef.current) {
       if (nativePTTChannelIdRef.current) {
-        if (startWasEmitted) pttPost(currentGroupId, 'stop').catch(() => null);
+        const stopBody = broadcastToAllRef.current ? { broadcastToAll: true } : undefined;
+        if (startWasEmitted) pttPost(currentGroupId, 'stop', stopBody).catch(() => null);
         // Arm before calling stopTransmitting so the onTransmissionEnded
         // delegate (fired asynchronously by iOS after the stop call) knows
         // cleanup was already handled and doesn't wipe a rapid re-press's state.
@@ -1467,7 +1507,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     } else {
       // iOS (PTT framework unavailable or init failed) or Android
       clientLog('ptt:js:stopTransmitting:fallback', 'HTTP ptt:stop path', { groupId: currentGroupId, platform: Platform.OS, startWasEmitted, durationMs });
-      if (startWasEmitted) pttPost(currentGroupId, 'stop').catch(() => null);
+      const stopBody = broadcastToAllRef.current ? { broadcastToAll: true } : undefined;
+      if (startWasEmitted) pttPost(currentGroupId, 'stop', stopBody).catch(() => null);
       if (Platform.OS === 'android' && callUUIDRef.current) callKitService.setMuted(callUUIDRef.current, true);
       if (startWasEmitted) {
         pttRecorderService.stopAndUpload(currentGroupId).then((audioUrl) => {
@@ -1527,11 +1568,13 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         connectedParticipants: store.participants.filter((p) =>
           store.connectedMemberIds.includes(p.userId),
         ),
+        broadcastToAll,
         startTransmitting,
         stopTransmitting,
         joinChannel,
         leaveChannel,
         updateConfig,
+        toggleBroadcastMode,
       }}
     >
       {children}

@@ -112,31 +112,12 @@ export async function getToken(
     }
   }
 
-  // Sub-group members receive a listen-only token for their parent Lead group room
-  // so they can hear Lead group transmissions in real time.
-  let leadGroupRoom: { groupId: string; groupName: string; token: string; roomName: string } | undefined;
-  if (membership.group.type === 'SUB' && membership.group.parentGroupId) {
-    const leadGroup = await prisma.group.findUnique({
-      where: { id: membership.group.parentGroupId },
-      select: { id: true, name: true },
-    });
-    if (leadGroup) {
-      leadGroupRoom = {
-        groupId: leadGroup.id,
-        groupName: leadGroup.name,
-        token: await generateLiveKitToken(userId, membership.user.displayName, leadGroup.id, false),
-        roomName: getRoomName(leadGroup.id),
-      };
-    }
-  }
-
   reply.send({
     token,
     roomName: getRoomName(groupId),
     livekitUrl: env.LIVEKIT_URL,
     groupName: membership.group.name,
     ...(subGroupRooms ? { subGroupRooms } : {}),
-    ...(leadGroupRoom ? { leadGroupRoom } : {}),
   });
 }
 
@@ -285,13 +266,69 @@ async function getUserSocketIdsInRoom(roomName: string, userId: string): Promise
 }
 
 /**
+ * GET /ptt/:groupId/lead-room-token
+ * Returns a listen-only LiveKit token for the lead group room.
+ * Called by sub-group members when the lead admin starts a "Broadcast to All"
+ * transmission so they can connect to the lead room and hear the audio.
+ *
+ * Authorization: the caller must be a member of a sub-group whose parent is :groupId.
+ */
+export async function getLeadRoomToken(
+  request: FastifyRequest<{ Params: TokenParams }>,
+  reply: FastifyReply,
+) {
+  const { groupId } = request.params; // this is the LEAD group's id
+  const { userId } = request;
+
+  // Verify the caller belongs to at least one sub-group of this lead group
+  // and that the lead group is in the same org.
+  const leadGroup = await prisma.group.findUnique({
+    where: { id: groupId },
+    select: { id: true, name: true, type: true, organizationId: true },
+  });
+  if (!leadGroup || leadGroup.organizationId !== request.organizationId) {
+    throw new AuthorizationError('Group not found');
+  }
+  if (leadGroup.type !== 'LEAD') {
+    throw new AuthorizationError('Not a lead group');
+  }
+
+  const subMembership = await prisma.groupMembership.findFirst({
+    where: {
+      userId,
+      group: { parentGroupId: groupId },
+    },
+    include: { user: { select: { displayName: true } } },
+  });
+  if (!subMembership) {
+    throw new AuthorizationError('Not a member of a sub-group of this channel');
+  }
+
+  const token = await generateLiveKitToken(
+    userId, subMembership.user.displayName, groupId, /* canPublish */ false,
+  );
+
+  reply.send({
+    token,
+    roomName: getRoomName(groupId),
+    livekitUrl: env.LIVEKIT_URL,
+    groupName: leadGroup.name,
+  });
+}
+
+/**
  * POST /ptt/:groupId/start
  * HTTP alternative to the ptt:start socket event for iOS native PTT.
  * The iOS audio session activation drops the WebSocket; HTTP uses a fresh
  * TCP connection so it reaches the server reliably regardless of socket state.
+ *
+ * Body: { mimeType?: string; broadcastToAll?: boolean }
+ * broadcastToAll is only honoured for LEAD group members and causes ptt:speaking
+ * to be forwarded to all sub-group socket rooms so sub-group members can join
+ * the lead room for audio.
  */
 export async function transmitStart(
-  request: FastifyRequest<{ Params: TokenParams; Body: { mimeType?: string } }>,
+  request: FastifyRequest<{ Params: TokenParams; Body: { mimeType?: string; broadcastToAll?: boolean } }>,
   reply: FastifyReply,
 ) {
   const { groupId } = request.params;
@@ -301,10 +338,12 @@ export async function transmitStart(
   logger.info(`[PTT] HTTP ptt:start from ${userId} in ptt:${groupId}`);
 
   const excludeSocketIds = await getUserSocketIdsInRoom(`ptt:${groupId}`, userId);
+  const broadcastToSubGroups =
+    request.body?.broadcastToAll === true && membership.group.type === 'LEAD';
 
   await beginTransmission(
     { groupId, userId, displayName: membership.user.displayName },
-    { mimeType: request.body?.mimeType ?? 'audio/mp4', excludeSocketIds },
+    { mimeType: request.body?.mimeType ?? 'audio/mp4', excludeSocketIds, broadcastToSubGroups },
   );
 
   reply.status(204).send();
@@ -313,9 +352,13 @@ export async function transmitStart(
 /**
  * POST /ptt/:groupId/stop
  * HTTP alternative to the ptt:stop socket event.
+ *
+ * Body: { broadcastToAll?: boolean }
+ * Must match the broadcastToAll flag from the corresponding /start call so
+ * the ptt:stopped event reaches the same sub-group socket rooms.
  */
 export async function transmitStop(
-  request: FastifyRequest<{ Params: TokenParams }>,
+  request: FastifyRequest<{ Params: TokenParams; Body: { broadcastToAll?: boolean } }>,
   reply: FastifyReply,
 ) {
   const { groupId } = request.params;
@@ -325,10 +368,12 @@ export async function transmitStop(
   logger.info(`[PTT] HTTP ptt:stop from ${userId} in ptt:${groupId}`);
 
   const excludeSocketIds = await getUserSocketIdsInRoom(`ptt:${groupId}`, userId);
+  const broadcastToSubGroups =
+    request.body?.broadcastToAll === true && membership.group.type === 'LEAD';
 
   await endTransmission(
     { groupId, userId, displayName: membership.user.displayName },
-    { excludeSocketIds },
+    { excludeSocketIds, broadcastToSubGroups },
   );
 
   reply.status(204).send();
