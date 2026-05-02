@@ -101,9 +101,11 @@ export async function beginTransmission(
 
   // Surface sub-group transmissions to the parent LEAD room so lead members
   // see the active speaker indicator without having to be in the sub-group.
+  // Also surface Lead group transmissions down to every sub-group so sub-group
+  // members see the active speaker indicator when the lead admin speaks.
   const group = await prisma.group.findUnique({
     where: { id: groupId },
-    select: { parentGroupId: true },
+    select: { parentGroupId: true, type: true },
   });
   if (group?.parentGroupId && io) {
     const target = (opts.excludeSocketIds && opts.excludeSocketIds.length > 0)
@@ -112,6 +114,18 @@ export async function beginTransmission(
     target.emit('ptt:speaking', {
       groupId, userId, displayName, startedAt, fromSubGroup: true,
     });
+  }
+  if (group?.type === 'LEAD' && io) {
+    const subGroups = await prisma.group.findMany({
+      where: { parentGroupId: groupId },
+      select: { id: true },
+    });
+    for (const sg of subGroups) {
+      const target = (opts.excludeSocketIds && opts.excludeSocketIds.length > 0)
+        ? io.to(room(sg.id)).except(opts.excludeSocketIds)
+        : io.to(room(sg.id));
+      target.emit('ptt:speaking', { groupId, userId, displayName, startedAt, fromLeadGroup: true });
+    }
   }
 
   // Wake offline members via APNs PTT push. We exclude online members by
@@ -186,13 +200,25 @@ export async function endTransmission(
 
   const group = await prisma.group.findUnique({
     where: { id: groupId },
-    select: { parentGroupId: true },
+    select: { parentGroupId: true, type: true },
   });
   if (group?.parentGroupId && io) {
     const target = (opts.excludeSocketIds && opts.excludeSocketIds.length > 0)
       ? io.to(room(group.parentGroupId)).except(opts.excludeSocketIds)
       : io.to(room(group.parentGroupId));
     target.emit('ptt:stopped', { groupId, userId, endedAt, fromSubGroup: true });
+  }
+  if (group?.type === 'LEAD' && io) {
+    const subGroups = await prisma.group.findMany({
+      where: { parentGroupId: groupId },
+      select: { id: true },
+    });
+    for (const sg of subGroups) {
+      const target = (opts.excludeSocketIds && opts.excludeSocketIds.length > 0)
+        ? io.to(room(sg.id)).except(opts.excludeSocketIds)
+        : io.to(room(sg.id));
+      target.emit('ptt:stopped', { groupId, userId, endedAt, fromLeadGroup: true });
+    }
   }
 
   try {

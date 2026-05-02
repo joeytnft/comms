@@ -15,6 +15,8 @@ export interface PTTTokenResponse {
   groupName: string;
   /** Present only when the joined group is a LEAD group. Listen-only tokens for every sub-group. */
   subGroupRooms?: PTTSubGroupRoom[];
+  /** Present only when the joined group is a SUB group. Listen-only token for the parent Lead group. */
+  leadGroupRoom?: PTTSubGroupRoom;
 }
 
 export interface PTTParticipant {

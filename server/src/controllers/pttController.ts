@@ -112,12 +112,31 @@ export async function getToken(
     }
   }
 
+  // Sub-group members receive a listen-only token for their parent Lead group room
+  // so they can hear Lead group transmissions in real time.
+  let leadGroupRoom: { groupId: string; groupName: string; token: string; roomName: string } | undefined;
+  if (membership.group.type === 'SUB' && membership.group.parentGroupId) {
+    const leadGroup = await prisma.group.findUnique({
+      where: { id: membership.group.parentGroupId },
+      select: { id: true, name: true },
+    });
+    if (leadGroup) {
+      leadGroupRoom = {
+        groupId: leadGroup.id,
+        groupName: leadGroup.name,
+        token: await generateLiveKitToken(userId, membership.user.displayName, leadGroup.id, false),
+        roomName: getRoomName(leadGroup.id),
+      };
+    }
+  }
+
   reply.send({
     token,
     roomName: getRoomName(groupId),
     livekitUrl: env.LIVEKIT_URL,
     groupName: membership.group.name,
     ...(subGroupRooms ? { subGroupRooms } : {}),
+    ...(leadGroupRoom ? { leadGroupRoom } : {}),
   });
 }
 

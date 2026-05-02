@@ -1049,6 +1049,37 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           if (failed > 0) console.warn(`[PTT] ${failed} sub-group room(s) failed to connect`);
         }
 
+        // Sub-group: connect to the parent Lead group room as a listen-only subscriber
+        // so sub-group members hear Lead group transmissions in real time.
+        if (response.leadGroupRoom) {
+          const lg = response.leadGroupRoom;
+          try {
+            const leadRoom = new Room!({ dynacast: false });
+            leadRoom.on(RoomEvent!.ActiveSpeakersChanged, (speakers: Array<{ identity: string; name?: string }>) => {
+              const remote = speakers.find((s) => s.identity !== leadRoom.localParticipant?.identity);
+              if (remote) {
+                usePTTStore.getState().setActiveSpeaker({
+                  userId: remote.identity,
+                  displayName: remote.name ?? remote.identity,
+                  startedAt: new Date().toISOString(),
+                });
+                if (USE_NATIVE_PTT && nativePTTChannelIdRef.current) {
+                  nativePTTService.setActiveRemoteParticipant(
+                    nativePTTChannelIdRef.current,
+                    remote.name ?? remote.identity,
+                  ).catch(() => null);
+                }
+              }
+            });
+            leadRoom.on(RoomEvent!.Disconnected, () => {});
+            await leadRoom.connect(livekitUrl, lg.token, { autoSubscribe: true });
+            subRoomsRef.current = [...subRoomsRef.current, leadRoom];
+            console.info(`[PTT] Connected to lead group room ${lg.groupName} (listen-only)`);
+          } catch (err) {
+            console.warn('[PTT] Failed to connect to lead group listen-only room:', err);
+          }
+        }
+
         // ── Hand audio session ownership to Apple's PTT framework ───────────
         if (USE_NATIVE_PTT) {
           // Release our hold on the AVAudioSession before joining the PTT
