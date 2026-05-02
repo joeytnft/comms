@@ -448,7 +448,7 @@ export function AlertsScreen() {
       <View style={styles.gridSection}>
         <Text style={styles.gridLabel}>TAP TO SEND ALERT</Text>
         <View style={styles.grid}>
-          {ALERT_TYPE_KEYS.map((key) => {
+          {ALERT_TYPE_KEYS.filter((key) => key !== 'ACTIVE_SHOOTER').map((key) => {
             const d = ALERT_TYPE_DEFS[key];
             return (
               <TouchableOpacity
