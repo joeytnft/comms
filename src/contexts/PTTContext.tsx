@@ -184,6 +184,9 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   const joinGraceWindowUntilRef = useRef(0);
   // Guard against two concurrent joinChannel() calls (rapid group switch).
   const joinInProgressRef = useRef(false);
+  // Incremented by leaveChannel() so a slow in-flight joinChannel() detects
+  // it was cancelled and skips the final setConnected(true).
+  const joinCancelRef = useRef(0);
   // Wall-clock time of the most recent successful join. Used to decide whether
   // an unintentional Disconnected event likely reflects an expired LiveKit
   // token (issued for ~6h) vs. a transient network failure that LiveKit's
@@ -793,6 +796,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       joinInProgressRef.current = true;
+      const myGeneration = joinCancelRef.current;
       try {
 
       // fetchToken can fail (network down, server 4xx/5xx). Without the catch
@@ -1011,7 +1015,15 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
             return;
           }
 
-          usePTTStore.getState().setActiveSpeaker(null);
+          // Unintentional short-session disconnect. LiveKit's built-in reconnect
+          // already exhausted all retries before firing this event. Reset to the
+          // fully-disconnected state so the UI shows the group picker — otherwise
+          // isConnected stays true with a dead room and PTT presses are silently
+          // swallowed (root cause of the Android channel-switch "break and doesn't
+          // recover" bug: both rooms ping-timed-out simultaneously, Disconnected
+          // fired, but only activeSpeaker was cleared, not isConnected).
+          if (!USE_NATIVE_PTT) AudioSession?.stopAudioSession();
+          usePTTStore.getState().disconnect();
         });
 
         // room.connect rejection is the most common silent failure on bad
@@ -1177,6 +1189,11 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
+      // If leaveChannel() fired while this join was in flight, it already
+      // disconnected the room(s) and reset the store. Don't re-flip isConnected.
+      if (joinCancelRef.current !== myGeneration) {
+        return;
+      }
       socket.emit('ptt:join', { groupId });
       usePTTStore.getState().setConnected(true);
       usePTTStore.getState().fetchParticipants(groupId);
@@ -1217,6 +1234,13 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     // Always end the Live Activity first — must not be gated on socket/group state
     // because the island can get stuck if the socket is disconnected when leave is pressed.
     endLiveActivity();
+
+    // Cancel any in-flight joinChannel() — without this, a slow join (e.g.
+    // Lead group connecting to multiple sub-rooms on Android emulator) can
+    // complete after leaveChannel() has already returned to the group picker
+    // and call setConnected(true), re-entering a broken connected state.
+    joinCancelRef.current += 1;
+    joinInProgressRef.current = false;
 
     intentionalLeaveRef.current = true;
 
