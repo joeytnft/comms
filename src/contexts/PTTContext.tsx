@@ -408,7 +408,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         alertLevel: null,
       });
       if (currentGroupId) {
-        pttPost(currentGroupId, 'stop').catch(() => null);
+        const stopBody = broadcastToAllRef.current ? { broadcastToAll: true } : undefined;
+        pttPost(currentGroupId, 'stop', stopBody).catch(() => null);
         // On iOS native PTT we rely on LiveKit server-side egress for audio.
         // Just send metadata; server attaches the egress URL via egress_ended webhook.
         pttPost(currentGroupId, 'native-log', { durationMs }).catch(() => null);
@@ -465,7 +466,9 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         // (foreground case where audio session was already active).
         if (currentGroupId && !transmitStateRef.current.startEmitted) {
           markStartEmitted();
-          pttPost(currentGroupId, 'start').catch(() => null);
+          const startBody: Record<string, unknown> = {};
+          if (broadcastToAllRef.current) startBody.broadcastToAll = true;
+          pttPost(currentGroupId, 'start', Object.keys(startBody).length ? startBody : undefined).catch(() => null);
         }
       }
       // For incoming audio, LiveKit auto-plays subscribed tracks — nothing to do here
@@ -528,6 +531,16 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       roomRef.current?.disconnect();
       roomRef.current = null;
       nativePTTChannelIdRef.current = null;
+      // Clean up any active lead broadcast room so it doesn't trigger another
+      // audio session conflict after the PTT channel has already been vacated.
+      if (leadBroadcastDisconnectTimerRef.current) {
+        clearTimeout(leadBroadcastDisconnectTimerRef.current);
+        leadBroadcastDisconnectTimerRef.current = null;
+      }
+      if (leadBroadcastRoomRef.current) {
+        leadBroadcastRoomRef.current.disconnect();
+        leadBroadcastRoomRef.current = null;
+      }
       usePTTStore.getState().disconnect();
       // Native PTT path never called startAudioSession itself, so there is
       // nothing to stop here — the framework deactivated its own session
@@ -960,6 +973,38 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           });
           if (USE_NATIVE_PTT && nativePTTChannelIdRef.current) {
             nativePTTService.setServiceStatus(nativePTTChannelIdRef.current, 'ready').catch(() => null);
+          }
+          // After a full peer-connection teardown and rebuild the LiveKit SDK
+          // re-publishes tracks internally, but the LocalAudioTrack object in
+          // micTrackRef may now refer to a sender that no longer belongs to the
+          // new PeerConnection (logcat: "Sender does not belong to this peer
+          // connection"). Re-publish it if it's no longer in the participant's
+          // publication map, so the next PTT press has a live track.
+          if (micTrackRef.current && createLocalAudioTrack) {
+            const pubs = [...room.localParticipant.trackPublications.values()];
+            const stillPublished = pubs.some((p) => p.track === micTrackRef.current);
+            if (!stillPublished) {
+              const wasTransmitting = transmitStateRef.current.isTransmitting;
+              clientLog('livekit:reconnected:republish', 'mic track lost after reconnect — re-publishing');
+              room.localParticipant.publishTrack(micTrackRef.current, { dtx: true })
+                .then(() => { if (!wasTransmitting) micTrackRef.current?.mute(); })
+                .catch(async () => {
+                  // Old track is truly dead — create a fresh one
+                  try {
+                    const newTrack = await createLocalAudioTrack!({
+                      echoCancellation: true, noiseSuppression: true, autoGainControl: true,
+                    });
+                    await room.localParticipant.publishTrack(newTrack, { dtx: true });
+                    if (!wasTransmitting) newTrack.mute();
+                    micTrackRef.current = newTrack;
+                    clientLog('livekit:reconnected:republish:fresh', 'fresh mic track published after reconnect');
+                  } catch (trackErr) {
+                    clientLog('livekit:reconnected:republish:failed', 'mic re-publish failed — PTT unavailable until rejoin');
+                    console.warn('[PTT] Mic re-publish after reconnect failed:', trackErr);
+                    micTrackRef.current = null;
+                  }
+                });
+            }
           }
         });
 
@@ -1438,7 +1483,7 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       }
     } else {
       // iOS (PTT framework unavailable or init failed) or Android
-      clientLog('ptt:js:startTransmitting:fallback', 'HTTP ptt:start path', { groupId: currentGroupId, platform: Platform.OS });
+      clientLog('ptt:js:startTransmitting:fallback', 'HTTP ptt:start path', { groupId: currentGroupId, platform: Platform.OS, broadcastToAll: broadcastToAllRef.current });
       const startBody: Record<string, unknown> = {};
       if (broadcastToAllRef.current) startBody.broadcastToAll = true;
       pttPost(currentGroupId, 'start', startBody).catch((err: unknown) => {
