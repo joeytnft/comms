@@ -1099,7 +1099,11 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
               });
 
               subRoom.on(RoomEvent!.Disconnected, () => {
-                // Sub-room disconnects are silent — they don't affect the main PTT state.
+                // LiveKit exhausted all reconnect retries. Remove the dead room from the
+                // list so leaveChannel() doesn't try to disconnect it again, and so a
+                // future Lead-group rejoin can create a fresh room without stale state.
+                subRoomsRef.current = subRoomsRef.current.filter((r) => r !== subRoom);
+                console.warn(`[PTT] Sub-group room permanently disconnected (${sg.groupName}), removed from listener list`);
               });
 
               await subRoom.connect(livekitUrl, sg.token, { autoSubscribe: true });
