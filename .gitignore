@@ -23,6 +23,9 @@ web-build/
 .env.local
 .env.production
 
+# Play Store service account key — never commit this
+play-store-key.json
+
 # IDE
 .vscode/
 .idea/
