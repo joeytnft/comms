@@ -51,6 +51,13 @@ function buildOutput(groupId: string, userId: string): EncodedFileOutput | null 
 const TRACK_POLL_INTERVAL_MS = 300;
 const TRACK_POLL_TIMEOUT_MS  = 5000;
 
+// Sentinel stored in the egress Redis key while startTransmissionEgress is
+// in progress (between claiming the slot and receiving the egress ID from
+// LiveKit). Allows stopTransmissionEgress to cancel an in-flight start by
+// deleting the key — the start function checks the session key afterward
+// and aborts if the transmission already ended.
+const EGRESS_PENDING = '__pending__';
+
 async function findAudioTrackSid(
   rooms: RoomServiceClient,
   roomName: string,
@@ -70,8 +77,15 @@ async function findAudioTrackSid(
 /**
  * Start a LiveKit TrackCompositeEgress for the transmitting user's audio track.
  * Stores the egress ID in Redis so stopTransmissionEgress can find it.
- * Idempotent — skips silently if an egress is already active for this user+group.
- * Errors are logged but never thrown — egress is a best-effort backup.
+ * Idempotent — skips silently if an egress is already active or starting for
+ * this user+group. Errors are logged but never thrown — egress is best-effort.
+ *
+ * Race-condition safety: we write the EGRESS_PENDING sentinel to the Redis key
+ * BEFORE polling for the track. This blocks a concurrent call from also seeing
+ * an empty key and starting a second egress (the TOCTOU window that previously
+ * caused two concurrent egresses and hit the LiveKit limit). After the slow
+ * track-poll, we also verify the transmission session is still active; if
+ * endTransmission already ran while we were polling, we abort cleanly.
  */
 export async function startTransmissionEgress(groupId: string, userId: string): Promise<void> {
   const clients = getClients();
@@ -82,13 +96,23 @@ export async function startTransmissionEgress(groupId: string, userId: string): 
   const output = buildOutput(groupId, userId);
   if (!output) return;
 
-  // Idempotency guard — one egress per user per group at a time.
-  // We verify the stored egress is still alive before skipping: a quick start/stop
-  // race (or a crash) can leave a stale key for up to 1 hour, silently blocking all
-  // future recordings.
   const egressKey = `ptt:egress:${userId}:${groupId}`;
-  const existing  = await redis.get(egressKey);
-  if (existing) {
+
+  // Atomically claim the egress slot. SET NX means only one concurrent caller
+  // can proceed; the 60s TTL covers the track-poll window + API round-trip.
+  // If the claim fails, inspect the existing value to decide what to do.
+  const claimed = await redis.set(egressKey, EGRESS_PENDING, 'EX', 60, 'NX');
+  if (!claimed) {
+    const existing = await redis.get(egressKey);
+
+    if (!existing || existing === EGRESS_PENDING) {
+      // Another startTransmissionEgress call is already in progress.
+      logger.debug(`[LiveKit] Egress start already in progress for ${userId}/${groupId} — skipping`);
+      return;
+    }
+
+    // Real egress ID present — verify it's still alive before skipping.
+    // A crash or rapid stop/start can leave a stale key for up to 1 hour.
     try {
       const list = await clients.egress.listEgress({ egressId: existing });
       const info = list[0];
@@ -97,21 +121,20 @@ export async function startTransmissionEgress(groupId: string, userId: string): 
         EgressStatus.EGRESS_FAILED,
         EgressStatus.EGRESS_ABORTED,
         EgressStatus.EGRESS_LIMIT_REACHED,
-        // EGRESS_ENDING: stopEgress was already called and LiveKit is wrapping
-        // up. Treat as stale so a rapid stop/start cycle starts fresh egress
-        // rather than silently skipping the new transmission's recording.
         EgressStatus.EGRESS_ENDING,
       ]);
-      const isStale = !info || TERMINAL.has(info.status);
-      if (!isStale) {
+      if (!info || TERMINAL.has(info.status)) {
+        logger.info(`[LiveKit] Stale egress for ${userId}/${groupId} (${info?.status ?? 'not found'}) — clearing and restarting`);
+        await redis.del(egressKey);
+        const retryClaimed = await redis.set(egressKey, EGRESS_PENDING, 'EX', 60, 'NX');
+        if (!retryClaimed) return; // Lost the race on retry — give up
+      } else {
         logger.debug(`[LiveKit] Egress already active for ${userId}/${groupId} (${existing}) — skipping`);
         return;
       }
-      logger.info(`[LiveKit] Stale egress key for ${userId}/${groupId} (status: ${info?.status ?? 'not found'}) — clearing and restarting`);
-      await redis.del(egressKey);
     } catch (verifyErr) {
-      logger.warn({ err: verifyErr }, '[LiveKit] Could not verify existing egress — clearing stale key and restarting');
-      await redis.del(egressKey);
+      logger.warn({ err: verifyErr }, '[LiveKit] Could not verify existing egress — skipping start to avoid duplicate');
+      return;
     }
   }
 
@@ -121,6 +144,17 @@ export async function startTransmissionEgress(groupId: string, userId: string): 
 
     if (!trackSid) {
       logger.warn(`[LiveKit] No published audio track for ${userId} in ${roomName} after ${TRACK_POLL_TIMEOUT_MS}ms — egress skipped`);
+      await redis.del(egressKey);
+      return;
+    }
+
+    // Guard: transmission may have ended while we were polling for the track.
+    // If the session key is gone, endTransmission already ran — abort so we
+    // don't start an egress for a transmission that's already over.
+    const sessionActive = await redis.exists(`ptt:session:${userId}:${groupId}`);
+    if (!sessionActive) {
+      logger.info(`[LiveKit] Transmission ended before egress could start for ${userId}/${groupId} — aborting`);
+      await redis.del(egressKey);
       return;
     }
 
@@ -132,24 +166,36 @@ export async function startTransmissionEgress(groupId: string, userId: string): 
     );
 
     const egressStartedAt = new Date().toISOString();
-    await redis.setex(`ptt:egress:${userId}:${groupId}`, 3600, egress.egressId);
+    await redis.setex(egressKey, 3600, egress.egressId);
     await redis.setex(`ptt:egress_meta:${egress.egressId}`, 3600, JSON.stringify({ userId, groupId, startedAt: egressStartedAt }));
     logger.info(`[LiveKit] Egress ${egress.egressId} started OK`);
   } catch (err) {
     logger.warn({ err }, '[LiveKit] startTransmissionEgress failed — continuing without egress');
+    await redis.del(egressKey); // release the slot so the next transmission can try
   }
 }
 
 /**
  * Stop the LiveKit egress for this transmission.
  * Cleans up the Redis key regardless of whether the stop call succeeds.
+ *
+ * If the key holds the EGRESS_PENDING sentinel (startTransmissionEgress is
+ * still mid-flight), we delete the slot and return. The in-flight start will
+ * check the session key after its track-poll and abort when it finds the
+ * session gone — so no orphaned egress is created.
  */
 export async function stopTransmissionEgress(userId: string, groupId: string): Promise<void> {
   const clients = getClients();
   if (!clients) return;
 
-  const egressId = await redis.get(`ptt:egress:${userId}:${groupId}`);
+  const egressKey = `ptt:egress:${userId}:${groupId}`;
+  const egressId  = await redis.get(egressKey);
   if (!egressId) return;
+
+  if (egressId === EGRESS_PENDING) {
+    await redis.del(egressKey);
+    return;
+  }
 
   try {
     await clients.egress.stopEgress(egressId);
@@ -157,6 +203,6 @@ export async function stopTransmissionEgress(userId: string, groupId: string): P
   } catch (err) {
     logger.warn({ err, egressId }, '[LiveKit] stopEgress failed');
   } finally {
-    await redis.del(`ptt:egress:${userId}:${groupId}`);
+    await redis.del(egressKey);
   }
 }
