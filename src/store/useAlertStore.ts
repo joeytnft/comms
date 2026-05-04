@@ -131,10 +131,13 @@ export const useAlertStore = create<AlertState>((set, get) => ({
 
   // Real-time socket updates
   addAlert: (alert) => {
-    set((state) => ({
-      alerts: [alert, ...state.alerts],
-      activeAlerts: [alert, ...state.activeAlerts],
-    }));
+    set((state) => {
+      if (state.alerts.some((a) => a.id === alert.id)) return state;
+      return {
+        alerts: [alert, ...state.alerts],
+        activeAlerts: alert.resolvedAt ? state.activeAlerts : [alert, ...state.activeAlerts],
+      };
+    });
   },
 
   updateAlertAcknowledgment: (alertId, userId) => {

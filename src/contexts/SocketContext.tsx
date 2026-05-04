@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import { secureStorage } from '@/utils/secureStorage';
 import { ENV } from '@/config/env';
@@ -169,8 +170,19 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     connect();
 
+    // iOS suspends JS timers when backgrounded, so socket.io's reconnection
+    // backoff loop may never fire after a server restart. Force a reconnect
+    // attempt whenever the app returns to the foreground.
+    const handleAppState = (next: AppStateStatus) => {
+      if (next === 'active' && socketRef.current && !socketRef.current.connected) {
+        socketRef.current.connect();
+      }
+    };
+    const appStateSub = AppState.addEventListener('change', handleAppState);
+
     return () => {
       mounted = false;
+      appStateSub.remove();
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
