@@ -3,6 +3,7 @@ import { prisma } from '../config/database';
 import { NotFoundError, AuthorizationError, ValidationError } from '../utils/errors';
 import * as alertService from '../services/alerts/alertService';
 import { ALERT_SELECT } from '../services/alerts/alertService';
+import { getIO } from '../config/socketIO';
 
 interface TriggerBody {
   level: 'ATTENTION' | 'WARNING' | 'EMERGENCY';
@@ -57,6 +58,8 @@ export async function triggerAlert(
     photoUrl,
     groupIds: groupIds && groupIds.length > 0 ? groupIds : undefined,
   });
+
+  getIO()?.to(`org:${organizationId}`).emit('alert:new', alert);
 
   reply.status(201).send({ alert });
 }
@@ -135,6 +138,11 @@ export async function acknowledgeAlert(
     request.organizationId,
   );
 
+  getIO()?.to(`org:${request.organizationId}`).emit('alert:acknowledged', {
+    alertId: request.params.id,
+    userId: request.userId,
+  });
+
   reply.send({ alert: updated });
 }
 
@@ -160,6 +168,11 @@ export async function resolveAlert(
     request.userId,
     request.organizationId,
   );
+
+  getIO()?.to(`org:${request.organizationId}`).emit('alert:resolved', {
+    alertId: request.params.id,
+    resolvedBy: request.userId,
+  });
 
   reply.send({ alert: updated });
 }

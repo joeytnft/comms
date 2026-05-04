@@ -1,0 +1,11 @@
+<!--
+    Input:
+        hardware/interfaces/gatekeeper/1.0/software/android.hardware.gatekeeper@1.0-service.software.xml
+-->
+<manifest version="8.0" type="device">
+    <hal format="hidl">
+        <name>android.hardware.gatekeeper</name>
+        <transport>hwbinder</transport>
+        <fqname>@1.0::IGatekeeper/default</fqname>
+    </hal>
+</manifest>

@@ -11,6 +11,7 @@ import {
 } from '@/config/constants';
 import { useAuth } from './AuthContext';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useAlertStore } from '@/store/useAlertStore';
 import { reportCrash } from '@/utils/logger';
 
 // Decode a JWT's `exp` claim (in seconds since epoch) without verifying the
@@ -90,6 +91,17 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
       socket.on('disconnect', () => {
         if (mounted) setIsConnected(false);
+      });
+
+      // Real-time alert updates
+      socket.on('alert:new', (alert) => {
+        useAlertStore.getState().addAlert(alert);
+      });
+      socket.on('alert:acknowledged', ({ alertId, userId }: { alertId: string; userId: string }) => {
+        useAlertStore.getState().updateAlertAcknowledgment(alertId, userId);
+      });
+      socket.on('alert:resolved', ({ alertId, resolvedBy }: { alertId: string; resolvedBy: string }) => {
+        useAlertStore.getState().markAlertResolved(alertId, resolvedBy);
       });
 
       // De-duplication guard: while a refresh is in flight we don't want

@@ -190,7 +190,7 @@ export function SettingsScreen() {
             <Text style={styles.settingLabel}>Schedule & Check-In</Text>
             <Text style={styles.chevron}>{'›'}</Text>
           </Pressable>
-          {isEnterprise && (
+          {isEnterprise && isOrgAdmin && (
             <Pressable
               style={styles.settingRow}
               onPress={() => navigation.navigate('CampusManagement')}

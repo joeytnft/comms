@@ -1,0 +1,10 @@
+<!--
+    Input:
+        device/generic/goldfish/camera/android.hardware.camera.provider.ranchu.xml
+-->
+<manifest version="8.0" type="device">
+    <hal format="aidl">
+        <name>android.hardware.camera.provider</name>
+        <fqname>ICameraProvider/internal/1</fqname>
+    </hal>
+</manifest>

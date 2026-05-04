@@ -1,0 +1,16 @@
+<!--
+    Input:
+        device/generic/goldfish-opengl/system/hals/android.hardware.graphics.gralloc3.ranchu.xml
+-->
+<manifest version="8.0" type="device">
+    <hal format="hidl">
+        <name>android.hardware.graphics.allocator</name>
+        <transport>hwbinder</transport>
+        <fqname>@3.0::IAllocator/default</fqname>
+    </hal>
+    <hal format="hidl">
+        <name>android.hardware.graphics.mapper</name>
+        <transport arch="32+64">passthrough</transport>
+        <fqname>@3.0::IMapper/default</fqname>
+    </hal>
+</manifest>

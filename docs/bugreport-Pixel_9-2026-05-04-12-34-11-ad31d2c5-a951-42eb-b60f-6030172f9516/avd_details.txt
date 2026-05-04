@@ -1,0 +1,56 @@
+Name: Pixel_9
+CPU/ABI: x86_64
+Path: C:\Users\joe74\.android\avd\Pixel_9.avd
+Target: google_apis_playstore [Google Play] (API level 35)
+Skin: pixel_9
+SD Card: 512M
+AvdId: Pixel_9
+PlayStore.enabled: true
+avd.ini.displayname: Pixel 9
+avd.ini.encoding: UTF-8
+disk.dataPartition.size: 6G
+emulator.dev.xr.glasses_display: monocular_right
+fastboot.chosenSnapshotFile: 
+fastboot.forceChosenSnapshotBoot: no
+fastboot.forceColdBoot: no
+fastboot.forceFastBoot: yes
+hw.accelerometer: yes
+hw.arc: false
+hw.audioInput: yes
+hw.battery: yes
+hw.camera.back: virtualscene
+hw.camera.front: emulated
+hw.cpu.ncore: 4
+hw.dPad: no
+hw.device.hash2: MD5:5478e3411cc0e0441240e736eb14c07a
+hw.device.manufacturer: Google
+hw.device.name: pixel_9
+hw.gps: yes
+hw.gpu.enabled: yes
+hw.gpu.mode: auto
+hw.gyroscope: yes
+hw.initialOrientation: portrait
+hw.keyboard: yes
+hw.lcd.density: 420
+hw.lcd.height: 2424
+hw.lcd.width: 1080
+hw.mainKeys: no
+hw.ramSize: 2048
+hw.sdCard: yes
+hw.sensors.light: yes
+hw.sensors.magnetic_field: yes
+hw.sensors.orientation: yes
+hw.sensors.pressure: yes
+hw.sensors.proximity: yes
+hw.trackBall: no
+image.sysdir.1: system-images\android-35\google_apis_playstore\x86_64\
+runtime.network.latency: none
+runtime.network.speed: full
+showDeviceFrame: yes
+skin.dynamic: yes
+tag.display: Google Play
+tag.displaynames: Google Play
+tag.id: google_apis_playstore
+tag.ids: google_apis_playstore
+target: android-35
+vm.heapSize: 228
