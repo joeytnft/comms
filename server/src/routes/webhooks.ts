@@ -100,6 +100,13 @@ export async function webhookRoutes(app: FastifyInstance) {
       // (asc order). Without startedAt, fall back to the prior 5-minute window.
       // The orderBy was previously 'desc' which caused late egress_ended webhooks
       // to backfill the NEWEST (wrong) log when the user transmitted twice rapidly.
+      //
+      // NOTE: audioUrl: null is intentionally NOT in the filter. Android creates
+      // pttLog records with a client-uploaded audioUrl already set (client records
+      // locally and uploads via POST /audio before the LiveKit egress webhook fires).
+      // The server-side LiveKit recording URL overwrites the client URL — this is
+      // correct behaviour since server recordings are higher fidelity and more
+      // reliable than client-side ExpoAV captures.
       const windowStart = startedAt
         ? new Date(new Date(startedAt).getTime() - 30_000)
         : new Date(Date.now() - 300_000);
@@ -110,7 +117,6 @@ export async function webhookRoutes(app: FastifyInstance) {
         where: {
           groupId,
           senderId: userId,
-          audioUrl: null,
           createdAt: { gte: windowStart, lte: windowEnd },
         },
         orderBy: { createdAt: 'asc' },
