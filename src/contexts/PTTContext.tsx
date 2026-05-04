@@ -1081,42 +1081,39 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
 
           // Unintentional disconnect. LiveKit auto-reconnects transient
           // network blips on its own (Reconnecting → Reconnected); reaching
-          // this handler means reconnect failed for good. The most common
-          // cause for a long-running PTT session is an expired access token
-          // (LiveKit issues them for ~6h by default). Try a transparent
-          // rejoin once when the session is old enough that a refresh is
-          // plausible — otherwise preserve the existing short-session
-          // behaviour of just clearing the active speaker.
-          const sessionAgeMs = Date.now() - joinedAtRef.current;
-          const TOKEN_REFRESH_THRESHOLD_MS = 5 * 60 * 60 * 1000; // 5h
+          // this handler means reconnect failed for good. Common causes:
+          // expired access token (~6h), Android Doze mode ping timeout (~10min
+          // when the foreground service isn't running), or a prolonged network
+          // outage. Always attempt a transparent rejoin — a fresh joinChannel
+          // call gets a new token from the server and re-establishes WebRTC.
           const groupIdToRejoin = usePTTStore.getState().currentGroupId;
-          if (
-            !rejoinInFlightRef.current &&
-            groupIdToRejoin &&
-            sessionAgeMs > TOKEN_REFRESH_THRESHOLD_MS
-          ) {
+          if (!rejoinInFlightRef.current && groupIdToRejoin) {
             rejoinInFlightRef.current = true;
-            console.info('[PTT] Long-session LiveKit disconnect — rejoining for fresh token');
+            clientLog('livekit:disconnected:rejoin', 'Unintentional disconnect — attempting auto-rejoin', {
+              groupId,
+              sessionAgeMs: Date.now() - joinedAtRef.current,
+            });
             // Defer to the next tick so the in-flight Disconnected handler
             // unwinds before we tear the room down again.
             setTimeout(() => {
               try { leaveChannelRef.current?.(); } catch { /* ignore */ }
               setTimeout(() => {
                 joinChannelRef.current?.(groupIdToRejoin)
-                  .catch((err) => console.warn('[PTT] Auto-rejoin failed:', err))
+                  .catch((err) => {
+                    console.warn('[PTT] Auto-rejoin failed:', err);
+                    // Rejoin failed — surface the disconnected state so the
+                    // user can manually re-join rather than silently losing PTT.
+                    if (!USE_NATIVE_PTT) AudioSession?.stopAudioSession();
+                    usePTTStore.getState().disconnect();
+                  })
                   .finally(() => { rejoinInFlightRef.current = false; });
               }, 250);
             }, 0);
             return;
           }
 
-          // Unintentional short-session disconnect. LiveKit's built-in reconnect
-          // already exhausted all retries before firing this event. Reset to the
-          // fully-disconnected state so the UI shows the group picker — otherwise
-          // isConnected stays true with a dead room and PTT presses are silently
-          // swallowed (root cause of the Android channel-switch "break and doesn't
-          // recover" bug: both rooms ping-timed-out simultaneously, Disconnected
-          // fired, but only activeSpeaker was cleared, not isConnected).
+          // No group to rejoin (e.g. user left while Disconnected was in-flight).
+          // Reset to the fully-disconnected state so the UI shows the group picker.
           if (!USE_NATIVE_PTT) AudioSession?.stopAudioSession();
           usePTTStore.getState().disconnect();
         });
