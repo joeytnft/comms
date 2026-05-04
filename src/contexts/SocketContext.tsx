@@ -13,6 +13,7 @@ import {
 import { useAuth } from './AuthContext';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useAlertStore } from '@/store/useAlertStore';
+import { useIncidentStore } from '@/store/useIncidentStore';
 import { reportCrash } from '@/utils/logger';
 
 // Decode a JWT's `exp` claim (in seconds since epoch) without verifying the
@@ -103,6 +104,11 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       });
       socket.on('alert:resolved', ({ alertId, resolvedBy }: { alertId: string; resolvedBy: string }) => {
         useAlertStore.getState().markAlertResolved(alertId, resolvedBy);
+      });
+
+      // Real-time incident updates
+      socket.on('incident:new', (incident) => {
+        useIncidentStore.getState().addIncident(incident);
       });
 
       // De-duplication guard: while a refresh is in flight we don't want

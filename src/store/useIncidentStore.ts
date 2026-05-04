@@ -15,6 +15,7 @@ interface IncidentState {
   createIncident: (data: CreateIncidentData) => Promise<Incident>;
   updateIncident: (id: string, data: UpdateIncidentData) => Promise<void>;
   addPhoto: (incidentId: string, encryptedUrl: string) => Promise<void>;
+  addIncident: (incident: Incident) => void;
   clearError: () => void;
   clearCurrentIncident: () => void;
 }
@@ -121,6 +122,13 @@ export const useIncidentStore = create<IncidentState>((set, get) => ({
       set({ error: message });
       throw error;
     }
+  },
+
+  addIncident: (incident) => {
+    set((state) => {
+      if (state.incidents.some((i) => i.id === incident.id)) return state;
+      return { incidents: [incident, ...state.incidents] };
+    });
   },
 
   clearError: () => set({ error: null }),

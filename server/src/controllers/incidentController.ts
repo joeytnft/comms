@@ -3,6 +3,7 @@ import { prisma } from '../config/database';
 import { NotFoundError, AuthorizationError, ValidationError } from '../utils/errors';
 import { assertAllowedHttpsUrl } from '../utils/validators';
 import { env } from '../config/env';
+import { getIO } from '../config/socketIO';
 
 // Hostnames whose URLs we allow tenants to attach to incident photos.
 // Anything outside this list is refused — the previous code accepted any
@@ -79,6 +80,8 @@ export async function createIncident(
     },
     select: INCIDENT_SELECT,
   });
+
+  getIO()?.to(`org:${organizationId}`).emit('incident:new', incident);
 
   reply.status(201).send({ incident });
 }
