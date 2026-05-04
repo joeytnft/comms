@@ -217,6 +217,12 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
   // Temporary listen-only room joined by sub-group members during a lead broadcast.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const leadBroadcastRoomRef = useRef<any>(null);
+  // True when leadBroadcastRoomRef was pre-connected at joinChannel time (iOS only).
+  // False when it was connected on-demand in handleSpeaking (Android fallback).
+  const leadRoomPreConnectedRef = useRef(false);
+  // True while the lead broadcast is active — used to gate audio subscriptions
+  // on the pre-connected room (prevents audio flowing outside broadcastToAll windows).
+  const leadBroadcastActiveRef = useRef(false);
   // Timer to disconnect from the lead broadcast room after a short idle window.
   const leadBroadcastDisconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -541,6 +547,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         leadBroadcastRoomRef.current.disconnect();
         leadBroadcastRoomRef.current = null;
       }
+      leadRoomPreConnectedRef.current = false;
+      leadBroadcastActiveRef.current  = false;
       usePTTStore.getState().disconnect();
       // Native PTT path never called startAudioSession itself, so there is
       // nothing to stop here — the framework deactivated its own session
@@ -601,22 +609,45 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       const localUserId = useAuthStore.getState().user?.id;
       if (data.userId === localUserId) return;
 
-      // Lead broadcast: sub-group member dynamically connects to the lead room
-      // so they can hear the audio. Cancelled disconnect timer if one is pending.
+      // Lead broadcast: sub-group member needs to receive audio from the lead room.
+      // iOS path: room was pre-connected at joinChannel time (autoSubscribe:false).
+      //   → enable subscriptions on existing tracks instantly (1 SFU RTT, ~10-50ms).
+      //   New tracks published after this point are handled by the TrackPublished listener.
+      // Android fallback: connect on-demand (extra audio session conflicts with ExpoAV,
+      //   so we only do this when explicit broadcast audio is needed).
       if (data.fromLeadGroup && Platform.OS !== 'web') {
         if (leadBroadcastDisconnectTimerRef.current) {
           clearTimeout(leadBroadcastDisconnectTimerRef.current);
           leadBroadcastDisconnectTimerRef.current = null;
         }
-        if (!leadBroadcastRoomRef.current && Room && RoomEvent) {
+        leadBroadcastActiveRef.current = true;
+
+        if (leadBroadcastRoomRef.current && leadRoomPreConnectedRef.current) {
+          // Pre-connected (iOS): enable subscriptions on all current remote audio tracks.
+          for (const participant of leadBroadcastRoomRef.current.remoteParticipants.values()) {
+            for (const pub of participant.trackPublications.values()) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              if ((pub as any).kind === 'audio' && !(pub as any).isSubscribed) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (pub as any).setSubscribed(true);
+              }
+            }
+          }
+        } else if (!leadBroadcastRoomRef.current && Room && RoomEvent) {
+          // On-demand fallback (Android or iOS where pre-connect failed/unavailable).
           pttService.getLeadRoomToken(data.groupId)
             .then(async (res) => {
-              if (leadBroadcastRoomRef.current) return; // already connected by parallel call
+              if (leadBroadcastRoomRef.current) {
+                (leadBroadcastRoomRef.current as { disconnect(): void }).disconnect();
+                return; // pre-connect arrived while we were fetching — discard this room
+              }
               const bRoom = new Room({ dynacast: false });
-              bRoom.on(RoomEvent.Disconnected, () => { leadBroadcastRoomRef.current = null; });
+              bRoom.on(RoomEvent.Disconnected, () => {
+                if (leadBroadcastRoomRef.current === bRoom) leadBroadcastRoomRef.current = null;
+              });
               await bRoom.connect(res.livekitUrl || ENV.livekitUrl, res.token, { autoSubscribe: true });
               leadBroadcastRoomRef.current = bRoom;
-              console.info(`[PTT] Connected to lead broadcast room ${res.groupName} (listen-only)`);
+              console.info(`[PTT] Connected to lead broadcast room ${res.groupName} (on-demand)`);
             })
             .catch((err) => console.warn('[PTT] Failed to join lead broadcast room:', err));
         }
@@ -651,15 +682,34 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
     };
 
     const handleStopped = (data?: { fromLeadGroup?: boolean }) => {
-      // Schedule disconnect from the temporary lead broadcast room after a short
-      // idle window so rapid multi-transmission broadcasts don't reconnect every time.
-      if (data?.fromLeadGroup && leadBroadcastRoomRef.current) {
-        if (leadBroadcastDisconnectTimerRef.current) clearTimeout(leadBroadcastDisconnectTimerRef.current);
-        leadBroadcastDisconnectTimerRef.current = setTimeout(() => {
+      if (data?.fromLeadGroup) {
+        leadBroadcastActiveRef.current = false;
+        if (leadBroadcastDisconnectTimerRef.current) {
+          clearTimeout(leadBroadcastDisconnectTimerRef.current);
           leadBroadcastDisconnectTimerRef.current = null;
-          leadBroadcastRoomRef.current?.disconnect();
-          leadBroadcastRoomRef.current = null;
-        }, 5000); // 5s grace: lead admin may transmit again quickly
+        }
+        if (leadBroadcastRoomRef.current) {
+          if (leadRoomPreConnectedRef.current) {
+            // Pre-connected (iOS): disable subscriptions immediately without disconnecting.
+            // The room stays connected for the next broadcast — zero reconnect latency.
+            for (const participant of leadBroadcastRoomRef.current.remoteParticipants.values()) {
+              for (const pub of participant.trackPublications.values()) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                if ((pub as any).kind === 'audio' && (pub as any).isSubscribed) {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (pub as any).setSubscribed(false);
+                }
+              }
+            }
+          } else {
+            // On-demand (Android): keep connected briefly in case admin transmits again soon.
+            leadBroadcastDisconnectTimerRef.current = setTimeout(() => {
+              leadBroadcastDisconnectTimerRef.current = null;
+              leadBroadcastRoomRef.current?.disconnect();
+              leadBroadcastRoomRef.current = null;
+            }, 5000);
+          }
+        }
       }
       usePTTStore.getState().setActiveSpeaker(null);
       // Clear system UI speaker indicator
@@ -1165,6 +1215,39 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
           if (failed > 0) console.warn(`[PTT] ${failed} sub-group room(s) failed to connect`);
         }
 
+        // ── iOS: pre-connect to lead room for zero-latency "Broadcast to All" ──
+        // Connect with autoSubscribe:false so no audio flows until the lead admin
+        // activates broadcastToAll. handleSpeaking enables subscriptions instantly
+        // (1 SFU RTT) rather than doing a full token-fetch + room-connect (~400ms).
+        // Android skips this: a second LiveKit audio session conflicts with ExpoAV's
+        // MediaRecorder when the sub-group member tries to transmit.
+        if (Platform.OS === 'ios' && USE_NATIVE_PTT && response.leadRoom && Room && RoomEvent) {
+          const lr = response.leadRoom;
+          try {
+            const preRoom = new Room!({ dynacast: false });
+            preRoom.on(RoomEvent!.TrackPublished, (pub: unknown) => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              if (leadBroadcastActiveRef.current && (pub as any).kind === 'audio') {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (pub as any).setSubscribed(true);
+              }
+            });
+            preRoom.on(RoomEvent!.Disconnected, () => {
+              if (leadBroadcastRoomRef.current === preRoom) {
+                leadBroadcastRoomRef.current = null;
+                leadRoomPreConnectedRef.current = false;
+                leadBroadcastActiveRef.current  = false;
+              }
+            });
+            await preRoom.connect(lr.livekitUrl || ENV.livekitUrl, lr.token, { autoSubscribe: false });
+            leadBroadcastRoomRef.current     = preRoom;
+            leadRoomPreConnectedRef.current  = true;
+            console.info(`[PTT] Pre-connected to lead room ${lr.groupName} (listen-only, subs disabled)`);
+          } catch (preConnectErr) {
+            console.warn('[PTT] Failed to pre-connect to lead room:', preConnectErr);
+          }
+        }
+
         // ── Hand audio session ownership to Apple's PTT framework ───────────
         if (USE_NATIVE_PTT) {
           // Release our hold on the AVAudioSession before joining the PTT
@@ -1324,6 +1407,8 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
         leadBroadcastRoomRef.current.disconnect();
         leadBroadcastRoomRef.current = null;
       }
+      leadRoomPreConnectedRef.current = false;
+      leadBroadcastActiveRef.current  = false;
       // Reset broadcast mode when leaving channel
       broadcastToAllRef.current = false;
       setBroadcastToAll(false);
@@ -1483,6 +1568,36 @@ export function PTTProvider({ children }: { children: React.ReactNode }) {
       }
     } else {
       // iOS (PTT framework unavailable or init failed) or Android
+
+      // Guard: if the LiveKit room isn't connected (e.g. ping timeout while backgrounded),
+      // abort rather than sending a ghost ptt:start with no audio. The user's next press
+      // after the room reconnects / the UI resets to disconnected will work correctly.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (!roomRef.current || (roomRef.current as any).state !== 'connected') {
+        console.warn('[PTT] startTransmitting: room not connected — aborting');
+        clientLog('ptt:js:startTransmitting:noRoom', 'aborted — room not connected or null', {
+          groupId: currentGroupId,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          roomState: (roomRef.current as any)?.state ?? 'null',
+        });
+        endTransmit();
+        usePTTStore.getState().setTransmitting(false);
+        return;
+      }
+
+      // Android: disconnect any active lead broadcast room before recording.
+      // The extra LiveKit audio session conflicts with ExpoAV's MediaRecorder when both
+      // compete for the Android audio capture hardware simultaneously.
+      if (Platform.OS === 'android' && leadBroadcastRoomRef.current) {
+        if (leadBroadcastDisconnectTimerRef.current) {
+          clearTimeout(leadBroadcastDisconnectTimerRef.current);
+          leadBroadcastDisconnectTimerRef.current = null;
+        }
+        leadBroadcastActiveRef.current = false;
+        leadBroadcastRoomRef.current.disconnect();
+        leadBroadcastRoomRef.current = null;
+      }
+
       clientLog('ptt:js:startTransmitting:fallback', 'HTTP ptt:start path', { groupId: currentGroupId, platform: Platform.OS, broadcastToAll: broadcastToAllRef.current });
       const startBody: Record<string, unknown> = {};
       if (broadcastToAllRef.current) startBody.broadcastToAll = true;

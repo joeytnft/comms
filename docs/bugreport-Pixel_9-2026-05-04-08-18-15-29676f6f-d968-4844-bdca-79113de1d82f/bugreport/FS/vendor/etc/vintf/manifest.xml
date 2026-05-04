@@ -1,0 +1,52 @@
+<!--
+    Input:
+        device/generic/goldfish/manifest.xml
+        device/generic/goldfish/radio/manifest.radio.xml
+        device/generic/goldfish/audio/android.hardware.audio.effects@7.0.xml
+-->
+<manifest version="8.0" type="device" target-level="7">
+    <hal format="hidl">
+        <name>android.hardware.audio.effect</name>
+        <transport>hwbinder</transport>
+        <fqname>@7.0::IEffectsFactory/default</fqname>
+    </hal>
+    <hal format="aidl">
+        <name>android.hardware.radio.config</name>
+        <fqname>IRadioConfig/default</fqname>
+    </hal>
+    <hal format="aidl">
+        <name>android.hardware.radio.data</name>
+        <fqname>IRadioData/slot1</fqname>
+    </hal>
+    <hal format="aidl">
+        <name>android.hardware.radio.ims</name>
+        <fqname>IRadioIms/slot1</fqname>
+    </hal>
+    <hal format="aidl">
+        <name>android.hardware.radio.ims.media</name>
+        <fqname>IImsMedia/default</fqname>
+    </hal>
+    <hal format="aidl">
+        <name>android.hardware.radio.messaging</name>
+        <fqname>IRadioMessaging/slot1</fqname>
+    </hal>
+    <hal format="aidl">
+        <name>android.hardware.radio.modem</name>
+        <fqname>IRadioModem/slot1</fqname>
+    </hal>
+    <hal format="aidl">
+        <name>android.hardware.radio.network</name>
+        <fqname>IRadioNetwork/slot1</fqname>
+    </hal>
+    <hal format="aidl">
+        <name>android.hardware.radio.sim</name>
+        <fqname>IRadioSim/slot1</fqname>
+    </hal>
+    <hal format="aidl">
+        <name>android.hardware.radio.voice</name>
+        <fqname>IRadioVoice/slot1</fqname>
+    </hal>
+    <sepolicy>
+        <version>202404</version>
+    </sepolicy>
+</manifest>

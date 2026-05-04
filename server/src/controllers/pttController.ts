@@ -112,12 +112,36 @@ export async function getToken(
     }
   }
 
+  // Sub-group members get a listen-only token for their parent lead group so
+  // the client can pre-connect at join time (autoSubscribe:false). This allows
+  // near-instant audio on the first "Broadcast to All" transmission without the
+  // 300-500 ms token-fetch + room-connect latency of the on-demand approach.
+  let leadRoom: {
+    groupId: string; groupName: string; token: string; roomName: string; livekitUrl: string;
+  } | undefined;
+  if (membership.group.parentGroupId) {
+    const leadGroup = await prisma.group.findUnique({
+      where:  { id: membership.group.parentGroupId },
+      select: { id: true, name: true, type: true },
+    });
+    if (leadGroup?.type === 'LEAD') {
+      leadRoom = {
+        groupId:    leadGroup.id,
+        groupName:  leadGroup.name,
+        token:      await generateLiveKitToken(userId, membership.user.displayName, leadGroup.id, false),
+        roomName:   getRoomName(leadGroup.id),
+        livekitUrl: env.LIVEKIT_URL ?? '',
+      };
+    }
+  }
+
   reply.send({
     token,
     roomName: getRoomName(groupId),
     livekitUrl: env.LIVEKIT_URL,
     groupName: membership.group.name,
     ...(subGroupRooms ? { subGroupRooms } : {}),
+    ...(leadRoom      ? { leadRoom }      : {}),
   });
 }
 

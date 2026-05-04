@@ -8,6 +8,14 @@ export interface PTTSubGroupRoom {
   roomName: string;
 }
 
+export interface PTTLeadRoom {
+  groupId: string;
+  groupName: string;
+  token: string;
+  roomName: string;
+  livekitUrl: string;
+}
+
 export interface PTTTokenResponse {
   token: string;
   roomName: string;
@@ -15,6 +23,8 @@ export interface PTTTokenResponse {
   groupName: string;
   /** Present only when the joined group is a LEAD group. Listen-only tokens for every sub-group. */
   subGroupRooms?: PTTSubGroupRoom[];
+  /** Present when the joined group has a parent LEAD group. Listen-only token for pre-connecting. */
+  leadRoom?: PTTLeadRoom;
 }
 
 export interface PTTParticipant {

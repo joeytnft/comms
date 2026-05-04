@@ -1,0 +1,11 @@
+<!--
+    Input:
+        hardware/interfaces/contexthub/aidl/default/contexthub-default.xml
+-->
+<manifest version="8.0" type="device">
+    <hal format="aidl">
+        <name>android.hardware.contexthub</name>
+        <version>3</version>
+        <fqname>IContextHub/default</fqname>
+    </hal>
+</manifest>
